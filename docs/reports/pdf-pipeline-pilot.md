@@ -51,6 +51,19 @@ Trạng thái cuối của 158 học khu:
   Oklahoma City (bảng 2023-24) và Clark County, Hillsborough, San Antonio chuyển sang xem tay sau khi
   thêm các kiểm tra ở mục dưới.
 
+## Lô đầu trên production
+
+Sau khi merge (commit 19db2e3), lô 100 học khu đông nhất trên CSDL production
+(Release `docs-production-20261112-43271718628`, khoảng 12 phút Actions):
+
+| Học khu | Tìm thấy tài liệu | Đọc được bảng | Publish | Xem tay | no_schedule | no_candidates | no_website | unreachable |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 38 | 22 | 13 | 9 | 42 | 21 | 8 | 7 |
+
+Kiểm tra trượt ở 9 bảng chờ xem tay: `step_start` 4, `lane_label` 3, `monotonic_lane` 2,
+`schedule_scope` 1, `school_year` 1, `double_extraction` 1 (một bảng có thể trượt nhiều kiểm tra).
+Học khu đã có bảng từ file của bang (CA, KY) không vào hàng đợi.
+
 ## Các kiểu lỗi (học khu không ra bảng)
 
 | Kiểu | Học khu | Ghi chú |
