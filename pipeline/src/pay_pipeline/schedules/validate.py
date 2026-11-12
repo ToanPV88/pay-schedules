@@ -21,6 +21,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import pairwise
 
 from pay_pipeline.schedules.model import ScheduleDraft, school_year_start
 
@@ -68,14 +69,15 @@ def check_monotonic(s: ScheduleDraft) -> list[Issue]:
             prev = (step, cell.amount_cents)
     if s.lanes:
         # Lanes are usually printed lowest qualification first; some schedules (Kentucky ranks,
-        # "Doctorate" first) print them highest first. The direction is the one most adjacent
-        # pairs follow; every pair must then follow it.
+        # "Doctorate" first) print them highest first. Highest-first is accepted only when it is
+        # clearly the pattern (at least 3 falling pairs and 3x more falling than rising pairs);
+        # every pair must then follow that direction.
         rising = falling = 0
         for step in range(len(s.steps)):
             row = [a for ln in range(len(s.lanes)) if (a := s.amount(step, ln)) is not None]
-            rising += sum(y > x for x, y in zip(row, row[1:], strict=False))
-            falling += sum(y < x for x, y in zip(row, row[1:], strict=False))
-        sign = -1 if falling > rising else 1
+            rising += sum(y > x for x, y in pairwise(row))
+            falling += sum(y < x for x, y in pairwise(row))
+        sign = -1 if falling >= 3 and falling >= 3 * rising else 1
         for step in range(len(s.steps)):
             prev = None
             for lane in range(len(s.lanes)):
@@ -86,7 +88,7 @@ def check_monotonic(s: ScheduleDraft) -> list[Issue]:
                     issues.append(
                         Issue(
                             "monotonic_lane",
-                            f"Lương giảm khi sang lane cao hơn: bậc {s.steps[step].label_raw},"
+                            f"Lương đổi chiều giữa hai lane: bậc {s.steps[step].label_raw},"
                             f" {s.lanes[prev[0]].label_raw!r} {_fmt(prev[1])}"
                             f" → {s.lanes[lane].label_raw!r} {_fmt(cell.amount_cents)}",
                         )

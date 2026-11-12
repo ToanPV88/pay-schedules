@@ -1,5 +1,5 @@
 # Bộ chuẩn của pipeline PDF (PLAN Công đoạn 5, nghiệm thu; DECISIONS.md D-020).
-# Chạy classify → extract (Claude, 2 lần) → validate trên mọi tài liệu trong pipeline/gold/*.json,
+# Chạy classify → đọc bảng (tất định, D-022) → validate trên mọi tài liệu trong pipeline/gold/*.json,
 # so từng ô với bảng nhập tay. Không ghi D1. Báo cáo lưu ở Release `report-gold-<ngày>-<run>`.
 # Chạy: đẩy commit lên nhánh `run/pdf-eval`, hoặc chạy tay.
 name: PDF eval
@@ -47,8 +47,6 @@ jobs:
           done
       - name: Evaluate
         working-directory: pipeline
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           uv run pay-pipeline pdf-eval --gold gold --docs "$GITHUB_WORKSPACE/gold-docs" \
             --report "$GITHUB_WORKSPACE/out/gold-report.md"

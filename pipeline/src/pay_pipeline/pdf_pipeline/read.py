@@ -31,6 +31,7 @@ import re
 import statistics
 import subprocess
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -315,12 +316,13 @@ def _header_lines(candidates: list[Line], centres: list[float], width: float) ->
     """Lines right above the table that label its columns.
 
     Going up from the first row: blank lines are skipped (two in a row end the header), and a
-    title line ends it, e.g. "2025-2026 Certificated Teacher Salary Schedule". A title is one phrase (no wide gaps) with title words (salary,
-    schedule, district, board, approved, a year...). At most 5 lines.
+    title line ends it, e.g. "2025-2026 Certificated Teacher Salary Schedule". A title is one
+    phrase (no wide gaps) with title words (salary, schedule, district, board, approved, a
+    year...). At most 5 lines.
     """
     out: list[Line] = []
     blanks = 0
-    for k, line in enumerate(reversed(candidates)):
+    for line in reversed(candidates):
         if not line.words:
             blanks += 1
             if blanks == 2 and out:
@@ -328,7 +330,7 @@ def _header_lines(candidates: list[Line], centres: list[float], width: float) ->
             continue
         blanks = 0
         words = line.words
-        gaps = [b.x0 - a.x1 for a, b in zip(words, words[1:], strict=False)]
+        gaps = [b.x0 - a.x1 for a, b in pairwise(words)]
         covered = sum(1 for c in centres if words[0].x0 <= c <= words[-1].x1)
         tight = not gaps or max(gaps) < 0.5 * width
         title = tight and covered >= 1 and bool(_TITLE.search(line.text))

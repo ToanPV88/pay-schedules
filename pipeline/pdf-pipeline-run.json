@@ -1,6 +1,6 @@
 {
-  "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*.",
+  "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*. rerun: trạng thái district_pipeline được chạy lại ngay.",
   "limit": 100,
-  "budget_usd": 0,
-  "state": ""
+  "state": "",
+  "rerun": []
 }

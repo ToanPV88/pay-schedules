@@ -18,11 +18,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
-ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN", "ANTHROPIC_API_KEY", "REVIEW_PASSWORD"}
+ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN", "REVIEW_PASSWORD"}
 # Secret nào chỉ được nằm trong env của bước chạy lệnh nào (D-019).
 SECRET_STEP_COMMAND = {
     "CLOUDFLARE_API_TOKEN": ("wrangler",),
-    "ANTHROPIC_API_KEY": ("pay-pipeline pdf-extract", "pay-pipeline pdf-eval"),
     "REVIEW_PASSWORD": ("wrangler secret put REVIEW_PASSWORD",),
 }
 # Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.

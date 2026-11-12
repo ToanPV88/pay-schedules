@@ -326,7 +326,10 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 
 ## D-019: Pipeline PDF (Công đoạn 5): kiến trúc, model, secret, điểm lưu
 
-- Ngày: 2026-11-12. Claude quyết; chủ dự án duyệt ngân sách chạy thử.
+- Ngày: 2026-11-12. Claude quyết.
+- **Đã thay một phần bởi D-022**: bước Extract không gọi Claude, không có secret
+  `ANTHROPIC_API_KEY`, không dùng pypdf. Các phần khác (Discover, Classify, điểm lưu, lưu trữ) giữ
+  nguyên.
 - Chạy theo lô trong workflow `pdf-pipeline.yml` (chạy tay: target, limit, budget_usd, state). Hàng
   đợi lấy từ D1: học khu đang hoạt động, chưa có bảng lương nào, chưa xử lý hoặc đã đến hạn chạy
   lại, đông học sinh trước.
@@ -387,3 +390,25 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   trích đối chiếu khác, sửa ô (ghi `review_edits`, migration 0005), duyệt (publish, thay bảng
   published cũ cùng khóa, đóng `review_queue`, tính lại `district_summary`), loại (kèm lý do; học
   khu chạy lại sau 90 ngày).
+
+## D-022: Đọc bảng lương tất định, không dùng API AI
+
+- Ngày: 2026-11-12. Chủ dự án quyết: không dùng API key (không gọi model trả phí).
+- `pdf_pipeline/read.py` đọc bảng từ lớp chữ của tài liệu theo vị trí, như travienphi (ADR-0002 của
+  travienphi cũng cấm API AI trả phí):
+  - hàng dữ liệu = nhãn bậc (`1`, `31+`, `Step 4`, `0-3 Years`) + các số tiền cỡ lương năm; hàng chỉ
+    có số ngay dưới thì nối vào (bảng in hai dòng mỗi bậc);
+  - cột = gom mép phải các số tiền (số căn phải); mỗi số vào cột gần nhất, nên ô trống của bảng bậc
+    thang vẫn trống; hai số rơi vào một cột thì coi như không hiểu bố cục;
+  - nhãn lane = chữ tiêu đề ngay trên hàng đầu, đặt vào cột gần nhất; tiêu đề bảng chặn lại;
+  - chọn bảng lớn nhất có chữ "teacher/certificated" gần đó và không có chữ classified/administrator.
+- **Hai lần đọc độc lập** (thay cho hai model): pdfplumber (tọa độ chữ) và `pdftotext -layout`
+  (cột ký tự). `compare_extractions` so số lane, nhãn bậc và từng ô; lệch thì chờ xem tay. Excel và
+  bảng Word có ô rõ ràng nên đọc một lần.
+- Không đọc được: PDF dạng ảnh quét (cần OCR, chưa làm), bảng không có nhãn bậc ở đầu hàng, bảng
+  nằm trong trang HTML. Những học khu này ghi `no_schedule` với lý do, để xem tay hoặc làm sau.
+- Kiểm tra lane: lane in từ cao xuống thấp (Rank I trước, cột Doctorate trước) được chấp nhận khi đó
+  rõ ràng là chiều của bảng (≥ 3 cặp giảm và gấp ≥ 3 lần số cặp tăng); mọi cặp phải theo cùng chiều.
+- Chi phí đọc: 0 USD. Phụ thuộc: `pdfplumber` thay `pypdf`.
+- Bộ chuẩn (D-020) đo trên bộ đọc này. Bộ chuẩn ban đầu dựng bằng `pdftotext` nên chưa độc lập
+  hoàn toàn với bộ đọc; các bảng thêm sau được đối chiếu bằng mắt trên ảnh trang.
