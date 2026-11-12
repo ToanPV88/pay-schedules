@@ -20,7 +20,10 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN"}
 # Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.
-WRITE_JOBS = {("fetch-sources.yml", "archive"): {"contents": "write"}}
+WRITE_JOBS = {
+    ("fetch-sources.yml", "archive"): {"contents": "write"},
+    ("import-districts.yml", "publish-report"): {"contents": "write"},
+}
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
 
@@ -51,7 +54,7 @@ def tracked_files() -> list[Path]:
 
 def test_workflows_exist() -> None:
     names = {p.name for p in WORKFLOWS}
-    assert {"ci.yml", "deploy.yml", "bootstrap-cloudflare.yml"} <= names
+    assert {"ci.yml", "deploy.yml", "bootstrap-cloudflare.yml", "fetch-sources.yml"} <= names
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)

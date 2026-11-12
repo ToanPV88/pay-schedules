@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -11,6 +12,8 @@ from pathlib import Path
 from pay_pipeline import __version__
 from pay_pipeline.acquisition.http import PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
+from pay_pipeline.catalog.d1sql import catalog_sql, render_sql
+from pay_pipeline.catalog.districts import build_catalog, render_report
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures
 
 DEFAULT_USER_AGENT = f"pay-schedules/{__version__} (+https://github.com/ToanPV88/pay-schedules)"
@@ -33,6 +36,35 @@ def _cmd_fetch_sources(args: argparse.Namespace) -> int:
     return 1 if required_failures(failed) else 0
 
 
+def load_existing_slugs(path: Path | None) -> dict[str, tuple[str, str]]:
+    """Read ``SELECT nces_id, state, slug`` output of ``wrangler d1 execute --json``."""
+    if path is None or not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8") or "[]")
+    rows: list[dict[str, object]] = []
+    for item in data if isinstance(data, list) else [data]:
+        if isinstance(item, dict) and "results" in item:
+            rows.extend(item["results"])
+        elif isinstance(item, dict):
+            rows.append(item)
+    return {str(r["nces_id"]): (str(r["state"]), str(r["slug"])) for r in rows if r.get("nces_id")}
+
+
+def _cmd_districts_build(args: argparse.Namespace) -> int:
+    sources = Path(args.sources)
+    catalog = build_catalog(
+        sources, load_existing_slugs(Path(args.existing) if args.existing else None)
+    )
+    provenance = []
+    manifest = sources / "manifest.json"
+    if manifest.exists():
+        provenance = json.loads(manifest.read_text(encoding="utf-8")).get("files", [])
+    Path(args.sql).write_text(render_sql(catalog_sql(catalog)), encoding="utf-8")
+    Path(args.report).write_text(render_report(catalog, provenance), encoding="utf-8")
+    print(f"{len(catalog.districts):,} học khu, {len(catalog.neighbors):,} cặp lân cận")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pay-pipeline")
     parser.add_argument("--version", action="version", version=__version__)
@@ -42,6 +74,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("manifest", help="Tệp kê khai, vd. pipeline/sources/nces-ccd-2425.json")
     p.add_argument("--out", required=True, help="Thư mục đầu ra (phải trống)")
     p.set_defaults(func=_cmd_fetch_sources)
+
+    p = sub.add_parser("districts-build", help="Dựng danh mục học khu từ tệp NCES CCD")
+    p.add_argument("--sources", required=True, help="Thư mục chứa tệp của Release nguồn")
+    p.add_argument("--existing", help="JSON slug hiện có trong D1 (wrangler d1 execute --json)")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra để nạp vào D1")
+    p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
+    p.set_defaults(func=_cmd_districts_build)
     return parser
 
 
