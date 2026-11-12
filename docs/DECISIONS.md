@@ -412,6 +412,14 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Chi phí đọc: 0 USD. Phụ thuộc: `pdfplumber` thay `pypdf`.
 - Bộ chuẩn (D-020) đo trên bộ đọc này. Bộ chuẩn ban đầu dựng bằng `pdftotext` nên chưa độc lập
   hoàn toàn với bộ đọc; các bảng thêm sau được đối chiếu bằng mắt trên ảnh trang.
+- Kiểm tra thêm cho bảng đọc từ website (ngoài Validate chung, `pdf_checks` trong `run.py`, dùng
+  chung với bộ chuẩn), thêm sau chạy thử ngày 2026-11-12:
+  - `schedule_scope`: bảng chỉ cho một nhóm giáo viên (thuê trước một ngày, ngoài lớp học) xếp sau
+    bảng chung; nếu chỉ có nó thì chờ xem tay;
+  - `lane_label`: nhãn lane lẫn chữ của đoạn văn bên cạnh bảng thì chờ xem tay;
+  - `school_year`: bảng cũ hơn hai năm học so với năm học hiện tại thì chờ xem tay.
+- Bộ đọc có số phiên bản (`layout-text@N`, `pdfplumber-words@N`...). Tài liệu chỉ được coi là đã xử lý
+  (bỏ qua khi sha256 không đổi) nếu đã đọc bằng phiên bản hiện tại; đổi cách đọc thì tăng số.
 
 ## D-023: Xóa cache website sau khi publish: hàng chờ trong D1, Worker xem tay gửi đi
 
