@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -25,13 +26,23 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
 from pay_pipeline.acquisition.http import FetchError, PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
 from pay_pipeline.acquisition.shared import SharedPoliteFetcher, SharedThrottle
-from pay_pipeline.discover.crawl import Candidate, discover
+from pay_pipeline.discover.crawl import (
+    DOC_EXTENSIONS,
+    Candidate,
+    Link,
+    discover,
+    extract_links,
+    is_document_url,
+    same_site,
+    score_document,
+)
 from pay_pipeline.documents.classify import Classification, classify, detect_kind
 
 MAX_DOCS_PER_DISTRICT = 4
@@ -100,6 +111,54 @@ def choose(docs: list[DocWork]) -> DocWork | None:
     )
 
 
+_DRIVE_FILE = re.compile(r"^https://drive\.google\.com/file/d/([\w-]{10,})")
+_DOCS = re.compile(
+    r"^https://docs\.google\.com/(spreadsheets|document|presentation)/d/([\w-]{10,})"
+)
+
+
+def export_url(url: str) -> str:
+    """Google Drive / Docs links point at viewers; ask for the file itself."""
+    m = _DRIVE_FILE.match(url)
+    if m:
+        return f"https://drive.google.com/uc?export=download&id={m.group(1)}"
+    m = _DOCS.match(url)
+    if m:
+        fmt = {"spreadsheets": "xlsx", "document": "docx", "presentation": "pdf"}[m.group(1)]
+        return f"https://docs.google.com/{m.group(1)}/d/{m.group(2)}/export?format={fmt}"
+    return url
+
+
+def _looks_html(content_type: str, data: bytes) -> bool:
+    head = data[:2000].lower()
+    return "html" in content_type or b"<html" in head or b"<!doctype html" in head
+
+
+_LANDING_HINTS = (
+    "resource-manager/view",
+    "/fs/resource-manager",
+    "download",
+    "/files/",
+    "attachment",
+)
+
+
+def landing_target(data: bytes, page_url: str, anchor: str) -> str | None:
+    """The file a document landing page points to, or None."""
+    links = extract_links(data.decode("utf-8", errors="replace"), page_url)
+    files = [
+        ln
+        for ln in links
+        if urlsplit(ln.url).path.lower().endswith(DOC_EXTENSIONS)
+        or any(h in ln.url.lower() for h in _LANDING_HINTS)
+        or (is_document_url(ln.url) and not same_site(ln.url, page_url))
+    ]
+    if not files:
+        return None
+    best = max(files, key=lambda ln: score_document(Link(ln.url, ln.text or anchor)))
+    return best.url
+
+
 def gather_one(
     item: QueueItem,
     fetcher: PoliteFetcher,
@@ -122,13 +181,24 @@ def gather_one(
         return work
     errors = []
     for cand in picked[:MAX_DOCS_PER_DISTRICT]:
+        url = export_url(cand.url)
         try:
-            response = fetcher.get(cand.url)
+            response = fetcher.get(url)
+            data = response.content
+            kind = detect_kind(data)
+            if kind not in EXTENSIONS and _looks_html(
+                response.headers.get("content-type", ""), data
+            ):
+                # A document landing page (Finalsite "/documents/.../123456", viewers): follow the
+                # best file link on it, one hop only.
+                inner = landing_target(data, response.final_url, cand.anchor_text)
+                if inner is not None:
+                    response = fetcher.get(export_url(inner))
+                    data = response.content
+                    kind = detect_kind(data)
         except FetchError as exc:
             errors.append(f"{cand.url}: {exc}"[:200])
             continue
-        data = response.content
-        kind = detect_kind(data)
         if kind not in EXTENSIONS:
             errors.append(f"{cand.url}: không phải PDF/DOCX/XLSX")
             continue

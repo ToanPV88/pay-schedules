@@ -472,3 +472,30 @@ class TestReader:
             assert rd.parse_row(L(label, "50,000"), 0) is not None, label
         for label in ("Rank IV--41", "Total", ""):
             assert rd.parse_row(L(label, "50,000"), 0) is None, label
+
+    def test_row_variants_seen_in_the_pilot(self) -> None:
+        # step + code letter (Clark County), placement column (Fairfax), footnote marker (Detroit),
+        # daily rate beside the annual one (Horry), side text far right (Pinellas)
+        assert rd.parse_row(L("1", "A", "$57,471", "$63,986"), 0) is not None
+        assert rd.parse_row(L("0,1,2", "1", "27,175", "30,876"), 0).label == "1"  # type: ignore[union-attr]
+        assert rd.parse_row(L("11*", "79,000", "90,000", "*2024-25"), 0) is not None
+        row = rd.parse_row(L("0", "284.96", "54,142", "304.24", "57,806"), 0)
+        assert row is not None and [a for _, _, a in row.amounts] == [54142, 57806]
+        side = rd.Line(
+            [rd.Word("2", 0, 1), rd.Word("$60,880", 10, 17), rd.Word("Advanced", 60, 68)]
+        )
+        row = rd.parse_row(side, 0)
+        assert row is not None and [a for _, _, a in row.amounts] == [60880]
+        assert rd.parse_row(L("3", "61,118", "abc"), 0) is None  # words mixed in: not a row
+
+    def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:
+        lines = [L("Step", "BA", "MA")] + [
+            L(str(s), f"{50000 + s * 900:,}", f"{52000 + s * 900:,}") for s in (1, 2)
+        ]
+        lines += [rd.Line([rd.Word("Masters", 80, 87), rd.Word("2,251", 90, 95)])] * 2  # side box
+        lines += [L("3", "52,700", "54,700"), L("4"), L("5"), L("6", "", "57,500")]
+        lines += [L("7", "", "58,400")]
+        tables = rd.find_tables(lines, 1)
+        assert len(tables) == 1
+        assert [r.label for r in tables[0].rows] == ["1", "2", "3", "6", "7"]
+        assert tables[0].grid[-2] == [None, 57500]

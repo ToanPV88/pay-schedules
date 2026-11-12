@@ -20,7 +20,13 @@ from pay_pipeline.catalog.d1sql import batched_insert, quote
 from pay_pipeline.pdf_pipeline import extract as ex
 from pay_pipeline.pdf_pipeline import read as rd
 from pay_pipeline.pdf_pipeline.gather import DistrictWork, DocWork
-from pay_pipeline.schedules.model import ScheduleDraft, school_year_from_start, school_year_start
+from pay_pipeline.schedules.model import (
+    Lane,
+    ScheduleDraft,
+    normalize_lane,
+    school_year_from_start,
+    school_year_start,
+)
 from pay_pipeline.schedules.state_import import (
     CatalogDistrict,
     ImportResult,
@@ -117,6 +123,17 @@ def _clean_title(draft: ScheduleDraft) -> ScheduleDraft:
     return replace(draft, title="", notes=notes)
 
 
+def merge_lane_labels(a: list[Lane], b: list[Lane]) -> list[Lane]:
+    """Two readers may sweep stray words into a heading; when one label contains the other,
+    the shorter one is the heading."""
+    out = []
+    for x, y in zip(a, b, strict=True):
+        nx, ny = " ".join(x.label_raw.split()), " ".join(y.label_raw.split())
+        label = ny if ny and ny != nx and ny in nx else nx
+        out.append(Lane(label, normalize_lane(label)))
+    return out
+
+
 def prepare(
     works: list[DistrictWork],
     extractions: dict[str, dict[str, Any]],
@@ -178,6 +195,8 @@ def prepare(
                 )
             except ex.ExtractionError as exc:
                 issues.append(Issue("double_extraction", f"{exruns[1].model}: {exc}"))
+        if second is not None and len(second.lanes) == len(draft.lanes):
+            draft = replace(draft, lanes=merge_lane_labels(draft.lanes, second.lanes))
         try:
             start = school_year_start(draft.school_year)
         except ValueError:

@@ -19,6 +19,7 @@ reasons. The checks:
 from __future__ import annotations
 
 import datetime as dt
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import pairwise
@@ -116,6 +117,41 @@ def check_cell_count(s: ScheduleDraft) -> list[Issue]:
     if all(c.amount_cents is None for c in s.cells.values()):
         issues.append(Issue("cell_count", "Bảng không có ô nào có số tiền"))
     return issues
+
+
+_MONEY_IN_LABEL = re.compile(r"\$?\d{1,3},\d{3}")
+
+
+def check_labels(s: ScheduleDraft) -> list[Issue]:
+    """Lane labels must read as headings: no amounts in them, not a sentence."""
+    issues = []
+    bad = [
+        ln.label_raw
+        for ln in s.lanes
+        if _MONEY_IN_LABEL.search(ln.label_raw) or len(ln.label_raw) > 90
+    ]
+    if bad:
+        issues.append(Issue("lane_label", f"Nhãn lane không giống tiêu đề cột: {bad[0][:80]!r}"))
+    labels = [" ".join(ln.label_raw.lower().split()) for ln in s.lanes]
+    dupes = sorted({x for x in labels if labels.count(x) > 1})
+    if dupes:
+        issues.append(Issue("lane_label", f"Nhiều lane cùng nhãn {dupes[0]!r}: thiếu tiêu đề cột"))
+    return issues
+
+
+_STEP_NUMBER = re.compile(r"^\D{0,6}(\d{1,2})")
+
+
+def check_steps(s: ScheduleDraft) -> list[Issue]:
+    """A table that starts at a high step may have lost its first rows."""
+    if not s.steps:
+        return []
+    m = _STEP_NUMBER.match(s.steps[0].label_raw)
+    if m and int(m.group(1)) > 2:
+        return [
+            Issue("step_start", f"Bảng bắt đầu ở bậc {s.steps[0].label_raw}: có thể thiếu hàng đầu")
+        ]
+    return []
 
 
 def check_range(s: ScheduleDraft) -> list[Issue]:
@@ -225,6 +261,8 @@ def validate(
     issues: list[Issue] = []
     issues += check_cell_count(s)
     issues += check_monotonic(s)
+    issues += check_labels(s)
+    issues += check_steps(s)
     issues += check_range(s)
     issues += check_school_year(s, today, published_year, allow_history)
     issues += check_start_change(s, previous_start_cents)

@@ -29,7 +29,9 @@ TEACHER_RE = re.compile(
 )
 NEGATIVE_RE = re.compile(
     r"\b(classified|administrat\w*|principals?|custodi\w*|bus drivers?|food service|"
-    r"paraprofessional|substitutes?|hourly|confidential|supervisory|management)\b",
+    r"paraprofessional|substitutes?|hourly|confidential|supervisory|management|"
+    r"(?:instructional|teacher|classroom)\s+(?:assistants?|aides?|support)|assistants?|aides?|"
+    r"attendants?|technicians?|secretar\w*|support\s+(?:staff|scale|personnel))\b",
     re.I,
 )
 YEAR_PATTERNS = (

@@ -50,6 +50,9 @@ _LABEL = re.compile(
     r"(?:\s*(?:years?|yrs?\.?)(?:\s+and\s+(?:over|above|up))?)?\s*(\+)?$",
     re.I,
 )
+_PLACEMENT = re.compile(r"^[\d,\-–+]+$")
+_CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
+_NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,2}\)?\**$")
 _TITLE = re.compile(
     r"salary|salaries|schedule|district|schools?\b|board|approved|adopted|effective|revised|"
     r"unified|county|fiscal|\b20\d\d\b",
@@ -190,14 +193,39 @@ def parse_row(line: Line, index: int) -> Row | None:
     first = next((i for i, w in enumerate(words) if money(w.text) is not None), None)
     if first is None:
         return None
-    label = " ".join(w.text for w in words[:first]).strip()
+    head = words[:first]
+    while head and _NUMBER.match(head[-1].text):
+        head = head[:-1]  # a daily/hourly figure before the first annual amount
+    label = " ".join(w.text for w in head).strip()
+    # "0,1,2   1   $27,175": a placement column (years of experience) before the step
+    if (
+        not _LABEL.match(label)
+        and len(head) >= 2
+        and _LABEL.match(head[-1].text)
+        and all(_PLACEMENT.match(w.text) for w in head[:-1])
+    ):
+        label = head[-1].text
     if not _LABEL.match(label):
-        return None
-    amounts = []
+        # "1  A  $57,471 ...": a step number followed by one short code (letter or roman numeral)
+        if len(head) == 2 and _LABEL.match(head[0].text) and _CODE.match(head[1].text):
+            label = words[0].text
+        else:
+            return None
+    amounts: list[tuple[float, float, float]] = []
     for w in words[first:]:
         value = money(w.text)
+        if amounts and not _NUMBER.match(w.text) and value is None:
+            # Text far to the right of the amounts (a side box or footnote on the same line)
+            # ends the row; text close to them means the line is not a plain table row.
+            width = statistics.median(x1 - x0 for x0, x1, _ in amounts)
+            if w.x0 - amounts[-1][1] > 1.5 * width:
+                break
         if value is not None:
             amounts.append((w.x0, w.x1, value))
+        elif _NUMBER.match(w.text):
+            continue  # a daily, hourly or monthly figure printed beside the annual one
+        elif w.text[:1] in "*†‡":
+            continue  # a footnote marker such as "*2024-25" after the row
         elif w.text.strip("*") != label.strip("*") and not re.fullmatch(r"[*†‡]+|\d{1,2}", w.text):
             return None  # words mixed into the amounts: not a plain table row
     return Row(label, amounts, index)
@@ -216,6 +244,13 @@ def _amount_only(line: Line) -> list[tuple[float, float, float]] | None:
 def _label_number(label: str) -> int | None:
     m = _LABEL.match(label)
     return int(m.group(1)) if m else None
+
+
+def _right_of(line: Line, rows: list[Row]) -> bool:
+    """True when every word of ``line`` lies clearly right of the table's amounts."""
+    right = max(x1 for r in rows for _, x1, _ in r.amounts)
+    width = statistics.median(x1 - x0 for r in rows for x0, x1, _ in r.amounts)
+    return min(w.x0 for w in line.words) > right + 2 * width
 
 
 def find_tables(lines: list[Line], page: int) -> list[Table]:
@@ -249,6 +284,12 @@ def find_tables(lines: list[Line], page: int) -> list[Table]:
             current[-1].amounts.extend(cont)
             current[-1].amounts.sort()
             continue
+        if line.words and current and _right_of(line, current):
+            continue  # a side box printed beside the table: not part of it, not a break
+        if current and len(line.words) == 1 and _LABEL.match(line.words[0].text):
+            n, prev = _label_number(line.words[0].text), _label_number(current[-1].label)
+            if n is not None and prev is not None and n > prev:
+                continue  # a step with no amount in any lane (empty row of a staircase)
         if line.words:
             gap += 1
             if gap > 1:
@@ -330,6 +371,8 @@ def _header_lines(candidates: list[Line], centres: list[float], width: float) ->
             continue
         blanks = 0
         words = line.words
+        if any(money(w.text) is not None for w in words):
+            break  # a line of amounts above the table is another table, not a header
         gaps = [b.x0 - a.x1 for a, b in pairwise(words)]
         covered = sum(1 for c in centres if words[0].x0 <= c <= words[-1].x1)
         tight = not gaps or max(gaps) < 0.5 * width
