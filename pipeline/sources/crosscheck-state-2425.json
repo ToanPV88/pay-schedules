@@ -58,18 +58,8 @@
       "optional": true
     },
     {
-      "name": "ca-magnolia-sd-2024-25.pdf",
-      "url": "https://4.files.edl.io/ba3f/02/21/25/163122-3b990248-4118-4207-ace6-557c5b4f728a.pdf",
-      "optional": true
-    },
-    {
       "name": "ky-bullitt-2025-26-ksba.pdf",
       "url": "https://portal.ksba.org/public/Meeting/Attachments/DisplayAttachment.aspx?AttachmentID=883311",
-      "optional": true
-    },
-    {
-      "name": "ky-kenton-issue-paper-ksba.pdf",
-      "url": "https://portal.ksba.org/public/Meeting/Attachments/DisplayAttachment.aspx?AttachmentID=878263",
       "optional": true
     },
     {
@@ -83,8 +73,18 @@
       "optional": true
     },
     {
-      "name": "ky-mccracken-2025-26.pdf",
-      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/4273/Mccrackencps/7af2cd24-83bd-4919-b891-574248b6ce32/Salary-Schedule-2025-2026-Updated-10-23-25.pdf?disposition=inline",
+      "name": "ca-fresno-teacher-librarian-2024-07-01.pdf",
+      "url": "https://resources.finalsite.net/images/v1721246054/fresnouorg/t7o9hdb3ykj8u00zemjb/TeacherLibrariansSalarySchedulesEffectiveJuly12024.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-pittsburg-certificated-2024-07-01.pdf",
+      "url": "https://pittsburgusd.net/documents/Departments/Human-Resources/Human-Resources-Home/2024-2025%20salary%20increase%201%20percent/2024-2025-Certificated-1.07-effective-July-1-2024-Final.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-mccreary-2025-26-handbook.pdf",
+      "url": "https://resources.finalsite.net/images/v1754489962/mccrearyk12kyus/e1mu6imgxpqjs9ybnku4/McCrearyCounty2025-2026EmployeeHandbookFINALver2.pdf",
       "optional": true
     }
   ]
