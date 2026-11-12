@@ -1,0 +1,47 @@
+// Cấu hình Worker web. ID tài nguyên Cloudflare không phải bí mật.
+// Khóa bí mật đặt bằng `wrangler secret put`, không ghi vào tệp này (AGENTS.md §4).
+// database_id = "00000000-…" là chỗ giữ: workflow bootstrap-cloudflare.yml tạo CSDL và in ID thật.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "pay-schedules",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": { "enabled": true },
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "vars": {
+    "ENVIRONMENT": "production",
+    // D-002: chưa có tên miền thì không cho lập chỉ mục.
+    "INDEXABLE": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pay-schedules",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "DOCS", "bucket_name": "pay-schedules-docs" }],
+  "env": {
+    // Worker riêng cho bản xem trước. Mỗi pull request là một preview alias của Worker này
+    // (`wrangler versions upload --env preview --preview-alias pr-<số>`), dùng CSDL preview.
+    "preview": {
+      "name": "pay-schedules-preview",
+      "workers_dev": true,
+      "preview_urls": true,
+      "vars": { "ENVIRONMENT": "preview", "INDEXABLE": "false" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pay-schedules-preview",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "../../packages/db/migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "DOCS", "bucket_name": "pay-schedules-docs" }]
+    }
+  }
+}

@@ -1,0 +1,114 @@
+"""Repo-wide guards (idea from travienphi tests/test_repo_consistency.py).
+
+These tests read files only; they never call the network. They enforce PLAN Công đoạn 1:
+no secret in the repo or in CI logs, and AGENTS.md §4–5 (minimal workflow permissions,
+actions pinned by commit SHA).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN"}
+SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
+PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
+
+
+def load(path: Path) -> dict[str, Any]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert isinstance(data, dict)
+    return data
+
+
+def steps(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for job in workflow.get("jobs", {}).values():
+        out.extend(job.get("steps", []))
+    return out
+
+
+def tracked_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],  # noqa: S607
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [ROOT / line for line in result.stdout.splitlines() if line]
+
+
+def test_workflows_exist() -> None:
+    names = {p.name for p in WORKFLOWS}
+    assert {"ci.yml", "deploy.yml", "bootstrap-cloudflare.yml"} <= names
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+class TestWorkflow:
+    def test_top_level_permissions_read_only(self, path: Path) -> None:
+        wf = load(path)
+        assert wf.get("permissions") == {"contents": "read"}
+        for name, job in wf["jobs"].items():
+            perms = job.get("permissions", {})
+            assert "write" not in json.dumps(perms), f"{name} xin quyền ghi"
+
+    def test_actions_pinned_by_sha(self, path: Path) -> None:
+        for step in steps(load(path)):
+            if "uses" in step:
+                assert PINNED.match(step["uses"]), step["uses"]
+
+    def test_only_allowed_secrets(self, path: Path) -> None:
+        names = set(SECRET_REF.findall(path.read_text(encoding="utf-8")))
+        assert names <= ALLOWED_SECRETS, names
+
+    def test_secrets_only_in_step_env_of_wrangler_steps(self, path: Path) -> None:
+        wf = load(path)
+        assert "secrets." not in json.dumps(wf.get("env", {})), "secret ở env cấp workflow"
+        for job in wf["jobs"].values():
+            assert "secrets." not in json.dumps(job.get("env", {})), "secret ở env cấp job"
+        for step in steps(wf):
+            env = json.dumps(step.get("env", {}))
+            run = step.get("run", "")
+            assert "secrets." not in run, "secret dùng thẳng trong lệnh"
+            if "secrets." in env:
+                assert "wrangler" in run, f"secret ở bước không gọi wrangler: {step.get('name')}"
+
+    def test_no_shell_tracing(self, path: Path) -> None:
+        # `set -x` in lại lệnh kèm biến môi trường đã mở rộng.
+        for step in steps(load(path)):
+            assert not re.search(r"set\s+-[a-z]*x", step.get("run", "")), step.get("name")
+
+
+def test_no_secret_values_in_repo() -> None:
+    patterns = [
+        re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+        re.compile(r"CLOUDFLARE_API_TOKEN\s*[=:]\s*['\"]?[A-Za-z0-9_-]{20,}"),
+        re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}"),
+    ]
+    for path in tracked_files():
+        if not path.is_file() or path.suffix in {".png", ".ico", ".pdf"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for pattern in patterns:
+            assert not pattern.search(text), f"{path.relative_to(ROOT)} có giá trị giống bí mật"
+
+
+def test_wrangler_config_has_no_secrets() -> None:
+    text = (ROOT / "apps" / "web" / "wrangler.jsonc").read_text(encoding="utf-8")
+    # Biến môi trường thường nằm trong "vars"; bí mật phải đặt bằng `wrangler secret put`.
+    assert not re.search(r'"[A-Z_]*(TOKEN|SECRET|PASSWORD|API_KEY)[A-Z_]*"\s*:', text)
+
+
+def test_preview_and_production_use_different_databases() -> None:
+    text = (ROOT / "apps" / "web" / "wrangler.jsonc").read_text(encoding="utf-8")
+    names = re.findall(r'"database_name":\s*"([^"]+)"', text)
+    assert names == ["pay-schedules", "pay-schedules-preview"]

@@ -1,0 +1,129 @@
+# Deploy Worker web (DECISIONS.md D-004).
+# - Pull request: áp migration lên CSDL preview, tải lên một phiên bản của Worker preview với
+#   alias pr-<số>, ghi URL xem trước vào tóm tắt job và môi trường "preview".
+# - Merge vào main: áp migration lên CSDL production rồi deploy Worker production.
+# Secret CLOUDFLARE_API_TOKEN chỉ có ở các bước gọi wrangler (kiểm thử trong
+# pipeline/tests/test_repo_consistency.py chặn dùng ở chỗ khác).
+name: Deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  preview:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    environment:
+      name: preview
+      url: ${{ steps.upload.outputs.url }}
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        working-directory: .
+        run: npm ci --no-audit --no-fund
+      - name: Check Cloudflare resources exist
+        id: ready
+        run: |
+          if grep -q '00000000-0000-0000-0000-000000000000' wrangler.jsonc; then
+            echo "::warning::wrangler.jsonc còn ID giữ chỗ: chạy workflow bootstrap-cloudflare.yml trước."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Migrate preview database
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler d1 migrations apply pay-schedules-preview --remote --env preview
+      - name: Create preview Worker on first run
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if ! npx wrangler deployments list --env preview > /dev/null 2>&1; then
+            npx wrangler deploy --env preview
+          fi
+      - name: Upload preview version
+        id: upload
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          npx wrangler versions upload --env preview \
+            --preview-alias "pr-${PR_NUMBER}" \
+            --message "PR #${PR_NUMBER} ${HEAD_SHA}" | tee upload.log
+          url=$(grep -oE "https://pr-${PR_NUMBER}-pay-schedules-preview\.[a-z0-9.-]+\.workers\.dev" upload.log | head -1)
+          if [ -z "$url" ]; then
+            echo "::error::Không tìm thấy URL xem trước trong kết quả của wrangler."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Bản xem trước: $url" >> "$GITHUB_STEP_SUMMARY"
+
+  production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        working-directory: .
+        run: npm ci --no-audit --no-fund
+      - name: Check Cloudflare resources exist
+        id: ready
+        run: |
+          if grep -q '00000000-0000-0000-0000-000000000000' wrangler.jsonc; then
+            echo "::warning::wrangler.jsonc còn ID giữ chỗ: chạy workflow bootstrap-cloudflare.yml trước."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Migrate production database
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler d1 migrations apply pay-schedules --remote
+      - name: Deploy production Worker
+        id: deploy
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx wrangler deploy | tee deploy.log
+          url=$(grep -oE "https://pay-schedules\.[a-z0-9.-]+\.workers\.dev" deploy.log | head -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production: $url" >> "$GITHUB_STEP_SUMMARY"
