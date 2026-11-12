@@ -34,6 +34,15 @@ uv sync
 uv run ruff check src tests && uv run mypy && uv run pytest
 ```
 
+## Dữ liệu nguồn và danh mục học khu
+
+- Tệp nguồn kê khai trong `pipeline/sources/*.json`. Workflow **Fetch sources** (chạy tay, hoặc đẩy lên
+  nhánh `run/fetch-sources`) tải về và lưu vào một GitHub Release `src-*` (D-014).
+- Workflow **Import districts** dựng danh mục học khu từ Release đó và nạp vào D1: đẩy lên nhánh
+  `run/import-districts-preview` để nạp CSDL preview, `run/import-districts-production` để nạp production
+  (chỉ với commit đã có trên `main`). Báo cáo: `docs/reports/districts-ccd-2024-25.md` (D-015).
+- Chạy cục bộ trên các tệp đã tải: `pay-pipeline districts-build --sources <thư mục> --sql out.sql --report out.md`.
+
 ## Hạ tầng Cloudflare
 
 Tài khoản dùng chung với travienphi, gói Workers Paid (D-001). Tài liệu gốc lưu trong GitHub
