@@ -389,3 +389,74 @@ class TestExtractUnits:
                 client, "k", ex.PRIMARY, [{"type": "text", "text": "x"}], sleep=lambda _: None
             )
         assert run.error and run.error.startswith("HTTP 400") and run.data() is None
+
+
+class TestGold:
+    def test_committed_gold_files_load(self) -> None:
+        from pay_pipeline.pdf_pipeline.gold import load_gold
+
+        golds = load_gold(REPO / "pipeline" / "gold")
+        assert len(golds) >= 15
+        assert all(g.school_year[:2] == "20" and len(g.sha256) == 64 for g in golds)
+        assert len({g.id for g in golds}) == len(golds)
+
+    def test_compare_matches_labels_then_positions(self) -> None:
+        from pay_pipeline.pdf_pipeline.gold import Gold, compare
+
+        gold = Gold(
+            "t",
+            "1",
+            "KY",
+            "Test",
+            "a.pdf",
+            "https://x.invalid",
+            "0" * 64,
+            "2025-26",
+            ["RANK III", "RANK II", "RANK I"],
+            ["0", "1"],
+            [[40000.0, 45000.0, 50000.0], [41000.0, None, 51000.0]],
+        )
+        data = tool_answer()
+        data["lanes"] = ["Rank I", "Rank II", "Rank III", "Rank IV"]
+        data["steps"] = [
+            {"label": "0", "years_experience": 0},
+            {"label": "1", "years_experience": 1},
+        ]
+        data["cells"] = [[50000, 45000, 40000, 30000], [51000, 46000, 41000, 30000]]
+        total, right, wrong = compare(gold, ex.to_draft(data, "KY", "1", "Test"))
+        assert (total, right, wrong) == (5, 5, [])
+        data["cells"][1][0] = 51001
+        total, right, wrong = compare(gold, ex.to_draft(data, "KY", "1", "Test"))
+        assert (total, right) == (5, 4) and "chuẩn 51,000.00, trích 51,001.00" in wrong[0]
+
+    def test_evaluate_with_fake_api(self, tmp_path: Path) -> None:
+        if not HAS_PDFTOTEXT:
+            pytest.skip("cần pdftotext")
+        from pay_pipeline.pdf_pipeline.gold import Gold, evaluate, render
+
+        (tmp_path / "s.pdf").write_bytes(PDF)
+        steps = [str(s) for s in range(1, 16)]
+        cells = [[50000.0 + 1500 * s, 53000.0 + 1600 * s, 56000.0 + 1700 * s] for s in range(1, 16)]
+        gold = Gold(
+            "g1",
+            "1",
+            "CA",
+            "Test",
+            "s.pdf",
+            "https://x.invalid",
+            "0" * 64,
+            "2025-26",
+            ["BA", "BA+30", "MA"],
+            steps,
+            cells,
+        )
+        answers = {ex.PRIMARY: tool_answer(), ex.SECONDARY: tool_answer()}
+        results = evaluate(
+            [gold], tmp_path, "k", today=NOW.date(), transport=claude_transport(answers, [])
+        )
+        assert (
+            results[0].status == "published"
+            and results[0].accuracy == 1.0
+            and results[0].school_year_ok
+        )
+        assert "45/45" in render(results)

@@ -21,8 +21,8 @@ WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN", "ANTHROPIC_API_KEY"}
 # Secret nào chỉ được nằm trong env của bước chạy lệnh nào (D-019).
 SECRET_STEP_COMMAND = {
-    "CLOUDFLARE_API_TOKEN": "wrangler",
-    "ANTHROPIC_API_KEY": "pay-pipeline pdf-extract",
+    "CLOUDFLARE_API_TOKEN": ("wrangler",),
+    "ANTHROPIC_API_KEY": ("pay-pipeline pdf-extract", "pay-pipeline pdf-eval"),
 }
 # Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.
 WRITE_JOBS = {
@@ -30,6 +30,7 @@ WRITE_JOBS = {
     ("import-districts.yml", "publish-report"): {"contents": "write"},
     ("import-schedules.yml", "publish-report"): {"contents": "write"},
     ("pdf-pipeline.yml", "archive"): {"contents": "write"},
+    ("pdf-eval.yml", "publish-report"): {"contents": "write"},
 }
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
@@ -96,11 +97,11 @@ class TestWorkflow:
             run = step.get("run", "")
             assert "secrets." not in run, "secret dùng thẳng trong lệnh"
             assert "secrets." not in json.dumps(step.get("with", {})), "secret trong with:"
-            for name in SECRET_REF.findall(env):
-                command = SECRET_STEP_COMMAND[name]
-                assert command in run, f"{name} ở bước không chạy {command}: {step.get('name')}"
-                others = set(SECRET_REF.findall(env)) - {name}
-                assert not others or all(SECRET_STEP_COMMAND[o] in run for o in others)
+            names = set(SECRET_REF.findall(env))
+            assert len(names) <= 1, f"nhiều secret trong một bước: {step.get('name')}"
+            for name in names:
+                commands = SECRET_STEP_COMMAND[name]
+                assert any(c in run for c in commands), f"{name} ở bước không chạy {commands}"
 
     def test_no_shell_tracing(self, path: Path) -> None:
         # `set -x` in lại lệnh kèm biến môi trường đã mở rộng.

@@ -179,6 +179,21 @@ def _cmd_pdf_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_eval(args: argparse.Namespace) -> int:
+    from pay_pipeline.pdf_pipeline import gold
+
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        print("Chưa có ANTHROPIC_API_KEY: không chạy được bộ chuẩn")
+        return 1
+    golds = gold.load_gold(Path(args.gold))
+    results = gold.evaluate(golds, Path(args.docs), key, today=dt.datetime.now(dt.UTC).date())
+    Path(args.report).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.report).write_text(gold.render(results), encoding="utf-8")
+    print(gold.render(results).split("\n\n")[1])
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pay-pipeline")
     parser.add_argument("--version", action="version", version=__version__)
@@ -236,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sql", required=True)
     p.add_argument("--report", required=True)
     p.set_defaults(func=_cmd_pdf_build)
+
+    p = sub.add_parser("pdf-eval", help="Chạy pipeline trên bộ chuẩn và đo độ chính xác")
+    p.add_argument("--gold", required=True, help="Thư mục pipeline/gold")
+    p.add_argument("--docs", required=True, help="Thư mục chứa tài liệu của bộ chuẩn")
+    p.add_argument("--report", required=True)
+    p.set_defaults(func=_cmd_pdf_eval)
     return parser
 
 
