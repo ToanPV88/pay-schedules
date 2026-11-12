@@ -1,9 +1,9 @@
 """Gold set (PLAN Công đoạn 5, nghiệm thu): salary schedules entered and checked by hand.
 
 Each ``pipeline/gold/*.json`` names a document (Release asset + URL + sha256), the school year and
-the grid (lanes, steps, cells) as printed. ``evaluate`` runs the same classify → extract →
-validate path as the pipeline on each document and compares the primary extraction with the
-gold grid, cell by cell:
+the grid (lanes, steps, cells) as printed. ``evaluate`` runs the same classify → read →
+validate path as the pipeline on each document and compares the first reading with the gold
+grid, cell by cell:
 
 * lanes are matched by label (normalised text, one containing the other), falling back to position
   when both have the same number of lanes; steps likewise;
@@ -21,8 +21,6 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-
-import httpx
 
 from pay_pipeline.documents.classify import classify
 from pay_pipeline.pdf_pipeline import extract as ex
@@ -126,58 +124,42 @@ def compare(gold: Gold, draft: ScheduleDraft) -> tuple[int, int, list[str]]:
     return total, right, wrong
 
 
-def evaluate(
-    golds: list[Gold],
-    docs_dir: Path,
-    api_key: str,
-    *,
-    today: dt.date,
-    transport: httpx.BaseTransport | None = None,
-) -> list[GoldResult]:
+def evaluate(golds: list[Gold], docs_dir: Path, *, today: dt.date) -> list[GoldResult]:
+    from pay_pipeline.pdf_pipeline.run import read_document
+
     results = []
-    with httpx.Client(transport=transport) as client:
-        for gold in golds:
-            path = docs_dir / gold.asset
-            c = classify(path)
-            if not c.is_candidate:
-                results.append(GoldResult(gold.id, "no_schedule", issues=[c.reason]))
-                continue
-            content, _ = ex.build_content(path, c.kind, asdict(c), gold.district, gold.state)
-            runs = [ex.call_claude(client, api_key, m, content) for m in (ex.PRIMARY, ex.SECONDARY)]
-            cost = sum(r.cost_usd_micros for r in runs)
-            data = [r.data() for r in runs]
-            if data[0] is None or data[1] is None:
-                errs = [r.error or "JSON lỗi" for r in runs if r.data() is None]
-                results.append(GoldResult(gold.id, "error", issues=errs, cost_usd_micros=cost))
-                continue
-            if not data[0].get("is_teacher_salary_schedule"):
-                results.append(GoldResult(gold.id, "no_schedule", cost_usd_micros=cost,
-                                          issues=[str(data[0].get("reason"))]))  # fmt: skip
-                continue
-            try:
-                draft = ex.to_draft(data[0], gold.state, gold.nces_id, gold.district)
-                second = None
-                if data[1].get("is_teacher_salary_schedule"):
-                    second = ex.to_draft(data[1], gold.state, gold.nces_id, gold.district)
-            except ex.ExtractionError as exc:
-                results.append(
-                    GoldResult(gold.id, "error", issues=[str(exc)], cost_usd_micros=cost)
-                )
-                continue
-            if not draft.school_year and c.best_year:
-                draft.school_year = c.best_year
-            issues: list[Issue] = validate(draft, today=today, second_extraction=second)
-            if second is None:
-                issues.append(Issue("double_extraction", "Bản đối chiếu không thấy bảng lương"))
-            total, right, wrong = compare(gold, draft)
-            results.append(
-                GoldResult(
-                    gold.id, "review" if issues else "published",
-                    school_year_ok=draft.school_year == gold.school_year,
-                    gold_cells=total, right_cells=right,
-                    issues=sorted({i.code for i in issues}), wrong=wrong, cost_usd_micros=cost,
-                )
-            )  # fmt: skip
+    for gold in golds:
+        path = docs_dir / gold.asset
+        c = classify(path)
+        if not c.is_candidate:
+            results.append(GoldResult(gold.id, "no_schedule", issues=[c.reason]))
+            continue
+        data = read_document(path, c.kind, asdict(c))
+        if not data[0].get("is_teacher_salary_schedule"):
+            results.append(GoldResult(gold.id, "no_schedule", issues=[str(data[0].get("reason"))]))
+            continue
+        try:
+            draft = ex.to_draft(data[0], gold.state, gold.nces_id, gold.district)
+            second = None
+            if len(data) > 1 and data[1].get("is_teacher_salary_schedule"):
+                second = ex.to_draft(data[1], gold.state, gold.nces_id, gold.district)
+        except ex.ExtractionError as exc:
+            results.append(GoldResult(gold.id, "error", issues=[str(exc)]))
+            continue
+        if not draft.school_year and c.best_year:
+            draft.school_year = c.best_year
+        issues: list[Issue] = validate(draft, today=today, second_extraction=second)
+        if len(data) > 1 and second is None:
+            issues.append(Issue("double_extraction", "Lần đọc thứ hai không thấy bảng"))
+        total, right, wrong = compare(gold, draft)
+        results.append(
+            GoldResult(
+                gold.id, "review" if issues else "published",
+                school_year_ok=draft.school_year == gold.school_year,
+                gold_cells=total, right_cells=right,
+                issues=sorted({i.code for i in issues}), wrong=wrong,
+            )
+        )  # fmt: skip
     return results
 
 
@@ -186,7 +168,6 @@ def render(results: list[GoldResult]) -> str:
     gold = sum(r.gold_cells for r in published)
     right = sum(r.right_cells for r in published)
     leaked = [r for r in published if r.right_cells < r.gold_cells or not r.school_year_ok]
-    cost = sum(r.cost_usd_micros for r in results) / 1e6
     lines = [
         "# Bộ chuẩn: kết quả pipeline PDF",
         "",
@@ -196,7 +177,6 @@ def render(results: list[GoldResult]) -> str:
         f"- Ô đúng trên các bảng sẽ publish: {right}/{gold}"
         + (f" ({right / gold:.2%}); ngưỡng PLAN ≥ 99%" if gold else ""),
         f"- Bảng sai mà vẫn qua Validate: {len(leaked)} (ngưỡng PLAN: 0)",
-        f"- Chi phí model: {cost:.2f} USD",
         "",
         "| Bộ chuẩn | Kết quả | Năm học đúng | Ô đúng | Kiểm tra trượt | Ô sai (tối đa 10) |",
         "|---|---|---|---:|---|---|",

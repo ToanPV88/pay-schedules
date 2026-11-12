@@ -1,27 +1,24 @@
 """Steps 4-6 of the PDF pipeline for one batch: Extract, Validate, Publish (as D1 SQL), report.
 
-``extract_all`` calls the model for every district whose gather status is ``found`` (two
-independent runs per document), within a cost budget, and checkpoints to ``extractions.json``
-after every district. ``prepare`` turns gather + extraction results into an
-:class:`ImportResult` (reusing the state-import SQL) plus the pipeline-state rows; ``pipeline_sql``
-renders those rows.
+``read_all`` reads the chosen document of every district whose gather status is ``found`` with
+the deterministic readers of ``read.py`` (no AI API, D-022): two independent readings for a PDF,
+one for a spreadsheet or Word table. Results are checkpointed to ``extractions.json``.
+``prepare`` turns gather + extraction results into an :class:`ImportResult` (reusing the
+state-import SQL) plus the pipeline-state rows; ``pipeline_sql`` renders those rows.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
-import threading
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from pay_pipeline.catalog.d1sql import batched_insert, quote
 from pay_pipeline.pdf_pipeline import extract as ex
+from pay_pipeline.pdf_pipeline import read as rd
 from pay_pipeline.pdf_pipeline.gather import DistrictWork, DocWork
 from pay_pipeline.schedules.model import ScheduleDraft, school_year_from_start, school_year_start
 from pay_pipeline.schedules.state_import import (
@@ -53,41 +50,35 @@ class Outcome:
 # ---------------------------------------------------------------- extract
 
 
-def extract_all(
-    works: list[DistrictWork],
-    work_dir: Path,
-    api_key: str,
-    *,
-    budget_usd: float,
-    models: tuple[str, str] = (ex.PRIMARY, ex.SECONDARY),
-    workers: int = 4,
-    transport: httpx.BaseTransport | None = None,
-) -> dict[str, dict[str, Any]]:
+def read_document(path: Path, kind: str, classification: dict[str, Any]) -> list[dict[str, Any]]:
+    """Deterministic readings of one document, in the shared answer shape."""
+    if classification.get("scanned"):
+        return [rd.to_answer(None, "", rd.LAYOUT, "PDF dạng ảnh quét: cần OCR hoặc nhập tay")]
+    if kind == "pdf":
+        return rd.read_pdf(path, [int(p) for p in classification.get("schedule_pages") or []])
+    if kind == "xlsx":
+        return [rd.read_xlsx(path)]
+    if kind == "docx":
+        return [rd.read_docx(path)]
+    return [rd.to_answer(None, "", rd.LAYOUT, f"Không đọc được tệp {kind}")]
+
+
+def read_all(works: list[DistrictWork], work_dir: Path) -> dict[str, dict[str, Any]]:
     path = work_dir / "extractions.json"
     results: dict[str, dict[str, Any]] = (
         json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     )
-    spent = sum(r["cost_usd_micros"] for v in results.values() for r in v["runs"])
-    lock = threading.Lock()
-    todo = [w for w in works if w.status == "found" and w.chosen and w.nces_id not in results]
-
-    def one(work: DistrictWork, client: httpx.Client) -> None:
-        nonlocal spent
-        with lock:
-            if spent >= budget_usd * 1_000_000:
-                return
+    for work in works:
+        if work.status != "found" or not work.chosen or work.nces_id in results:
+            continue
         doc = next(d for d in work.docs if d.asset_name == work.chosen)
-        content, pages = ex.build_content(
-            work_dir / "docs" / doc.asset_name, doc.kind, doc.classification, work.name, work.state
-        )
-        runs = [ex.call_claude(client, api_key, m, content) for m in models]
-        with lock:
-            spent += sum(r.cost_usd_micros for r in runs)
-            results[work.nces_id] = {"pages": pages, "runs": [asdict(r) for r in runs]}
-            path.write_text(json.dumps(results, ensure_ascii=False) + "\n", encoding="utf-8")
-
-    with httpx.Client(transport=transport) as client, ThreadPoolExecutor(workers) as pool:
-        list(pool.map(lambda w: one(w, client), todo))
+        answers = read_document(work_dir / "docs" / doc.asset_name, doc.kind, doc.classification)
+        runs = [
+            ex.ExtractionRun(a.get("reader", rd.LAYOUT), None, json.dumps(a, ensure_ascii=False))
+            for a in answers
+        ]
+        results[work.nces_id] = {"runs": [asdict(r) for r in runs]}
+    path.write_text(json.dumps(results, ensure_ascii=False) + "\n", encoding="utf-8")
     return results
 
 
@@ -165,7 +156,7 @@ def prepare(
         data = [r.data() or {} for r in exruns]
         if not data[0].get("is_teacher_salary_schedule"):
             reason = str(data[0].get("reason") or "")[:300]
-            outcomes.append(Outcome(work.nces_id, "no_schedule", f"Model: {reason}", cost))
+            outcomes.append(Outcome(work.nces_id, "no_schedule", f"Đọc tài liệu: {reason}", cost))
             continue
         year_hint = doc.classification.get("best_year")
         try:
@@ -176,7 +167,9 @@ def prepare(
         draft = _clean_title(_with_year(draft, year_hint))
         issues: list[Issue] = []
         second: ScheduleDraft | None = None
-        if not data[1].get("is_teacher_salary_schedule"):
+        if len(data) < 2:
+            pass  # spreadsheet or Word table: cells are explicit, one reading
+        elif not data[1].get("is_teacher_salary_schedule"):
             issues.append(Issue("double_extraction", f"{exruns[1].model} không thấy bảng lương"))
         else:
             try:
@@ -309,22 +302,20 @@ def pipeline_sql(
 # ---------------------------------------------------------------- report
 
 
-def render_report(
-    works: list[DistrictWork], outcomes: list[Outcome], run_key: str, budget_usd: float
-) -> str:
+def render_report(works: list[DistrictWork], outcomes: list[Outcome], run_key: str) -> str:
     by = Counter(o.status for o in outcomes)
     n = len(outcomes)
-    extracted = [o for o in outcomes if o.cost_usd_micros]
-    cost = sum(o.cost_usd_micros for o in outcomes) / 1_000_000
     found = sum(1 for w in works if w.status in ("found", "unchanged"))
+    read = by["published"] + by["review"]
     lines = [
         f"# Pipeline PDF: lần chạy {run_key}",
         "",
-        f"- Học khu xử lý: {n} (ngân sách model {budget_usd:.2f} USD)",
+        f"- Học khu xử lý: {n}",
         f"- Tìm thấy tài liệu giống bảng lương giáo viên: {found} ({found / n:.0%})" if n else "",
-        f"- Đã trích bằng model: {len(extracted)}; chi phí {cost:.2f} USD"
-        + (f", trung bình {cost / len(extracted):.3f} USD/học khu" if extracted else ""),
-        f"- Published: {by['published']}; chờ xem tay: {by['review']}",
+        f"- Đọc được bảng bậc × lane: {read}"
+        + (f" ({read / found:.0%} số tài liệu tìm thấy)" if found else ""),
+        f"- Qua mọi kiểm tra (published): {by['published']}; chờ xem tay: {by['review']}",
+        "- Chi phí: 0 USD (đọc tất định, không dùng API; D-022)",
         "",
         "## Trạng thái",
         "",
@@ -342,16 +333,10 @@ def render_report(
     ]
     lines += [f"| {k} | {v} |" for k, v in codes.most_common()] or ["| – | 0 |"]
     lines += ["", "## Từng học khu", ""]
-    lines += [
-        "| NCES | Học khu | Bang | Trạng thái | Chi phí | Chi tiết |",
-        "|---|---|---|---|---:|---|",
-    ]
+    lines += ["| NCES | Học khu | Bang | Trạng thái | Chi tiết |", "|---|---|---|---|---|"]
     names = {w.nces_id: w for w in works}
     for o in outcomes:
         w = names[o.nces_id]
         detail = o.detail.replace("|", "/").replace("\n", " ")[:220]
-        lines.append(
-            f"| {o.nces_id} | {w.name} | {w.state} | {o.status} |"
-            f" {o.cost_usd_micros / 1_000_000:.3f} | {detail} |"
-        )
+        lines.append(f"| {o.nces_id} | {w.name} | {w.state} | {o.status} | {detail} |")
     return "\n".join(x for x in lines if x is not None) + "\n"

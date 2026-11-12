@@ -12,6 +12,7 @@ import datetime as dt
 import json
 import shutil
 import sqlite3
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +31,9 @@ from pay_pipeline.discover.crawl import (
 )
 from pay_pipeline.documents.classify import classify, school_years
 from pay_pipeline.pdf_pipeline import extract as ex
+from pay_pipeline.pdf_pipeline import read as rd
 from pay_pipeline.pdf_pipeline.gather import QueueItem, gather, load_work
-from pay_pipeline.pdf_pipeline.run import extract_all, pipeline_sql, prepare, render_report
+from pay_pipeline.pdf_pipeline.run import pipeline_sql, prepare, read_all, render_report
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.schedules.state_import import CatalogDistrict
 
@@ -143,24 +145,11 @@ def tool_answer(
     }
 
 
-def claude_transport(
-    answers: dict[str, dict[str, Any]], calls: list[dict[str, Any]]
-) -> httpx.MockTransport:
-    def handler(request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content)
-        calls.append({"model": body["model"], "headers": dict(request.headers)})
-        answer = answers[body["model"]]
-        return httpx.Response(
-            200,
-            json={
-                "content": [
-                    {"type": "tool_use", "name": "record_salary_schedule", "input": answer}
-                ],
-                "usage": {"input_tokens": 3000, "output_tokens": 1500},
-            },
-        )
-
-    return httpx.MockTransport(handler)
+def fake_extractions(first: dict[str, Any], second: dict[str, Any] | None) -> dict[str, Any]:
+    runs = [ex.ExtractionRun(rd.LAYOUT, None, json.dumps(first))]
+    if second is not None:
+        runs.append(ex.ExtractionRun(rd.WORDS, None, json.dumps(second)))
+    return {"0600001": {"runs": [asdict(r) for r in runs]}}
 
 
 def fresh_db() -> sqlite3.Connection:
@@ -274,20 +263,16 @@ class TestPipeline:
         )
         assert works[0].status == "unchanged"
 
-    def test_extract_validate_publish(self, tmp_path: Path) -> None:
+    def test_read_validate_publish(self, tmp_path: Path) -> None:
         works = self.run_gather(tmp_path)
-        calls: list[dict[str, Any]] = []
-        answers = {ex.PRIMARY: tool_answer(), ex.SECONDARY: tool_answer()}
-        extractions = extract_all(
-            works,
-            tmp_path,
-            "sk-test-key",
-            budget_usd=1.0,
-            transport=claude_transport(answers, calls),
-        )
-        assert sorted(c["model"] for c in calls) == sorted([ex.PRIMARY, ex.SECONDARY])
-        assert all(c["headers"]["x-api-key"] == "sk-test-key" for c in calls)
+        extractions = read_all(works, tmp_path)
         assert json.loads((tmp_path / "extractions.json").read_text()).keys() == {"0600001"}
+        runs = extractions["0600001"]["runs"]
+        assert [r["model"] for r in runs] == [rd.WORDS, rd.LAYOUT]
+        answer = json.loads(runs[0]["raw_output"])
+        assert answer["lanes"] == ["BA", "BA+30", "MA"] and answer["school_year"] == "2025-26"
+        assert answer["cells"][0] == [51500.0, 54600.0, 57700.0]
+        assert json.loads(runs[1]["raw_output"])["cells"] == answer["cells"]
 
         result, outcomes = prepare(works, extractions, CATALOG, [], "docs-test-1", NOW.date())
         status = {o.nces_id: o.status for o in outcomes}
@@ -296,21 +281,17 @@ class TestPipeline:
             "0600002": "no_candidates",
             "0600003": "no_website",
         }
-        cost = next(o for o in outcomes if o.nces_id == "0600001").cost_usd_micros
-        assert cost == ex.cost_micros(ex.PRIMARY, 3000, 1500) + ex.cost_micros(
-            ex.SECONDARY, 3000, 1500
-        )
 
         db = fresh_db()
         sql = render_sql(schedules_sql(result, NOW) + pipeline_sql(works, outcomes, "run-1", NOW))
         db.executescript(sql)
         row = db.execute(
-            "SELECT s.status, s.school_year, s.title, s.contract_days, s.source_page, d.district_id,"
+            "SELECT s.status, s.school_year, s.title, s.source_page, d.district_id,"
             " d.release_tag, (SELECT count(*) FROM cells c WHERE c.schedule_id = s.id),"
             " (SELECT count(*) FROM extraction_runs e WHERE e.source_document_id = d.id)"
             " FROM schedules s JOIN source_documents d ON d.id = s.source_document_id"
         ).fetchone()
-        assert row == ("published", "2025-26", "", 185, 1, 1, "docs-test-1", 45, 2)
+        assert row == ("published", "2025-26", "", 1, 1, "docs-test-1", 45, 2)
         pipeline = dict(db.execute("SELECT district_id, status FROM district_pipeline").fetchall())
         assert pipeline == {1: "published", 2: "no_candidates", 3: "no_website"}
         assert db.execute("SELECT count(*) FROM document_classifications").fetchone()[0] == 2
@@ -332,39 +313,30 @@ class TestPipeline:
             db.execute("SELECT attempts FROM district_pipeline WHERE district_id = 1").fetchone()[0]
             == 2
         )
-        report = render_report(works, outcomes, "run-1", 1.0)
-        assert "Published: 1" in report and "Test Unified" in report
+        report = render_report(works, outcomes, "run-1")
+        assert "published): 1" in report and "Test Unified" in report and "0 USD" in report
 
-    def test_disagreeing_extractions_go_to_review(self, tmp_path: Path) -> None:
+    def test_disagreeing_readings_go_to_review(self, tmp_path: Path) -> None:
         works = self.run_gather(tmp_path)
         other = tool_answer()
         other["cells"][4][1] += 100
-        answers = {ex.PRIMARY: tool_answer(), ex.SECONDARY: other}
-        extractions = extract_all(
-            works, tmp_path, "k", budget_usd=1.0, transport=claude_transport(answers, [])
+        result, outcomes = prepare(
+            works, fake_extractions(tool_answer(), other), CATALOG, [], "t", NOW.date()
         )
-        result, outcomes = prepare(works, extractions, CATALOG, [], "docs-test-1", NOW.date())
         o = next(o for o in outcomes if o.nces_id == "0600001")
         assert o.status == "review" and o.issue_codes == ["double_extraction"]
         assert result.prepared[0].status == "draft"
 
-    def test_not_a_schedule_and_budget(self, tmp_path: Path) -> None:
+    def test_single_reading_and_not_a_schedule(self, tmp_path: Path) -> None:
         works = self.run_gather(tmp_path)
-        answers = {ex.PRIMARY: tool_answer(teacher=False), ex.SECONDARY: tool_answer(teacher=False)}
-        assert (
-            extract_all(
-                works,
-                tmp_path / "none",
-                "k",
-                budget_usd=0.0,
-                transport=claude_transport(answers, []),
-            )
-            == {}
-        )  # budget 0: no calls
-        extractions = extract_all(
-            works, tmp_path, "k", budget_usd=1.0, transport=claude_transport(answers, [])
+        _, outcomes = prepare(
+            works, fake_extractions(tool_answer(), None), CATALOG, [], "t", NOW.date()
         )
-        _, outcomes = prepare(works, extractions, CATALOG, [], "t", NOW.date())
+        assert next(o for o in outcomes if o.nces_id == "0600001").status == "published"
+        nothing = tool_answer(teacher=False)
+        _, outcomes = prepare(
+            works, fake_extractions(nothing, nothing), CATALOG, [], "t", NOW.date()
+        )
         assert next(o for o in outcomes if o.nces_id == "0600001").status == "no_schedule"
 
 
@@ -381,14 +353,6 @@ class TestExtractUnits:
         draft = ex.to_draft(data, "CA", "1", "Test")
         assert draft.cells[(0, 2)] == ex.Cell(None, ex.BLANK_NOTE)
         assert draft.lanes[0].lane_normalized == "BA" and draft.stipends[0].amount_cents == 200000
-
-    def test_api_error_is_recorded(self) -> None:
-        transport = httpx.MockTransport(lambda r: httpx.Response(400, json={"error": "bad"}))
-        with httpx.Client(transport=transport) as client:
-            run = ex.call_claude(
-                client, "k", ex.PRIMARY, [{"type": "text", "text": "x"}], sleep=lambda _: None
-            )
-        assert run.error and run.error.startswith("HTTP 400") and run.data() is None
 
 
 class TestGold:
@@ -429,7 +393,7 @@ class TestGold:
         total, right, wrong = compare(gold, ex.to_draft(data, "KY", "1", "Test"))
         assert (total, right) == (5, 4) and "chuẩn 51,000.00, trích 51,001.00" in wrong[0]
 
-    def test_evaluate_with_fake_api(self, tmp_path: Path) -> None:
+    def test_evaluate_on_hand_built_pdf(self, tmp_path: Path) -> None:
         if not HAS_PDFTOTEXT:
             pytest.skip("cần pdftotext")
         from pay_pipeline.pdf_pipeline.gold import Gold, evaluate, render
@@ -437,26 +401,74 @@ class TestGold:
         (tmp_path / "s.pdf").write_bytes(PDF)
         steps = [str(s) for s in range(1, 16)]
         cells = [[50000.0 + 1500 * s, 53000.0 + 1600 * s, 56000.0 + 1700 * s] for s in range(1, 16)]
-        gold = Gold(
-            "g1",
-            "1",
-            "CA",
-            "Test",
-            "s.pdf",
-            "https://x.invalid",
-            "0" * 64,
-            "2025-26",
-            ["BA", "BA+30", "MA"],
-            steps,
-            cells,
-        )
-        answers = {ex.PRIMARY: tool_answer(), ex.SECONDARY: tool_answer()}
-        results = evaluate(
-            [gold], tmp_path, "k", today=NOW.date(), transport=claude_transport(answers, [])
-        )
+        gold = Gold("g1", "1", "CA", "Test", "s.pdf", "https://x.invalid", "0" * 64, "2025-26",
+                    ["BA", "BA+30", "MA"], steps, cells)  # fmt: skip
+        results = evaluate([gold], tmp_path, today=NOW.date())
         assert (
             results[0].status == "published"
             and results[0].accuracy == 1.0
             and results[0].school_year_ok
         )
         assert "45/45" in render(results)
+        cells[3][1] = 1.0
+        bad = Gold("g2", "1", "CA", "Test", "s.pdf", "https://x.invalid", "0" * 64, "2025-26",
+                   ["BA", "BA+30", "MA"], steps, cells)  # fmt: skip
+        assert "Bảng sai mà vẫn qua Validate: 1" in render(
+            evaluate([bad], tmp_path, today=NOW.date())
+        )
+
+
+def L(*cells: str, step: float = 10.0) -> rd.Line:
+    """A line of words; each cell is right-aligned in a column of width ``step``."""
+    words = []
+    for j, text in enumerate(cells):
+        if text:
+            words.append(rd.Word(text, j * step + step - len(text), j * step + step))
+    return rd.Line(words)
+
+
+class TestReader:
+    def test_staircase_continuation_and_header(self) -> None:
+        lines = [
+            L("", "Teacher Salary Schedule 2025-26"),
+            rd.Line([]),
+            L("Step", "BA", "MA", "MA+30"),
+            L("1", "50,000", "", ""),
+            L("2", "51,000", "53,000", ""),
+            L("3", "$52,000", "$54,000", "$56,000"),
+            L("4", "", "", "57,500"),
+            L("", "53,000", "55,000", ""),  # amounts of step 4 printed on the next line
+            L("Rank IV", "40,000"),
+        ]
+        tables = rd.find_tables(lines, 1)
+        assert len(tables) == 1
+        t = tables[0]
+        assert t.lanes == ["BA", "MA", "MA+30"]
+        assert [r.label for r in t.rows] == ["1", "2", "3", "4"]
+        assert t.grid == [
+            [50000, None, None],
+            [51000, 53000, None],
+            [52000, 54000, 56000],
+            [53000, 55000, 57500],
+        ]
+
+    def test_unreadable_layout_and_table_choice(self) -> None:
+        clash = [L("Step", "BA"), L("1", "50,000"), L("2", "51,000"), rd.Line([rd.Word("3", 0, 1),
+                 rd.Word("52,000", 14, 20), rd.Word("52,500", 15, 20.5)])]  # fmt: skip
+        assert rd.find_tables(clash, 1) == []
+        classified = [L("", "Classified hourly staff"), rd.Line([]), L("Grade", "A", "B")] + [
+            L(str(s), f"{30000 + s * 900:,}", f"{31000 + s * 900:,}") for s in range(1, 10)
+        ]
+        teacher = [L("", "Certificated teacher schedule"), rd.Line([]), L("Step", "BA", "MA")] + [
+            L(str(s), f"{50000 + s * 900:,}", f"{52000 + s * 900:,}") for s in range(1, 6)
+        ]
+        tables = rd.find_tables(classified + [rd.Line([])] * 3 + teacher, 1)
+        assert len(tables) == 2
+        picked = rd.pick_table(tables)
+        assert picked is not None and picked.grid[0] == [50900, 52900]
+
+    def test_labels(self) -> None:
+        for label in ("1", "31+", "0-3 Years", "20 Years and Over", "Step 4", "10**"):
+            assert rd.parse_row(L(label, "50,000"), 0) is not None, label
+        for label in ("Rank IV--41", "Total", ""):
+            assert rd.parse_row(L(label, "50,000"), 0) is None, label

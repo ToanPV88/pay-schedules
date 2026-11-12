@@ -67,13 +67,22 @@ def check_monotonic(s: ScheduleDraft) -> list[Issue]:
                 )
             prev = (step, cell.amount_cents)
     if s.lanes:
+        # Lanes are usually printed lowest qualification first; some schedules (Kentucky ranks,
+        # "Doctorate" first) print them highest first. The direction is the one most adjacent
+        # pairs follow; every pair must then follow it.
+        rising = falling = 0
+        for step in range(len(s.steps)):
+            row = [a for ln in range(len(s.lanes)) if (a := s.amount(step, ln)) is not None]
+            rising += sum(y > x for x, y in zip(row, row[1:], strict=False))
+            falling += sum(y < x for x, y in zip(row, row[1:], strict=False))
+        sign = -1 if falling > rising else 1
         for step in range(len(s.steps)):
             prev = None
             for lane in range(len(s.lanes)):
                 cell = s.cells.get((step, lane))
                 if cell is None or cell.amount_cents is None:
                     continue
-                if prev is not None and cell.amount_cents < prev[1] and not cell.note:
+                if prev is not None and sign * (cell.amount_cents - prev[1]) < 0 and not cell.note:
                     issues.append(
                         Issue(
                             "monotonic_lane",
@@ -177,16 +186,23 @@ def check_start_change(s: ScheduleDraft, previous_start_cents: int | None) -> li
     ]
 
 
+def _label(text: str) -> str:
+    return "".join(text.lower().split())
+
+
 def compare_extractions(a: ScheduleDraft, b: ScheduleDraft) -> list[Issue]:
-    """Cell-by-cell agreement of two independent extractions of the same document."""
+    """Cell-by-cell agreement of two independent readings of the same document.
+
+    Lane headers may be grouped differently by two readers, so only their number is compared;
+    step labels (spaces ignored) and every cell must match.
+    """
     issues: list[Issue] = []
     if a.school_year != b.school_year:
         issues.append(
             Issue("double_extraction", f"Năm học lệch: {a.school_year} / {b.school_year}")
         )
-    if [x.label_raw for x in a.lanes] != [x.label_raw for x in b.lanes] or len(a.steps) != len(
-        b.steps
-    ):
+    same_steps = [_label(x.label_raw) for x in a.steps] == [_label(x.label_raw) for x in b.steps]
+    if len(a.lanes) != len(b.lanes) or not same_steps:
         issues.append(Issue("double_extraction", "Hai lần trích ra lưới bậc × lane khác nhau"))
         return issues
     differ = [k for k in set(a.cells) | set(b.cells) if a.cells.get(k) != b.cells.get(k)]

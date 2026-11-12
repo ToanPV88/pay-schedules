@@ -142,15 +142,13 @@ def _cmd_pdf_gather(args: argparse.Namespace) -> int:
 
 
 def _cmd_pdf_extract(args: argparse.Namespace) -> int:
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        print("Chưa có ANTHROPIC_API_KEY: bỏ qua bước Extract")
-        return 0
     work_dir = Path(args.work)
-    works = pdf_gather.load_work(work_dir)
-    results = pdf_run.extract_all(works, work_dir, key, budget_usd=args.budget_usd)
-    cost = sum(r["cost_usd_micros"] for v in results.values() for r in v["runs"]) / 1e6
-    print(f"Đã trích {len(results)} học khu, chi phí {cost:.2f} USD")
+    results = pdf_run.read_all(pdf_gather.load_work(work_dir), work_dir)
+    ok = sum(
+        1 for v in results.values()
+        if json.loads(v["runs"][0]["raw_output"]).get("is_teacher_salary_schedule")
+    )  # fmt: skip
+    print(f"Đã đọc {len(results)} tài liệu, {ok} có bảng bậc × lane")
     return 0
 
 
@@ -173,7 +171,7 @@ def _cmd_pdf_build(args: argparse.Namespace) -> int:
     )
     Path(args.sql).write_text(render_sql(statements), encoding="utf-8")
     Path(args.report).write_text(
-        pdf_run.render_report(works, outcomes, args.run_key, args.budget_usd), encoding="utf-8"
+        pdf_run.render_report(works, outcomes, args.run_key), encoding="utf-8"
     )
     print(f"{len(outcomes)} học khu, {len(result.prepared)} bảng lương")
     return 0
@@ -182,15 +180,12 @@ def _cmd_pdf_build(args: argparse.Namespace) -> int:
 def _cmd_pdf_eval(args: argparse.Namespace) -> int:
     from pay_pipeline.pdf_pipeline import gold
 
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        print("Chưa có ANTHROPIC_API_KEY: không chạy được bộ chuẩn")
-        return 1
     golds = gold.load_gold(Path(args.gold))
-    results = gold.evaluate(golds, Path(args.docs), key, today=dt.datetime.now(dt.UTC).date())
+    results = gold.evaluate(golds, Path(args.docs), today=dt.datetime.now(dt.UTC).date())
+    report = gold.render(results)
     Path(args.report).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.report).write_text(gold.render(results), encoding="utf-8")
-    print(gold.render(results).split("\n\n")[1])
+    Path(args.report).write_text(report, encoding="utf-8")
+    print(report.split("\n\n")[1])
     return 0
 
 
@@ -236,9 +231,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--deadline-minutes", type=float, default=40)
     p.set_defaults(func=_cmd_pdf_gather)
 
-    p = sub.add_parser("pdf-extract", help="Pipeline PDF: trích bảng lương bằng Claude")
+    p = sub.add_parser("pdf-extract", help="Pipeline PDF: đọc bảng lương (tất định, không API)")
     p.add_argument("--work", required=True)
-    p.add_argument("--budget-usd", type=float, default=5.0)
     p.set_defaults(func=_cmd_pdf_extract)
 
     p = sub.add_parser("pdf-build", help="Pipeline PDF: Validate, SQL cho D1, báo cáo")
@@ -247,7 +241,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--published")
     p.add_argument("--release-tag", required=True)
     p.add_argument("--run-key", required=True)
-    p.add_argument("--budget-usd", type=float, default=5.0)
     p.add_argument("--sql", required=True)
     p.add_argument("--report", required=True)
     p.set_defaults(func=_cmd_pdf_build)
