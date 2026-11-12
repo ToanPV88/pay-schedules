@@ -10,7 +10,8 @@ nothing (PLAN Công đoạn 5: "chạy lại ... không tạo bản ghi trùng")
   inserted only when missing, so a run cut off half-way can simply be run again;
 * schedules are inserted as ``draft``; those that passed every check are then published, and a
   published schedule with the same key from an older source becomes ``superseded``;
-* ``district_summary`` is recomputed for the districts touched.
+* ``district_summary`` is recomputed for the districts touched, and those districts are queued in
+  ``cache_purge_queue`` so the website's cached pages are purged (D-023).
 
 Every statement stays under D1's 100 KB statement limit; child rows are copied in slices of
 schedules so no single statement runs long.
@@ -320,6 +321,13 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " schedule_id = excluded.schedule_id, start_ba_cents = excluded.start_ba_cents,"
         " ma_step10_cents = excluded.ma_step10_cents,"
         " max_salary_cents = excluded.max_salary_cents, computed_at = excluded.computed_at"
+    )
+    # The website caches district pages; queue the districts touched so the review Worker purges
+    # their cache tags (D-023).
+    sql.append(
+        f"INSERT INTO cache_purge_queue (district_id, queued_at) SELECT DISTINCT t.district_id,"
+        f" {quote(stamp)} FROM ({touched}) t WHERE true"
+        " ON CONFLICT (district_id) DO UPDATE SET queued_at = excluded.queued_at"
     )
     for table in STAGING:
         sql.append(f"DROP TABLE {table}")

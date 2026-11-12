@@ -2,6 +2,9 @@
 // Worker riêng, không dùng chung code với apps/web. Không lập chỉ mục.
 // Mật khẩu đặt bằng `wrangler secret put REVIEW_PASSWORD` (workflow deploy-review.yml lấy từ
 // GitHub secret cùng tên). Chưa có mật khẩu thì mọi yêu cầu bị từ chối.
+// Xóa cache website sau khi publish (D-023): service binding WEB tới Worker web và secret
+// PURGE_TOKEN (cùng giá trị với secret của Worker web). Bản preview không xóa cache: Worker web
+// preview chạy theo alias của từng PR, mỗi alias có cache riêng.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "pay-schedules-review",
@@ -12,6 +15,8 @@
   "preview_urls": false,
   "observability": { "enabled": true },
   "vars": { "ENVIRONMENT": "production" },
+  "services": [{ "binding": "WEB", "service": "pay-schedules" }],
+  "triggers": { "crons": ["*/10 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
@@ -26,6 +31,8 @@
       "workers_dev": true,
       "preview_urls": false,
       "vars": { "ENVIRONMENT": "preview" },
+      "services": [],
+      "triggers": { "crons": [] },
       "d1_databases": [
         {
           "binding": "DB",

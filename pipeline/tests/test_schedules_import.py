@@ -303,7 +303,7 @@ def load(db: sqlite3.Connection, result: ImportResult) -> None:
 
 def counts(db: sqlite3.Connection) -> dict[str, int]:
     tables = ("source_documents", "extraction_runs", "schedules", "lanes", "steps", "cells",
-              "stipends", "review_queue", "district_summary")  # fmt: skip
+              "stipends", "review_queue", "district_summary", "cache_purge_queue")  # fmt: skip
     return {t: db.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in tables}  # noqa: S608
 
 
@@ -418,6 +418,11 @@ class TestSql:
             " JOIN districts d ON d.id = s.district_id WHERE d.nces_id = '2100001' AND s.school_year = '2025-26'"
         ).fetchone()
         assert summary == (4100000, 5000000)
+        # every district with a schedule is queued once for the website cache purge (D-023)
+        queued = db.execute("SELECT count(*) FROM cache_purge_queue").fetchone()[0]
+        assert (
+            queued == db.execute("SELECT count(DISTINCT district_id) FROM schedules").fetchone()[0]
+        )
 
     def test_new_source_supersedes_published(self, tmp_path: Path) -> None:
         db = fresh_db()

@@ -412,3 +412,121 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Chi phí đọc: 0 USD. Phụ thuộc: `pdfplumber` thay `pypdf`.
 - Bộ chuẩn (D-020) đo trên bộ đọc này. Bộ chuẩn ban đầu dựng bằng `pdftotext` nên chưa độc lập
   hoàn toàn với bộ đọc; các bảng thêm sau được đối chiếu bằng mắt trên ảnh trang.
+
+## D-023: Xóa cache website sau khi publish: hàng chờ trong D1, Worker xem tay gửi đi
+
+- Ngày: 2026-11-12. Claude quyết (nối D-102: "Pipeline gọi endpoint này sau bước Publish").
+- Bối cảnh: Worker web cache trang theo thẻ và mở `POST /internal/purge` (Bearer `PURGE_TOKEN`).
+  Pipeline chạy trên GitHub Actions nạp D1 bằng `wrangler d1 execute`; nếu gọi thẳng endpoint thì
+  workflow phải biết URL của Worker web và cầm thêm một secret ngay cạnh bước nạp.
+- Nội dung:
+  - Migration 0006: bảng `cache_purge_queue (district_id PK, queued_at, attempts, last_error)`.
+  - SQL nạp bảng lương (`schedules/d1sql.py`, dùng cho cả nhập từ bang và pipeline PDF) ghi mọi học
+    khu được chạm vào hàng chờ, trong cùng tệp SQL với dữ liệu. Nút "Duyệt" của trang xem tay cũng
+    ghi vào, rồi gửi ngay một lô.
+  - Worker xem tay (`apps/review`) có service binding `WEB` tới Worker web và cron mỗi 10 phút: lấy
+    tối đa 10 lô × 100 học khu (giới hạn của endpoint), gọi `/internal/purge`; thành công thì xóa dòng
+    (chỉ khi `queued_at` chưa đổi), lỗi thì tăng `attempts`, ghi `last_error`, dừng và thử lại lần
+    sau; quá 20 lần thì nằm lại, trang hàng chờ hiện số dòng và lỗi gần nhất.
+  - Secret mới **`PURGE_TOKEN`** (GitHub secret, chủ dự án tạo, một chuỗi ngẫu nhiên). `deploy.yml`
+    đặt nó cho Worker web production, `deploy-review.yml` đặt cho Worker xem tay production, mỗi chỗ
+    ở một bước `wrangler secret put PURGE_TOKEN` riêng. Workflow pipeline không cầm secret này.
+  - Bản preview không xóa cache: Worker web preview chạy theo alias của từng PR, mỗi alias có cache
+    riêng; Worker xem tay preview không có binding `WEB` và không có cron.
+- Hệ quả: trang web cập nhật trong vòng ~10 phút sau khi nạp hoặc duyệt. Thiếu `PURGE_TOKEN` thì
+  không có lỗi, chỉ là cache hết hạn theo `s-maxage` (1 ngày).
+
+## D-100: URL, lập chỉ mục và thứ tự trang của web (Công đoạn 6)
+
+- Ngày: 2026-11-12. Claude quyết.
+- URL:
+  - `/` trang chủ; `/<bang>` danh sách học khu của bang; `/<bang>/<học-khu>` bảng mới nhất;
+    `/<bang>/<học-khu>/<YYYY-YY>` năm cũ. URL năm bằng năm mới nhất chuyển 301 về URL không có năm;
+    năm không có hoặc sai dạng trả 404.
+  - `/search`, `/compare`, `/calculator`, `/about`, `/methodology`, `/privacy`, `/terms`, `/contact`,
+    `/report` (D-104), `/demo` (D-101), `/sitemap.xml`, `/robots.txt`, `/healthz`.
+- Lập chỉ mục:
+  - Khi `INDEXABLE` khác `"true"` (hiện tại, theo D-002): mọi phản hồi có `X-Robots-Tag: noindex,
+    nofollow`, thẻ meta cùng nội dung, `robots.txt` chặn tất cả.
+  - Khi mở: trang học khu chỉ index khi có bảng published và có học khu lân cận; học khu chưa có bảng
+    published hiện "Schedule not found" và noindex. Trang có query string (sắp xếp, máy tính, phân
+    trang), `/search` và `/report` luôn noindex.
+  - Sitemap chỉ gồm trang học khu có bảng teacher published (URL chính và URL của năm cũ), tối đa
+    50.000 URL. Trang bang và trang công cụ không vào sitemap.
+- Trang học khu theo thứ tự của PLAN: tiêu đề → tóm tắt (BA bậc 1, MA bậc 10, tối đa) → bảng lương
+  và máy tính → so sánh với học khu lân cận → phụ cấp và ghi chú → nguồn (link tài liệu, trang/sheet,
+  ngày tải) → các năm khác.
+- Trang bang: 200 học khu mỗi trang; sắp xếp theo tên, lương khởi điểm, MA bậc 10, tối đa làm ở server
+  (link ở tiêu đề cột). JavaScript chỉ sắp tại chỗ khi mọi dòng nằm trên một trang.
+
+## D-101: Render ở server, JavaScript chỉ để tăng cường; trang /demo chỉ ở bản xem trước
+
+- Ngày: 2026-11-12. Claude quyết.
+- Mọi bảng lương nằm trong HTML server gửi (`<table>` có `<th scope>`), đọc được khi tắt JavaScript
+  (có test). Máy tính là form GET: server tính và trả kết quả; `site.js` (không thư viện, không tải
+  từ nơi khác) chỉ cập nhật tại chỗ để khỏi tải lại trang.
+- Máy tính chỉ đọc đúng ô của bảng, không nội suy; ô trống hiện ghi chú, không có số.
+- `/demo` render một bảng GIẢ LẬP (AGENTS.md §2.6) để xem giao diện và đo Lighthouse khi CSDL chưa có
+  dữ liệu. Chỉ có khi `ENVIRONMENT` khác `production`; production trả 404. Trang có dòng ghi rõ là dữ
+  liệu bịa và luôn noindex.
+
+## D-102: Cache ở edge bằng Workers Cache, xóa theo thẻ khi publish (bổ sung D-007)
+
+- Ngày: 2026-11-12. Claude quyết.
+- Bối cảnh: D-007 ghi rằng Cache API của Workers không chạy trên `*.workers.dev`, nên dời cache sang khi
+  có tên miền. Cloudflare nay có **Workers Cache** (bật bằng `"cache": { "enabled": true }` trong
+  `wrangler.jsonc`), chạy cả trên `workers.dev`, mỗi phiên bản xem trước có cache riêng, không tính
+  phí riêng (mọi request vẫn tính theo giá request của Workers). Đã kiểm trên tài liệu Cloudflare
+  ngày 2026-11-12.
+- Nội dung:
+  - Trang trả `Cache-Control: public, max-age=300, s-maxage=86400, stale-while-revalidate=3600`; trang
+    nội dung tĩnh lâu hơn; `/healthz`, `/report`, `/internal/*` là `no-store`.
+  - Header `Cache-Tag`: `pages` cho mọi trang, `district-<id>`, `state-<mã bang>`, `home`, `sitemap`,
+    `compare`.
+  - `POST /internal/purge` với `Authorization: Bearer <PURGE_TOKEN>` và `{"districtIds": [...]}`
+    (1-100 id): xóa thẻ của các học khu đó, học khu lân cận trỏ tới chúng, bang của chúng, cùng
+    `home`, `sitemap`, `compare`. Không đặt `PURGE_TOKEN` thì luôn trả 401. Môi trường không có
+    `ctx.cache` (test cục bộ) trả 501 kèm danh sách thẻ.
+  - Pipeline (Công đoạn 5) gọi endpoint này sau bước Publish. Phần đó thuộc phiên làm pipeline.
+- Phần của D-007 về cache được thay bằng mục này; phần còn lại của D-007 giữ nguyên.
+
+## D-103: Khung quảng cáo giữ chỗ, chưa gắn mã
+
+- Ngày: 2026-11-12. Claude quyết.
+- Biến `AD_SLOTS`: `"true"` thì render `<aside class="ad-slot">` ở ba vị trí của trang học khu (dưới
+  tóm tắt, trước so sánh lân cận, cuối trang); các trang khác chưa có. Khung có chiều cao cố
+  định (280 px trên mobile, 250 px từ 48rem) để quảng cáo về sau không làm xô bố cục (CLS).
+- Production để `"false"` cho tới khi có mã quảng cáo (Công đoạn 9); bản xem trước để `"true"` để
+  Lighthouse đo cả khung.
+
+## D-104: Form báo lỗi, Turnstile tắt mặc định, không lưu dữ liệu cá nhân
+
+- Ngày: 2026-11-12. Claude quyết.
+- Migration `0010_error_reports.sql`: bảng `error_reports` (học khu, bảng lương nếu có, đường dẫn trang,
+  nội dung 10-2000 ký tự, thời điểm, trạng thái xử lý). **Không lưu** IP, email, tên hay user agent.
+- Form chỉ bật khi đặt đủ `TURNSTILE_SITE_KEY` (biến) và `TURNSTILE_SECRET_KEY` (secret). Thiếu một trong
+  hai thì không có nút "Report an error" và `/report` trả 404.
+- Kiểm tra theo thứ tự: trường bẫy `website` (bị điền thì báo đã nhận nhưng không lưu) → độ dài → bảng
+  lương phải là bảng published của đúng học khu → Turnstile Siteverify (gửi `CF-Connecting-IP` cho
+  Cloudflare, không lưu) → ghi D1.
+- Việc của chủ dự án để bật: tạo widget Turnstile cho tên miền của Worker; đặt `TURNSTILE_SITE_KEY` trong
+  `vars` của `wrangler.jsonc`; `npx wrangler secret put TURNSTILE_SECRET_KEY` (thêm `--env preview` cho
+  bản xem trước).
+
+## D-105: Tên hiển thị của học khu
+
+- Ngày: 2026-11-12. Claude quyết (D-015 để Công đoạn 6 quyết cách hiển thị).
+- D1 giữ tên nguyên văn của NCES. Khi hiển thị: tên, thành phố, quận viết hoa toàn bộ thì đổi sang
+  Title Case; giữ nguyên chữ viết tắt quen thuộc (ISD, CISD, USD, UFSD, CSD, SD, ESD, HSD, UHSD, CUSD,
+  JUSD, UESD, RSU, SAU, SAD, MSAD, PSD, RE, DC), từ có chữ số và số La Mã; từ nối (of, the, and…) viết
+  thường. Tên đã có chữ thường giữ nguyên ("DeSoto Cons SD 86").
+- Hàm `displayName` ở `packages/db/src/names.ts`, áp trong các truy vấn của `site.ts`.
+
+## D-106: Đo Lighthouse mobile trong CI
+
+- Ngày: 2026-11-12. Claude quyết.
+- Job `lighthouse` của `deploy.yml` chạy sau job `preview` của PR: `lighthouse@13.6.0` (cần Node ≥ 22.19),
+  cấu hình mobile mặc định, đo `/`, `/demo` và trang học khu đầu tiên trong sitemap, mỗi trang 3 lần
+  lấy trung vị. Thất bại khi Performance, Accessibility hoặc Best practices dưới 90. SEO ghi vào tóm
+  tắt nhưng không tính vì site đang noindex có chủ đích (D-002).
+- Job không checkout mã, không dùng secret, quyền chỉ đọc.

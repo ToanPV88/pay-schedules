@@ -1,6 +1,9 @@
 // Trang xem tay nội bộ (PLAN Công đoạn 5, DECISIONS.md D-021).
 // Danh sách bảng lương trong review_queue; xem bảng cạnh link tài liệu gốc; sửa ô; duyệt (publish)
 // hoặc loại. Bảo vệ bằng HTTP Basic, mật khẩu là secret REVIEW_PASSWORD; thiếu secret thì đóng.
+// Worker này cũng xóa cache của website sau khi publish (D-023): hàng chờ cache_purge_queue do
+// pipeline và nút "Duyệt" ghi vào; lịch chạy (cron) và nút "Duyệt" gọi POST /internal/purge của
+// Worker web qua service binding WEB, kèm secret PURGE_TOKEN.
 import { Hono } from "hono";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
@@ -9,6 +12,8 @@ export type Env = {
   DB: D1Database;
   ENVIRONMENT: string;
   REVIEW_PASSWORD?: string;
+  PURGE_TOKEN?: string;
+  WEB?: Fetcher;
 };
 
 type AppEnv = { Bindings: Env };
@@ -17,6 +22,75 @@ type Html = HtmlEscapedString | Promise<HtmlEscapedString>;
 const PAGE_SIZE = 100;
 const PUBLISHED_RETRY_DAYS = 180;
 const REJECTED_RETRY_DAYS = 90;
+/** Giới hạn của /internal/purge bên Worker web (MAX_PURGE_DISTRICTS). */
+const PURGE_BATCH = 100;
+/** Số lô mỗi lần cron chạy: giữ số subrequest của một lần chạy nhỏ. */
+const PURGE_BATCHES_PER_RUN = 10;
+/** Sau ngần này lần lỗi liên tiếp, dòng nằm lại để người xem (hiện trên trang hàng chờ). */
+export const PURGE_MAX_ATTEMPTS = 20;
+
+export type PurgeResult = { purged: number; failed: number; skipped?: string };
+
+/**
+ * Gửi các học khu trong cache_purge_queue sang Worker web để xóa cache theo thẻ (D-102, D-023).
+ * Thành công thì xóa dòng (chỉ khi queued_at chưa đổi, để lần ghi mới hơn không bị mất); lỗi thì
+ * tăng attempts, ghi last_error và dừng, lần chạy sau thử lại.
+ */
+export async function drainPurgeQueue(
+  env: Env,
+  maxBatches = PURGE_BATCHES_PER_RUN,
+): Promise<PurgeResult> {
+  if (!env.WEB) return { purged: 0, failed: 0, skipped: "no WEB service binding" };
+  if (!env.PURGE_TOKEN) return { purged: 0, failed: 0, skipped: "PURGE_TOKEN is not set" };
+  const db = env.DB;
+  let purged = 0;
+  for (let i = 0; i < maxBatches; i++) {
+    const { results } = await db
+      .prepare(
+        `SELECT district_id, queued_at FROM cache_purge_queue WHERE attempts < ?1
+          ORDER BY queued_at, district_id LIMIT ?2`,
+      )
+      .bind(PURGE_MAX_ATTEMPTS, PURGE_BATCH)
+      .all<{ district_id: number; queued_at: string }>();
+    if (results.length === 0) break;
+    let error: string | null = null;
+    try {
+      const res = await env.WEB.fetch("https://web.internal/internal/purge", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.PURGE_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ districtIds: results.map((r) => r.district_id) }),
+      });
+      if (!res.ok) error = `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
+    } catch (e) {
+      error = String(e).slice(0, 200);
+    }
+    if (error !== null) {
+      await db.batch(
+        results.map((r) =>
+          db
+            .prepare(
+              "UPDATE cache_purge_queue SET attempts = attempts + 1, last_error = ? WHERE district_id = ?",
+            )
+            .bind(error, r.district_id),
+        ),
+      );
+      return { purged, failed: results.length, skipped: error };
+    }
+    await db.batch(
+      results.map((r) =>
+        db
+          .prepare("DELETE FROM cache_purge_queue WHERE district_id = ? AND queued_at = ?")
+          .bind(r.district_id, r.queued_at),
+      ),
+    );
+    purged += results.length;
+    if (results.length < PURGE_BATCH) break;
+  }
+  return { purged, failed: 0 };
+}
 
 export function nowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -130,6 +204,9 @@ app.get("/", async (c) => {
   const total = await c.env.DB.prepare(
     "SELECT COUNT(DISTINCT schedule_id) AS n FROM review_queue WHERE resolved_at IS NULL",
   ).first<{ n: number }>();
+  const purge = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS n, COUNT(last_error) AS errors, MAX(last_error) AS last FROM cache_purge_queue",
+  ).first<{ n: number; errors: number; last: string | null }>();
   const rows = results.map(
     (r) => html`<tr><td class="l"><a href="/s/${r.id}">${r.name}</a></td><td>${r.state}</td>
 <td>${r.school_year}</td><td class="l">${r.state_file ? "tệp của bang" : "PDF học khu"}</td>
@@ -141,6 +218,7 @@ app.get("/", async (c) => {
       "Hàng chờ xem tay",
       html`<h1>Hàng chờ xem tay: ${total?.n ?? 0} bảng</h1>
 <form method="get"><label>Bang <input name="state" value="${state}" size="3"></label> <button>Lọc</button></form>
+<p>Chờ xóa cache web: ${purge?.n ?? 0} học khu${purge?.errors ? ` (${purge.errors} lỗi; gần nhất: ${purge.last})` : ""}${c.env.WEB && c.env.PURGE_TOKEN ? "" : " · chưa cấu hình xóa cache (WEB hoặc PURGE_TOKEN)"}</p>
 <table><tr><th class="l">Học khu</th><th>Bang</th><th>Năm học</th><th class="l">Nguồn</th><th class="l">Lý do</th></tr>${rows}</table>
 <p><a href="/?state=${state}&offset=${offset + PAGE_SIZE}">Trang sau</a></p>`,
     ),
@@ -394,7 +472,14 @@ app.post("/s/:id{[0-9]+}/approve", async (c) => {
       )
       .bind(`Duyệt tay ${s.school_year}`, plusDays(PUBLISHED_RETRY_DAYS), s.district_id),
     ...summaryStatements(db, s.district_id, stamp),
+    db
+      .prepare(
+        `INSERT INTO cache_purge_queue (district_id, queued_at) VALUES (?, ?)
+         ON CONFLICT (district_id) DO UPDATE SET queued_at = excluded.queued_at`,
+      )
+      .bind(s.district_id, stamp),
   ]);
+  c.executionCtx.waitUntil(drainPurgeQueue(c.env, 1));
   return c.redirect(`/s/${id}`, 303);
 });
 
@@ -418,4 +503,13 @@ app.post("/s/:id{[0-9]+}/reject", async (c) => {
   return c.redirect("/", 303);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(
+      drainPurgeQueue(env).then((r) => {
+        if (r.skipped || r.failed) console.warn("cache purge", JSON.stringify(r));
+      }),
+    );
+  },
+} satisfies ExportedHandler<Env>;

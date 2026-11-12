@@ -1,6 +1,12 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { alternateCells, parseMoney } from "../src/index";
+import {
+  alternateCells,
+  drainPurgeQueue,
+  type Env,
+  PURGE_MAX_ATTEMPTS,
+  parseMoney,
+} from "../src/index";
 
 const BASE = "https://review.example.invalid";
 const AUTH = `Basic ${btoa("review:test-password")}`;
@@ -29,6 +35,7 @@ function form(fields: Record<string, string>): RequestInit {
 async function seed() {
   await db.batch([
     db.prepare("DELETE FROM review_edits"),
+    db.prepare("DELETE FROM cache_purge_queue"),
     db.prepare("DELETE FROM review_queue"),
     db.prepare("DELETE FROM district_summary"),
     db.prepare("DELETE FROM cells"),
@@ -153,6 +160,11 @@ describe("xem và duyệt", () => {
       .prepare("SELECT status FROM district_pipeline WHERE district_id = 1")
       .first<{ status: string }>();
     expect(p?.status).toBe("published");
+    // học khu vào hàng chờ xóa cache (Worker web giả trong test luôn lỗi nên dòng còn đó)
+    const queued = await db
+      .prepare("SELECT district_id FROM cache_purge_queue")
+      .all<{ district_id: number }>();
+    expect(queued.results).toEqual([{ district_id: 1 }]);
     res = await req("/s/10/approve", { method: "POST" });
     expect(res.status).toBe(409);
   });
@@ -170,6 +182,77 @@ describe("xem và duyệt", () => {
       .prepare("SELECT status FROM district_pipeline WHERE district_id = 1")
       .first<{ status: string }>();
     expect(p?.status).toBe("no_schedule");
+  });
+});
+
+describe("xóa cache website (D-023)", () => {
+  type Call = { auth: string | null; ids: number[] };
+
+  function fakeEnv(status: number, calls: Call[], extra: Partial<Env> = {}): Env {
+    const web = {
+      fetch: async (url: string, init: RequestInit) => {
+        expect(new URL(url).pathname).toBe("/internal/purge");
+        const body = JSON.parse(String(init.body)) as { districtIds: number[] };
+        calls.push({
+          auth: new Headers(init.headers).get("authorization"),
+          ids: body.districtIds,
+        });
+        return new Response(status === 200 ? "{}" : "nope", { status });
+      },
+    } as unknown as Fetcher;
+    return { DB: db, ENVIRONMENT: "test", PURGE_TOKEN: "tok", WEB: web, ...extra };
+  }
+
+  async function queue(n: number) {
+    await db.prepare("DELETE FROM cache_purge_queue").run();
+    await db.prepare("DELETE FROM districts WHERE id >= 1000").run();
+    const ids = Array.from({ length: n }, (_, i) => 1000 + i);
+    await db.batch(
+      ids.flatMap((id) => [
+        db
+          .prepare(
+            "INSERT INTO districts (id, nces_id, name, slug, state) VALUES (?, ?, 'X', ?, 'CA')",
+          )
+          .bind(id, String(id).padStart(7, "9"), `x-${id}`),
+        db
+          .prepare("INSERT INTO cache_purge_queue (district_id, queued_at) VALUES (?, ?)")
+          .bind(id, "2026-11-12T00:00:00Z"),
+      ]),
+    );
+  }
+
+  async function left() {
+    return (await db.prepare("SELECT COUNT(*) AS n FROM cache_purge_queue").first<{ n: number }>())
+      ?.n;
+  }
+
+  it("gửi theo lô 100, có token, xóa dòng đã xong", async () => {
+    await queue(250);
+    const calls: Call[] = [];
+    const r = await drainPurgeQueue(fakeEnv(200, calls));
+    expect(r).toEqual({ purged: 250, failed: 0 });
+    expect(calls.map((c) => c.ids.length)).toEqual([100, 100, 50]);
+    expect(calls.every((c) => c.auth === "Bearer tok")).toBe(true);
+    expect(await left()).toBe(0);
+  });
+
+  it("lỗi: giữ dòng, tăng attempts, dừng; thiếu cấu hình thì không gửi", async () => {
+    await queue(3);
+    const calls: Call[] = [];
+    const r = await drainPurgeQueue(fakeEnv(500, calls));
+    expect(r.failed).toBe(3);
+    expect(calls).toHaveLength(1);
+    const row = await db
+      .prepare("SELECT attempts, last_error FROM cache_purge_queue WHERE district_id = 1000")
+      .first<{ attempts: number; last_error: string }>();
+    expect(row).toEqual({ attempts: 1, last_error: "HTTP 500: nope" });
+    expect((await drainPurgeQueue(fakeEnv(200, calls, { PURGE_TOKEN: undefined }))).skipped).toBe(
+      "PURGE_TOKEN is not set",
+    );
+    await db.prepare("UPDATE cache_purge_queue SET attempts = ?").bind(PURGE_MAX_ATTEMPTS).run();
+    expect(await drainPurgeQueue(fakeEnv(200, calls))).toEqual({ purged: 0, failed: 0 });
+    expect(calls).toHaveLength(1);
+    expect(await left()).toBe(3);
   });
 });
 

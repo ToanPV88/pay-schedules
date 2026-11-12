@@ -12,10 +12,17 @@
   "preview_urls": true,
   "observability": { "enabled": true },
   "assets": { "directory": "./public", "binding": "ASSETS" },
+  // Workers Cache: cache trang theo Cache-Control, xóa theo Cache-Tag (DECISIONS.md D-102).
+  "cache": { "enabled": true },
   "vars": {
     "ENVIRONMENT": "production",
     // D-002: chưa có tên miền thì không cho lập chỉ mục.
-    "INDEXABLE": "false"
+    "INDEXABLE": "false",
+    // Chừa chỗ quảng cáo: bật ở Công đoạn 8 khi có mã quảng cáo.
+    "AD_SLOTS": "false",
+    // Form báo lỗi tắt cho tới khi có khóa Turnstile (D-104). Khóa bí mật đặt bằng wrangler secret.
+    "TURNSTILE_SITE_KEY": "",
+    "CONTACT_EMAIL": ""
   },
   "d1_databases": [
     {
@@ -32,7 +39,14 @@
       "name": "pay-schedules-preview",
       "workers_dev": true,
       "preview_urls": true,
-      "vars": { "ENVIRONMENT": "preview", "INDEXABLE": "false" },
+      "vars": {
+        "ENVIRONMENT": "preview",
+        "INDEXABLE": "false",
+        // Bản xem trước hiện khung quảng cáo rỗng để kiểm bố cục và Lighthouse.
+        "AD_SLOTS": "true",
+        "TURNSTILE_SITE_KEY": "",
+        "CONTACT_EMAIL": ""
+      },
       "d1_databases": [
         {
           "binding": "DB",

@@ -1,6 +1,7 @@
 # Deploy Worker web (DECISIONS.md D-004).
 # - Pull request: áp migration lên CSDL preview, tải lên một phiên bản của Worker preview với
 #   alias pr-<số>, ghi URL xem trước vào tóm tắt job và môi trường "preview".
+# - Pull request: sau khi có bản xem trước, đo Lighthouse mobile (DECISIONS.md D-106).
 # - Merge vào main: áp migration lên CSDL production rồi deploy Worker production.
 # Secret CLOUDFLARE_API_TOKEN chỉ có ở các bước gọi wrangler (kiểm thử trong
 # pipeline/tests/test_repo_consistency.py chặn dùng ở chỗ khác).
@@ -27,6 +28,8 @@ jobs:
       cancel-in-progress: true
     environment:
       name: preview
+      url: ${{ steps.upload.outputs.url }}
+    outputs:
       url: ${{ steps.upload.outputs.url }}
     defaults:
       run:
@@ -81,6 +84,92 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Bản xem trước: $url" >> "$GITHUB_STEP_SUMMARY"
 
+  # Đo Lighthouse mobile trên bản xem trước (D-106). Không cần secret, không checkout mã.
+  lighthouse:
+    needs: preview
+    if: needs.preview.outputs.url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Smoke check (status, cache, noindex)
+        env:
+          BASE_URL: ${{ needs.preview.outputs.url }}
+        run: |
+          echo "== Toàn bộ header của /"
+          curl -sS -o /dev/null -D - "${BASE_URL}/"
+          # Gọi mỗi trang hai lần: lần hai nên là HIT nếu Workers Cache chạy (D-102).
+          for page in / /healthz /robots.txt /sitemap.xml /california /demo; do
+            for n in 1 2; do
+              echo "== ${page} (lần ${n})"
+              curl -sS -o /dev/null -D - "${BASE_URL}${page}" \
+                | grep -iE '^(HTTP/|cf-cache-status|cache-control|cache-tag|x-robots-tag)' || true
+            done
+          done
+          # 20 trang học khu California đầu tiên trong sitemap: mã trạng thái và tiêu đề.
+          curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+/california/[^<]+</loc>' \
+            | sed -E 's#</?loc>##g' | head -20 > ca.txt || true
+          echo "Trang California trong sitemap (20 đầu): $(wc -l < ca.txt)"
+          while read -r url; do
+            code=$(curl -sS -o page.html -w '%{http_code}' "$url")
+            title=$(grep -oE '<title>[^<]*</title>' page.html | sed -E 's#</?title>##g')
+            rows=$(grep -c '<td data-cents=' page.html || true)
+            echo "${code} | ô có tiền: ${rows} | ${title} | ${url}"
+          done < ca.txt
+      - name: Lighthouse mobile
+        env:
+          BASE_URL: ${{ needs.preview.outputs.url }}
+          LIGHTHOUSE_VERSION: 13.6.0
+          MIN_SCORE: 90
+          RUNS: 3
+        run: |
+          # Trang chủ, trang mẫu /demo và trang học khu đầu tiên trong sitemap (nếu có dữ liệu).
+          pages="/ /demo"
+          first=$(curl -fsS "$BASE_URL/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | head -1 \
+            | sed -E 's#</?loc>##g; s#^https?://[^/]+##' || true)
+          if [ -n "$first" ]; then
+            pages="$pages $first"
+          fi
+          {
+            echo "### Lighthouse mobile (lighthouse@${LIGHTHOUSE_VERSION}, trung vị ${RUNS} lần)"
+            echo
+            echo "| Trang | Performance | Accessibility | Best practices | SEO |"
+            echo "| --- | ---: | ---: | ---: | ---: |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          median() { tr ' ' '\n' | sed '/^$/d' | sort -n | awk '{a[NR]=$1} END {print a[int((NR+1)/2)]}'; }
+          failed=0
+          for page in $pages; do
+            perf="" a11y="" bp="" seo=""
+            for run in $(seq 1 "$RUNS"); do
+              npx --yes "lighthouse@${LIGHTHOUSE_VERSION}" "${BASE_URL}${page}" \
+                --quiet --output=json --output-path=report.json \
+                --only-categories=performance,accessibility,best-practices,seo \
+                --chrome-flags="--headless=new --no-sandbox"
+              score() { jq -r ".categories[\"$1\"].score * 100 | round" report.json; }
+              perf="$perf $(score performance)"
+              a11y="$a11y $(score accessibility)"
+              bp="$bp $(score best-practices)"
+              seo="$seo $(score seo)"
+            done
+            p=$(echo "$perf" | median)
+            a=$(echo "$a11y" | median)
+            b=$(echo "$bp" | median)
+            s=$(echo "$seo" | median)
+            echo "| \`${page}\` | $p | $a | $b | $s |" | tee -a "$GITHUB_STEP_SUMMARY"
+            # SEO không tính vì toàn site đang noindex có chủ đích (D-002).
+            for v in "$p" "$a" "$b"; do
+              if [ "$v" -lt "$MIN_SCORE" ]; then
+                echo "::error::${page}: điểm $v < ${MIN_SCORE} (perf $p, a11y $a, best practices $b)"
+                failed=1
+              fi
+            done
+          done
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "SEO không tính vào ngưỡng: site đang noindex có chủ đích (D-002)." >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"
+
   production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -127,3 +216,16 @@ jobs:
           url=$(grep -oE "https://pay-schedules\.[a-z0-9.-]+\.workers\.dev" deploy.log | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Production: $url" >> "$GITHUB_STEP_SUMMARY"
+      # Token cho POST /internal/purge (D-102). Pipeline không gọi thẳng: Worker xem tay gọi qua
+      # service binding, dùng cùng secret (D-023).
+      - name: Set cache purge token
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PURGE_TOKEN: ${{ secrets.PURGE_TOKEN }}
+        run: |
+          if [ -z "$PURGE_TOKEN" ]; then
+            echo "::warning::Chưa có secret PURGE_TOKEN: /internal/purge luôn trả 401."
+            exit 0
+          fi
+          printf '%s' "$PURGE_TOKEN" | npx wrangler secret put PURGE_TOKEN
