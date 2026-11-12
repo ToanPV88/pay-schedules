@@ -100,10 +100,10 @@
         }
         const numeric = index > 0;
         const rows = [...body.rows];
-        const valueOf = (row) => row.cells[index]?.dataset.sortValue ?? "";
+        const sortValueOf = (row) => row.cells[index]?.dataset.sortValue ?? "";
         rows.sort((a, b) => {
-          const x = valueOf(a);
-          const y = valueOf(b);
+          const x = sortValueOf(a);
+          const y = sortValueOf(b);
           // Dòng thiếu số luôn xếp cuối, dù tăng hay giảm.
           if (x === "" || y === "") {
             return Number(x === "") - Number(y === "");

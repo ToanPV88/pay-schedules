@@ -1,7 +1,7 @@
 /** Các khối hiển thị một bảng lương: bảng, máy tính, phụ cấp và ghi chú, nguồn. */
 import type { Cell, Schedule } from "@pay-schedules/db";
 import { html, raw } from "hono/html";
-import { calculate, type Calculation } from "../calc";
+import { type Calculation, calculate } from "../calc";
 import { formatCents, formatDate, hostOf, payBasisNoun, safeHttpUrl, stepLabel } from "../format";
 import type { Html } from "./layout";
 

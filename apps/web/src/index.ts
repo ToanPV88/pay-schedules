@@ -23,8 +23,8 @@ import {
   REPORT_MIN_LENGTH,
   type Schedule,
   type SearchHit,
-  searchDistricts,
   type SortDirection,
+  searchDistricts,
 } from "@pay-schedules/db";
 import { type Context, Hono } from "hono";
 import {
@@ -75,12 +75,7 @@ import {
   statePage,
 } from "./views/pages";
 import { districtPath } from "./views/parts";
-import {
-  calculatorPage,
-  comparePage,
-  type ReportError,
-  reportPage,
-} from "./views/tools";
+import { calculatorPage, comparePage, type ReportError, reportPage } from "./views/tools";
 
 export type { Env } from "./env";
 export { isIndexable, SITE_NAME } from "./env";
@@ -170,9 +165,7 @@ app.get("/sitemap.xml", async (c) => {
     // Hàng đầu của mỗi học khu là năm mới nhất: URL không kèm năm.
     const path = base === previous ? `${base}/${row.schoolYear}` : base;
     previous = base;
-    const lastmod = row.lastPublished
-      ? `<lastmod>${escapeXml(row.lastPublished)}</lastmod>`
-      : "";
+    const lastmod = row.lastPublished ? `<lastmod>${escapeXml(row.lastPublished)}</lastmod>` : "";
     urls.push(`<url><loc>${escapeXml(`${origin}${path}`)}</loc>${lastmod}</url>`);
   }
   const body = `<?xml version="1.0" encoding="UTF-8"?>
