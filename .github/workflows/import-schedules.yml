@@ -1,0 +1,149 @@
+# Nạp bảng lương do bang công bố (CA J-90, KY) vào D1 (PLAN Công đoạn 4, DECISIONS.md D-016..D-018).
+# - Đẩy commit lên nhánh run/import-schedules-preview: nạp vào CSDL preview.
+# - Đẩy lên run/import-schedules-production (hoặc chạy tay với target=production): nạp vào CSDL
+#   production; chỉ chạy khi commit đã nằm trên main.
+# Tệp nguồn lấy từ Release mới nhất của hai tệp kê khai (bảng lương của bang, NCES CCD), kiểm
+# SHA-256. File J-90 là ZIP tự giải nén: chỉ mở bằng zipfile, không chạy; bảng Access đọc bằng
+# mdbtools. Báo cáo lưu vào một Release `report-schedules-*`.
+name: Import schedules
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "CSDL đích"
+        type: choice
+        options: [preview, production]
+        default: preview
+  push:
+    branches: ["run/import-schedules-preview", "run/import-schedules-production"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-schedules
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  STATE_MANIFEST: pipeline/sources/state-salaries-2425.json
+  CCD_MANIFEST: pipeline/sources/nces-ccd-2425.json
+  TARGET: ${{ inputs.target || (github.ref_name == 'run/import-schedules-production' && 'production' || 'preview') }}
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Production only from main
+        if: env.TARGET == 'production'
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Nạp production chỉ được chạy từ commit đã merge vào main."
+            exit 1
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mdbtools
+          npm ci --no-audit --no-fund
+          (cd pipeline && uv sync --locked --no-dev)
+      - name: Download and verify sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          fetch() {
+            prefix=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_prefix"])' "$1")
+            tag=$(gh release list --limit 100 --json tagName --jq "[.[] | select(.tagName | startswith(\"$prefix-\"))][0].tagName")
+            if [ -z "$tag" ]; then echo "::error::Chưa có Release $prefix-*"; exit 1; fi
+            gh release download "$tag" --dir "$2" >&2
+            (cd pipeline && uv run pay-pipeline verify-sources "$GITHUB_WORKSPACE/$2") >&2
+            echo "$tag"
+          }
+          state_tag=$(fetch "$STATE_MANIFEST" sources-state)
+          ccd_tag=$(fetch "$CCD_MANIFEST" sources-ccd)
+          echo "STATE_TAG=$state_tag" >> "$GITHUB_ENV"
+          echo "CCD_TAG=$ccd_tag" >> "$GITHUB_ENV"
+      - name: Read catalogue and published schedules
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          npx wrangler d1 execute "$db" $flag --remote --json \
+            --command "SELECT nces_id, state, name, active FROM districts WHERE state IN ('CA', 'KY') AND nces_id IS NOT NULL" \
+            > "$GITHUB_WORKSPACE/catalog.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.nces_id, s.school_year, s.schedule_type, s.title, (SELECT c.amount_cents FROM cells c JOIN steps t ON t.id = c.step_id LEFT JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = s.id AND t.position = 1 AND c.amount_cents IS NOT NULL ORDER BY l.position LIMIT 1) AS start_cents FROM schedules s JOIN districts d ON d.id = s.district_id WHERE s.status = 'published' AND d.state IN ('CA', 'KY')" \
+            > "$GITHUB_WORKSPACE/published.json"
+      - name: Build schedules
+        working-directory: pipeline
+        run: |
+          uv run pay-pipeline schedules-build \
+            --sources "$GITHUB_WORKSPACE/sources-state" --ccd "$GITHUB_WORKSPACE/sources-ccd" \
+            --catalog "$GITHUB_WORKSPACE/catalog.json" --published "$GITHUB_WORKSPACE/published.json" \
+            --release-tag "$STATE_TAG" \
+            --sql "$GITHUB_WORKSPACE/schedules.sql" --report "$GITHUB_WORKSPACE/report.md"
+      - name: Load into D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/schedules.sql"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.state, s.school_year, s.status, COUNT(*) AS schedules FROM schedules s JOIN districts d ON d.id = s.district_id GROUP BY 1, 2, 3 ORDER BY 1, 2, 3" \
+            > "$GITHUB_WORKSPACE/after.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT (SELECT COUNT(*) FROM source_documents) AS source_documents, (SELECT COUNT(*) FROM schedules) AS schedules, (SELECT COUNT(*) FROM cells) AS cells, (SELECT COUNT(*) FROM stipends) AS stipends, (SELECT COUNT(*) FROM review_queue WHERE resolved_at IS NULL) AS open_reviews, (SELECT COUNT(*) FROM district_summary) AS summaries" \
+            > "$GITHUB_WORKSPACE/totals.json"
+      - name: Report
+        run: |
+          {
+            echo
+            echo "## Sau khi nạp vào D1 ($TARGET, nguồn $STATE_TAG, danh mục $CCD_TAG)"
+            echo
+            echo '```json'
+            cat totals.json
+            cat after.json
+            echo '```'
+          } >> report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          mkdir out && cp report.md after.json totals.json out/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report
+          path: out/
+          retention-days: 7
+
+  publish-report:
+    needs: import
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: report
+          path: out
+      - name: Create report release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          tag="report-schedules-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
+          gh release create "$tag" out/* --repo "$REPO" --title "$tag" --notes "Báo cáo nạp bảng lương của bang (${TARGET})." --prerelease

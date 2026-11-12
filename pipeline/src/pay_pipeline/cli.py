@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import sys
@@ -14,6 +15,8 @@ from pay_pipeline.acquisition.http import PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
 from pay_pipeline.catalog.d1sql import catalog_sql, render_sql
 from pay_pipeline.catalog.districts import build_catalog, render_report
+from pay_pipeline.schedules import state_import
+from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
 
 DEFAULT_USER_AGENT = f"pay-schedules/{__version__} (+https://github.com/ToanPV88/pay-schedules)"
@@ -76,6 +79,27 @@ def _cmd_districts_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_schedules_build(args: argparse.Namespace) -> int:
+    today = dt.date.fromisoformat(args.today) if args.today else dt.datetime.now(dt.UTC).date()
+    result = state_import.build_import(
+        sources=Path(args.sources),
+        ccd_dir=Path(args.ccd),
+        catalog=state_import.load_catalog(Path(args.catalog)),
+        published=state_import.load_published(Path(args.published) if args.published else None),
+        release_tag=args.release_tag,
+        today=today,
+        ky_years=args.ky_years,
+    )
+    Path(args.sql).write_text(render_sql(schedules_sql(result)), encoding="utf-8")
+    Path(args.report).write_text(state_import.render_report(result), encoding="utf-8")
+    published = sum(p.status == "published" for p in result.prepared)
+    print(
+        f"{len(result.prepared):,} bảng lương ({published:,} published,"
+        f" {len(result.prepared) - published:,} chờ xem tay), {len(result.skipped):,} bỏ qua"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pay-pipeline")
     parser.add_argument("--version", action="version", version=__version__)
@@ -96,6 +120,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra để nạp vào D1")
     p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
     p.set_defaults(func=_cmd_districts_build)
+
+    p = sub.add_parser("schedules-build", help="Nhập bảng lương do bang công bố (CA J-90, KY)")
+    p.add_argument("--sources", required=True, help="Thư mục tệp của Release src-state-salaries-*")
+    p.add_argument("--ccd", required=True, help="Thư mục tệp của Release src-nces-ccd-*")
+    p.add_argument("--catalog", required=True, help="JSON học khu trong D1 (wrangler --json)")
+    p.add_argument("--published", help="JSON bảng lương đang published trong D1")
+    p.add_argument("--release-tag", required=True, help="Tag Release chứa tệp nguồn")
+    p.add_argument("--ky-years", type=int, default=state_import.KY_YEARS)
+    p.add_argument("--today", help="Ngày chạy (YYYY-MM-DD), mặc định hôm nay theo UTC")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
+    p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
+    p.set_defaults(func=_cmd_schedules_build)
     return parser
 
 

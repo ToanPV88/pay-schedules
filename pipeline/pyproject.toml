@@ -11,13 +11,14 @@ license = { text = "Proprietary" }
 # Phụ thuộc runtime thêm theo từng công đoạn; mỗi phụ thuộc mới ghi lý do trong docs/DECISIONS.md.
 dependencies = [
   "httpx>=0.27,<1",  # D-014: bộ tải lịch sự chép từ travienphi
+  "openpyxl>=3.1,<4",  # D-016: đọc tệp Excel bảng lương của Kentucky
 ]
 
 [project.scripts]
 pay-pipeline = "pay_pipeline.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "pyyaml>=6", "types-PyYAML"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "pyyaml>=6", "types-PyYAML", "types-openpyxl"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pay_pipeline"]
@@ -38,6 +39,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # cho phép ký tự tiếng Việt tro
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
+# SQL chỉ ghép từ hằng số và quote(); không có dữ liệu ngoài đi thẳng vào câu lệnh.
+"src/pay_pipeline/schedules/d1sql.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"
