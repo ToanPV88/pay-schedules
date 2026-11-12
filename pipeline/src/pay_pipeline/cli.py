@@ -47,8 +47,10 @@ def _cmd_verify_sources(args: argparse.Namespace) -> int:
 
 def load_existing_slugs(path: Path | None) -> dict[str, tuple[str, str]]:
     """Read ``SELECT nces_id, state, slug`` output of ``wrangler d1 execute --json``."""
-    if path is None or not path.exists():
+    if path is None:
         return {}
+    if not path.exists():
+        raise FileNotFoundError(f"Không thấy tệp slug hiện có: {path}")
     data = json.loads(path.read_text(encoding="utf-8") or "[]")
     rows: list[dict[str, object]] = []
     for item in data if isinstance(data, list) else [data]:

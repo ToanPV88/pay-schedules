@@ -73,23 +73,24 @@ jobs:
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
           npx wrangler d1 execute "$db" $flag --remote --json \
-            --command "SELECT nces_id, state, slug FROM districts WHERE nces_id IS NOT NULL" > ../existing.json
+            --command "SELECT nces_id, state, slug FROM districts WHERE nces_id IS NOT NULL" > "$GITHUB_WORKSPACE/existing.json"
       - name: Build catalogue
         working-directory: pipeline
         run: |
-          uv run pay-pipeline districts-build --sources ../sources --existing ../existing.json \
-            --sql ../districts.sql --report ../report.md
+          uv run pay-pipeline districts-build --sources "$GITHUB_WORKSPACE/sources" \
+            --existing "$GITHUB_WORKSPACE/existing.json" \
+            --sql "$GITHUB_WORKSPACE/districts.sql" --report "$GITHUB_WORKSPACE/report.md"
       - name: Load into D1
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
-          npx wrangler d1 execute "$db" $flag --remote --file ../districts.sql
+          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/districts.sql"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT state, COUNT(*) AS districts, SUM(active) AS active FROM districts GROUP BY state ORDER BY state" > ../after.json
+            "SELECT state, COUNT(*) AS districts, SUM(active) AS active FROM districts GROUP BY state ORDER BY state" > "$GITHUB_WORKSPACE/after.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT (SELECT COUNT(*) FROM districts WHERE active = 1) AS active, (SELECT COUNT(*) FROM district_neighbors) AS neighbors, (SELECT COUNT(*) FROM states) AS states" > ../totals.json
+            "SELECT (SELECT COUNT(*) FROM districts WHERE active = 1) AS active, (SELECT COUNT(*) FROM district_neighbors) AS neighbors, (SELECT COUNT(*) FROM states) AS states" > "$GITHUB_WORKSPACE/totals.json"
       - name: Report
         run: |
           {

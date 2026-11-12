@@ -274,4 +274,6 @@ def test_load_existing_slugs_reads_wrangler_json(tmp_path: Path) -> None:
         )
     )
     assert load_existing_slugs(path) == {"0600001": ("CA", "x")}
-    assert load_existing_slugs(tmp_path / "missing.json") == {}
+    assert load_existing_slugs(None) == {}
+    with pytest.raises(FileNotFoundError):
+        load_existing_slugs(tmp_path / "missing.json")
