@@ -1,0 +1,586 @@
+"""PDF pipeline end to end, offline: a fake district website (httpx.MockTransport), a small
+hand-built PDF, a fake Claude API, and the generated SQL run on the real D1 schema in SQLite.
+
+Names contain "Test" and hosts use example.invalid.
+"""
+
+# ruff: noqa: E501
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import shutil
+import sqlite3
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+
+from pay_pipeline.acquisition.policy import CrawlPolicy
+from pay_pipeline.acquisition.shared import SharedThrottle
+from pay_pipeline.catalog.d1sql import render_sql
+from pay_pipeline.discover.crawl import (
+    Link,
+    extract_links,
+    is_document_url,
+    same_site,
+    score_document,
+)
+from pay_pipeline.documents.classify import classify, school_years
+from pay_pipeline.pdf_pipeline import extract as ex
+from pay_pipeline.pdf_pipeline import read as rd
+from pay_pipeline.pdf_pipeline.gather import QueueItem, gather, load_work
+from pay_pipeline.pdf_pipeline.run import pipeline_sql, prepare, read_all, render_report
+from pay_pipeline.schedules.d1sql import schedules_sql
+from pay_pipeline.schedules.state_import import CatalogDistrict
+
+REPO = Path(__file__).resolve().parents[2]
+MIGRATIONS = sorted((REPO / "packages" / "db" / "migrations").glob("*.sql"))
+UA = "pay-schedules-test/0.1 (+https://example.invalid)"
+NOW = dt.datetime(2026, 11, 12, 8, 0, tzinfo=dt.UTC)
+HAS_PDFTOTEXT = shutil.which("pdftotext") is not None
+
+SCHEDULE_LINES = [
+    "Test Unified School District",
+    "2025-2026 Certificated Teacher Salary Schedule",
+    "Step      BA        BA+30      MA",
+] + [
+    f"{s:>4}   {50000 + 1500 * s:,}   {53000 + 1600 * s:,}   {56000 + 1700 * s:,}"
+    for s in range(1, 16)
+]
+
+
+def make_pdf(lines: list[str]) -> bytes:
+    """A one-page PDF with the given text lines (Helvetica), valid enough for pdftotext/pypdf."""
+    text = (
+        "BT /F1 10 Tf 40 760 Td 12 TL "
+        + " ".join(
+            "(" + ln.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") + ") '"
+            for ln in lines
+        )
+        + " ET"
+    )
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(text)} >>\nstream\n{text}\nendstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for i, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n{body}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{o:010d} 00000 n \n" for o in offsets).encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    return out
+
+
+SITE = "https://test-usd.example.invalid"
+PDF = make_pdf(SCHEDULE_LINES)
+ROUTES: dict[str, httpx.Response] = {
+    f"{SITE}/robots.txt": httpx.Response(200, text="User-agent: *\nDisallow: /private/\n"),
+    f"{SITE}/": httpx.Response(200, headers={"content-type": "text/html"}, html=(
+        '<a href="/departments/human-resources">Human Resources</a> <a href="/menu">Lunch menu</a>'
+        ' <a href="/private/salary">Private</a>')),
+    f"{SITE}/departments/human-resources": httpx.Response(200, headers={"content-type": "text/html"}, html=(
+        '<a href="/files/2025-26%20Certificated%20Salary%20Schedule.pdf">2025-26 Teacher Salary Schedule</a>'
+        ' <a href="/files/classified.pdf">Classified Salary Schedule</a>')),
+    f"{SITE}/files/2025-26%20Certificated%20Salary%20Schedule.pdf": httpx.Response(
+        200, headers={"content-type": "application/pdf"}, content=PDF),
+    f"{SITE}/files/classified.pdf": httpx.Response(200, headers={"content-type": "application/pdf"},
+                                                   content=make_pdf(["Classified hourly rates", "Grade 1  18.50  19.25"])),
+    f"{SITE}/sitemap.xml": httpx.Response(404),
+    "https://empty.example.invalid/robots.txt": httpx.Response(404),
+    "https://empty.example.invalid/": httpx.Response(200, headers={"content-type": "text/html"}, html="<p>Welcome</p>"),
+    "https://empty.example.invalid/sitemap.xml": httpx.Response(404),
+}  # fmt: skip
+
+
+def site_transport(seen: list[str] | None = None) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if seen is not None:
+            seen.append(url)
+        return ROUTES.get(url, httpx.Response(404))
+
+    return httpx.MockTransport(handler)
+
+
+QUEUE = [
+    QueueItem(1, "0600001", "Test Unified", "CA", f"{SITE}/", 9000),
+    QueueItem(2, "0600002", "Test Empty Elementary", "CA", "https://empty.example.invalid/", 500),
+    QueueItem(3, "0600003", "Test No Website", "CA", None, 100),
+]
+
+
+def tool_answer(
+    lines: list[str] | None = None, *, teacher: bool = True, year: str | None = "2025-26"
+) -> dict[str, Any]:
+    steps = list(range(1, 16))
+    return {
+        "is_teacher_salary_schedule": teacher,
+        "reason": "Teacher schedule" if teacher else "Not a teacher schedule",
+        "school_year": year,
+        "title": "2025-2026 Certificated Teacher Salary Schedule",
+        "contract_days": 185,
+        "pay_basis": "annual",
+        "lanes": ["BA", "BA+30", "MA"] if teacher else [],
+        "steps": [{"label": str(s), "years_experience": None} for s in steps] if teacher else [],
+        "cells": [[50000 + 1500 * s, 53000 + 1600 * s, 56000 + 1700 * s] for s in steps]
+        if teacher
+        else [],
+        "stipends": [{"name": "Doctorate", "amount": 2000, "amount_text": None, "condition": None}],
+        "notes": None,
+        "source_pages": [1],
+        "other_schedules": [],
+    }
+
+
+def fake_extractions(first: dict[str, Any], second: dict[str, Any] | None) -> dict[str, Any]:
+    runs = [ex.ExtractionRun(rd.LAYOUT, None, json.dumps(first))]
+    if second is not None:
+        runs.append(ex.ExtractionRun(rd.WORDS, None, json.dumps(second)))
+    return {"0600001": {"runs": [asdict(r) for r in runs]}}
+
+
+def fresh_db() -> sqlite3.Connection:
+    db = sqlite3.connect(":memory:")
+    db.execute("PRAGMA foreign_keys = ON")
+    for path in MIGRATIONS:
+        db.executescript(path.read_text(encoding="utf-8"))
+    db.execute("INSERT INTO states (code, name, slug) VALUES ('CA', 'California', 'california')")
+    for item in QUEUE:
+        db.execute(
+            "INSERT INTO districts (id, nces_id, name, slug, state, website) VALUES (?, ?, ?, ?, ?, ?)",
+            (item.district_id, item.nces_id, item.name, item.nces_id, item.state, item.website),
+        )
+    return db
+
+
+CATALOG = {i.nces_id: CatalogDistrict(i.nces_id, i.state, i.name, True) for i in QUEUE}
+
+
+# ---------------------------------------------------------------- units
+
+
+class TestDiscoverUnits:
+    def test_links_and_scores(self) -> None:
+        links = extract_links(
+            '<base href="/a/"><a href="x.pdf">Salary <b>Schedule</b></a><a href="mailto:x@y">m</a>'
+            '<a href="#top">t</a><iframe src="https://docs.google.com/d/1"></iframe>',
+            f"{SITE}/p",
+        )
+        assert [link.url for link in links] == [f"{SITE}/a/x.pdf", "https://docs.google.com/d/1"]
+        assert links[0].text == "Salary Schedule"
+        teacher = score_document(Link(f"{SITE}/2025-26-certificated-salary-schedule.pdf", ""))
+        classified = score_document(Link(f"{SITE}/classified-salary-schedule.pdf", ""))
+        assert teacher > classified > 0
+        assert score_document(Link(f"{SITE}/lunch-menu.pdf", "Menu")) < 1
+        assert is_document_url(
+            "https://files-backend.assets.thrillshare.com/documents/asset/x?disposition=inline"
+        )
+        assert not is_document_url(f"{SITE}/departments/hr")
+        assert same_site("https://www.test-usd.example.invalid/hr", f"{SITE}/")
+
+    def test_landing_pages_and_google_links(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import export_url, landing_target
+
+        html = (
+            b'<script>var d={"file":"https:\\/\\/files-backend.assets.thrillshare.com\\/documents'
+            b'\\/asset\\/uploaded_file\\/1\\/X\\/a\\/2025-26-Teacher-Salary.pdf"}</script>'
+            b'<a href="/menu">Lunch menu</a>'
+        )
+        target = landing_target(html, f"{SITE}/documents/hr/123456", "Teacher salary")
+        assert target is not None and target.endswith("/2025-26-Teacher-Salary.pdf")
+        assert landing_target(b"<a href='/menu'>Menu</a>", f"{SITE}/documents/1", "") is None
+        assert export_url("https://drive.google.com/file/d/1AbCdEfGhIjK/view?usp=sharing") == (
+            "https://drive.google.com/uc?export=download&id=1AbCdEfGhIjK"
+        )
+        assert export_url(
+            "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit#gid=0"
+        ).endswith("/spreadsheets/d/1AbCdEfGhIjK/export?format=xlsx")
+
+    def test_school_years(self) -> None:
+        assert school_years("Salary Schedule 2025-2026 and 2024-25, FY26") == ["2025-26", "2024-25"]
+        assert school_years("Effective 7/1/2021 - 6/30/2022") == ["2021-22"]
+        assert school_years("2025-2027 agreement") == []
+        assert school_years("2026\u20102027 Teacher Salary") == ["2026-27"]  # Unicode hyphen
+        assert school_years("2 0 2 5 \u2013 2026 Pay Schedule") == ["2025-26"]  # letter-spaced
+        assert school_years("Teachers Salary Scales FY26-27") == ["2026-27"]
+        assert school_years("FY25/26 and FY 2026") == ["2025-26"]
+
+    def test_shared_throttle_spaces_requests_per_host(self) -> None:
+        clock = [0.0]
+        sleeps: list[float] = []
+
+        def sleep(s: float) -> None:
+            sleeps.append(s)
+
+        throttle = SharedThrottle(
+            CrawlPolicy(user_agent=UA, min_delay_seconds=2.0), sleep=sleep, clock=lambda: clock[0]
+        )
+        throttle.wait("a")
+        throttle.wait("a")
+        throttle.wait("b")
+        throttle.wait("a")
+        assert sleeps == [2.0, 4.0]
+
+
+@pytest.mark.skipif(not HAS_PDFTOTEXT, reason="cần poppler-utils (pdftotext)")
+class TestPipeline:
+    def run_gather(self, tmp_path: Path, seen: list[str] | None = None) -> list[Any]:
+        return gather(
+            QUEUE, tmp_path, {}, UA, workers=3, transport=site_transport(seen), sleep=lambda _: None
+        )
+
+    def test_classify_hand_built_pdf(self, tmp_path: Path) -> None:
+        path = tmp_path / "s.pdf"
+        path.write_bytes(PDF)
+        c = classify(path)
+        assert (c.kind, c.is_candidate, c.schedule_pages, c.best_year) == (
+            "pdf",
+            True,
+            [1],
+            "2025-26",
+        )
+
+    def test_gather_finds_teacher_schedule_and_respects_robots(self, tmp_path: Path) -> None:
+        seen: list[str] = []
+        works = self.run_gather(tmp_path, seen)
+        by = {w.nces_id: w for w in works}
+        assert by["0600001"].status == "found"
+        assert by["0600002"].status == "no_candidates"
+        assert by["0600003"].status == "no_website"
+        chosen = next(d for d in by["0600001"].docs if d.asset_name == by["0600001"].chosen)
+        assert chosen.url.endswith("Certificated%20Salary%20Schedule.pdf")
+        assert (tmp_path / "docs" / chosen.asset_name).read_bytes() == PDF
+        assert not any("/private/" in u for u in seen)
+        assert not any(u.endswith("/menu") for u in seen)
+        manifest = json.loads((tmp_path / "docs" / "manifest.json").read_text())
+        assert {f["name"] for f in manifest["files"]} == {d.asset_name for d in by["0600001"].docs}
+        assert [w.nces_id for w in load_work(tmp_path)] == [w.nces_id for w in works]
+
+    def test_known_documents_only_count_current_readers(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import known_documents
+
+        rows = [
+            {"url": "u1", "sha256": "a", "model": rd.WORDS},
+            {"url": "u2", "sha256": "b", "model": "pdfplumber-words@0"},  # older reader: read again
+            {"url": "u3", "sha256": "c"},
+        ]
+        assert known_documents(rows) == {"u1": {"a"}, "u3": {"c"}}
+
+    def test_known_document_is_not_processed_again(self, tmp_path: Path) -> None:
+        url = f"{SITE}/files/2025-26%20Certificated%20Salary%20Schedule.pdf"
+        import hashlib
+
+        known = {url: {hashlib.sha256(PDF).hexdigest()}}
+        works = gather(
+            QUEUE[:1],
+            tmp_path,
+            known,
+            UA,
+            workers=1,
+            transport=site_transport(),
+            sleep=lambda _: None,
+        )
+        assert works[0].status == "unchanged"
+
+    def test_read_validate_publish(self, tmp_path: Path) -> None:
+        works = self.run_gather(tmp_path)
+        extractions = read_all(works, tmp_path)
+        assert json.loads((tmp_path / "extractions.json").read_text()).keys() == {"0600001"}
+        runs = extractions["0600001"]["runs"]
+        assert [r["model"] for r in runs] == [rd.WORDS, rd.LAYOUT]
+        answer = json.loads(runs[0]["raw_output"])
+        assert answer["lanes"] == ["BA", "BA+30", "MA"] and answer["school_year"] == "2025-26"
+        assert answer["cells"][0] == [51500.0, 54600.0, 57700.0]
+        assert json.loads(runs[1]["raw_output"])["cells"] == answer["cells"]
+
+        result, outcomes = prepare(works, extractions, CATALOG, [], "docs-test-1", NOW.date())
+        status = {o.nces_id: o.status for o in outcomes}
+        assert status == {
+            "0600001": "published",
+            "0600002": "no_candidates",
+            "0600003": "no_website",
+        }
+
+        db = fresh_db()
+        sql = render_sql(schedules_sql(result, NOW) + pipeline_sql(works, outcomes, "run-1", NOW))
+        db.executescript(sql)
+        row = db.execute(
+            "SELECT s.status, s.school_year, s.title, s.source_page, d.district_id,"
+            " d.release_tag, (SELECT count(*) FROM cells c WHERE c.schedule_id = s.id),"
+            " (SELECT count(*) FROM extraction_runs e WHERE e.source_document_id = d.id)"
+            " FROM schedules s JOIN source_documents d ON d.id = s.source_document_id"
+        ).fetchone()
+        assert row == ("published", "2025-26", "", 1, 1, "docs-test-1", 45, 2)
+        pipeline = dict(db.execute("SELECT district_id, status FROM district_pipeline").fetchall())
+        assert pipeline == {1: "published", 2: "no_candidates", 3: "no_website"}
+        assert db.execute("SELECT count(*) FROM document_classifications").fetchone()[0] == 2
+        assert (
+            db.execute("SELECT count(*) FROM document_candidates WHERE district_id = 1").fetchone()[
+                0
+            ]
+            == 2
+        )
+        # rerun: nothing duplicated, attempts unchanged for the same run key, +1 for a new one
+        db.executescript(sql)
+        assert db.execute("SELECT count(*) FROM schedules").fetchone()[0] == 1
+        assert (
+            db.execute("SELECT attempts FROM district_pipeline WHERE district_id = 1").fetchone()[0]
+            == 1
+        )
+        db.executescript(render_sql(pipeline_sql(works, outcomes, "run-2", NOW)))
+        assert (
+            db.execute("SELECT attempts FROM district_pipeline WHERE district_id = 1").fetchone()[0]
+            == 2
+        )
+        report = render_report(works, outcomes, "run-1")
+        assert "published): 1" in report and "Test Unified" in report and "0 USD" in report
+
+    def test_disagreeing_readings_go_to_review(self, tmp_path: Path) -> None:
+        works = self.run_gather(tmp_path)
+        other = tool_answer()
+        other["cells"][4][1] += 100
+        result, outcomes = prepare(
+            works, fake_extractions(tool_answer(), other), CATALOG, [], "t", NOW.date()
+        )
+        o = next(o for o in outcomes if o.nces_id == "0600001")
+        assert o.status == "review" and o.issue_codes == ["double_extraction"]
+        assert result.prepared[0].status == "draft"
+
+    def test_single_reading_and_not_a_schedule(self, tmp_path: Path) -> None:
+        works = self.run_gather(tmp_path)
+        _, outcomes = prepare(
+            works, fake_extractions(tool_answer(), None), CATALOG, [], "t", NOW.date()
+        )
+        assert next(o for o in outcomes if o.nces_id == "0600001").status == "published"
+        nothing = tool_answer(teacher=False)
+        _, outcomes = prepare(
+            works, fake_extractions(nothing, nothing), CATALOG, [], "t", NOW.date()
+        )
+        assert next(o for o in outcomes if o.nces_id == "0600001").status == "no_schedule"
+
+
+class TestExtractUnits:
+    def test_to_draft_rejects_ragged_rows(self) -> None:
+        data = tool_answer()
+        data["cells"][2] = data["cells"][2][:2]
+        with pytest.raises(ex.ExtractionError):
+            ex.to_draft(data, "CA", "1", "Test")
+
+    def test_to_draft_blank_cells_and_stipends(self) -> None:
+        data = tool_answer()
+        data["cells"][0][2] = None
+        draft = ex.to_draft(data, "CA", "1", "Test")
+        assert draft.cells[(0, 2)] == ex.Cell(None, ex.BLANK_NOTE)
+        assert draft.lanes[0].lane_normalized == "BA" and draft.stipends[0].amount_cents == 200000
+
+
+class TestGold:
+    def test_committed_gold_files_load(self) -> None:
+        from pay_pipeline.pdf_pipeline.gold import load_gold
+
+        golds = load_gold(REPO / "pipeline" / "gold")
+        assert len(golds) >= 15
+        assert all(g.school_year[:2] == "20" and len(g.sha256) == 64 for g in golds)
+        assert len({g.id for g in golds}) == len(golds)
+
+    def test_compare_matches_labels_then_positions(self) -> None:
+        from pay_pipeline.pdf_pipeline.gold import Gold, compare
+
+        gold = Gold(
+            "t",
+            "1",
+            "KY",
+            "Test",
+            "a.pdf",
+            "https://x.invalid",
+            "0" * 64,
+            "2025-26",
+            ["RANK III", "RANK II", "RANK I"],
+            ["0", "1"],
+            [[40000.0, 45000.0, 50000.0], [41000.0, None, 51000.0]],
+        )
+        data = tool_answer()
+        data["lanes"] = ["Rank I", "Rank II", "Rank III", "Rank IV"]
+        data["steps"] = [
+            {"label": "0", "years_experience": 0},
+            {"label": "1", "years_experience": 1},
+        ]
+        data["cells"] = [[50000, 45000, 40000, 30000], [51000, 46000, 41000, 30000]]
+        total, right, wrong = compare(gold, ex.to_draft(data, "KY", "1", "Test"))
+        assert (total, right, wrong) == (5, 5, [])
+        data["cells"][1][0] = 51001
+        total, right, wrong = compare(gold, ex.to_draft(data, "KY", "1", "Test"))
+        assert (total, right) == (5, 4) and "chuẩn 51,000.00, trích 51,001.00" in wrong[0]
+
+    def test_evaluate_on_hand_built_pdf(self, tmp_path: Path) -> None:
+        if not HAS_PDFTOTEXT:
+            pytest.skip("cần pdftotext")
+        from pay_pipeline.pdf_pipeline.gold import Gold, evaluate, render
+
+        (tmp_path / "s.pdf").write_bytes(PDF)
+        steps = [str(s) for s in range(1, 16)]
+        cells = [[50000.0 + 1500 * s, 53000.0 + 1600 * s, 56000.0 + 1700 * s] for s in range(1, 16)]
+        gold = Gold("g1", "1", "CA", "Test", "s.pdf", "https://x.invalid", "0" * 64, "2025-26",
+                    ["BA", "BA+30", "MA"], steps, cells)  # fmt: skip
+        results = evaluate([gold], tmp_path, today=NOW.date())
+        assert (
+            results[0].status == "published"
+            and results[0].accuracy == 1.0
+            and results[0].school_year_ok
+        )
+        assert "45/45" in render(results)
+        cells[3][1] = 1.0
+        bad = Gold("g2", "1", "CA", "Test", "s.pdf", "https://x.invalid", "0" * 64, "2025-26",
+                   ["BA", "BA+30", "MA"], steps, cells)  # fmt: skip
+        assert "Bảng sai mà vẫn qua Validate: 1" in render(
+            evaluate([bad], tmp_path, today=NOW.date())
+        )
+
+
+def L(*cells: str, step: float = 10.0) -> rd.Line:
+    """A line of words; each cell is right-aligned in a column of width ``step``."""
+    words = []
+    for j, text in enumerate(cells):
+        if text:
+            words.append(rd.Word(text, j * step + step - len(text), j * step + step))
+    return rd.Line(words)
+
+
+class TestReader:
+    def test_staircase_continuation_and_header(self) -> None:
+        lines = [
+            L("", "Teacher Salary Schedule 2025-26"),
+            rd.Line([]),
+            L("Step", "BA", "MA", "MA+30"),
+            L("1", "50,000", "", ""),
+            L("2", "51,000", "53,000", ""),
+            L("3", "$52,000", "$54,000", "$56,000"),
+            L("4", "", "", "57,500"),
+            L("", "53,000", "55,000", ""),  # amounts of step 4 printed on the next line
+            L("Rank IV", "40,000"),
+        ]
+        tables = rd.find_tables(lines, 1)
+        assert len(tables) == 1
+        t = tables[0]
+        assert t.lanes == ["BA", "MA", "MA+30"]
+        assert [r.label for r in t.rows] == ["1", "2", "3", "4"]
+        assert t.grid == [
+            [50000, None, None],
+            [51000, 53000, None],
+            [52000, 54000, 56000],
+            [53000, 55000, 57500],
+        ]
+
+    def test_unreadable_layout_and_table_choice(self) -> None:
+        clash = [L("Step", "BA"), L("1", "50,000"), L("2", "51,000"), rd.Line([rd.Word("3", 0, 1),
+                 rd.Word("52,000", 14, 20), rd.Word("52,500", 15, 20.5)])]  # fmt: skip
+        assert rd.find_tables(clash, 1) == []
+        classified = [L("", "Classified hourly staff"), rd.Line([]), L("Grade", "A", "B")] + [
+            L(str(s), f"{30000 + s * 900:,}", f"{31000 + s * 900:,}") for s in range(1, 10)
+        ]
+        teacher = [L("", "Certificated teacher schedule"), rd.Line([]), L("Step", "BA", "MA")] + [
+            L(str(s), f"{50000 + s * 900:,}", f"{52000 + s * 900:,}") for s in range(1, 6)
+        ]
+        tables = rd.find_tables(classified + [rd.Line([])] * 3 + teacher, 1)
+        assert len(tables) == 2
+        picked = rd.pick_table(tables)
+        assert picked is not None and picked.grid[0] == [50900, 52900]
+
+    def test_labels(self) -> None:
+        for label in ("1", "31+", "0-3 Years", "20 Years and Over", "Step 4", "10**"):
+            assert rd.parse_row(L(label, "50,000"), 0) is not None, label
+        for label in ("Rank IV--41", "Total", ""):
+            assert rd.parse_row(L(label, "50,000"), 0) is None, label
+
+    def test_row_variants_seen_in_the_pilot(self) -> None:
+        # step + code letter (Clark County), placement column (Fairfax), footnote marker (Detroit),
+        # daily rate beside the annual one (Horry), side text far right (Pinellas)
+        assert rd.parse_row(L("1", "A", "$57,471", "$63,986"), 0) is not None
+        assert rd.parse_row(L("0,1,2", "1", "27,175", "30,876"), 0).label == "1"  # type: ignore[union-attr]
+        assert rd.parse_row(L("11*", "79,000", "90,000", "*2024-25"), 0) is not None
+        row = rd.parse_row(L("0", "284.96", "54,142", "304.24", "57,806"), 0)
+        assert row is not None and [a for _, _, a in row.amounts] == [54142, 57806]
+        side = rd.Line(
+            [rd.Word("2", 0, 1), rd.Word("$60,880", 10, 17), rd.Word("Advanced", 60, 68)]
+        )
+        row = rd.parse_row(side, 0)
+        assert row is not None and [a for _, _, a in row.amounts] == [60880]
+        assert rd.parse_row(L("3", "61,118", "abc"), 0) is None  # words mixed in: not a row
+        # hourly rate with four decimals before each annual amount (Hillsborough)
+        row = rd.parse_row(L("1", "29.9874", "47,500.04", "31.8174", "50,398.76"), 0)
+        assert row is not None and row.label == "1"
+        assert [a for _, _, a in row.amounts] == [47500.04, 50398.76]
+
+    def test_schedule_for_part_of_the_staff_is_second_choice_and_flagged(self) -> None:
+        def block(title: str, base: int) -> list[rd.Line]:
+            return [L("", title), rd.Line([]), L("Step", "BA", "MA")] + [
+                L(str(s), f"{base + s * 900:,}", f"{base + 2000 + s * 900:,}") for s in range(1, 7)
+            ]
+
+        old = block("Teacher schedule for employees hired prior to July 1, 2013", 47000)
+        new = block("Teacher salary schedule", 50000)
+        tables = rd.find_tables(old + [rd.Line([])] * 3 + new, 1)
+        picked = rd.pick_table(tables)
+        assert picked is not None and picked.grid[0] == [50900, 52900]
+        assert rd.scope_note(picked) is None
+        only_old = rd.pick_table(rd.find_tables(old, 1))
+        assert only_old is not None and "hired prior to" in (rd.scope_note(only_old) or "")
+        assert rd.to_answer(only_old, "", rd.WORDS)["scope_note"]
+
+    def test_lane_label_drops_unit_words(self) -> None:
+        assert rd.lane_label("Bachelor’s Degree  Hourly Rate Rate") == "Bachelor’s Degree"
+        assert rd.lane_label("MA (Annual)") == "MA"
+        assert rd.lane_label("Bachelors ANNUAL(1) DAILY(2)") == "Bachelors"
+        # title words swept in front of the lane name (Douglas County), date in the heading
+        title = "2025-2026 Licensed General Compensation Schedule Effective 7/1/2025"
+        assert rd.lane_label("General Compensation MA + 15", title) == "MA + 15"
+        assert rd.lane_label("Effective 7/1/2025 PHDEDS", title) == "PHDEDS"
+        # kept when what is left would not start like a lane name
+        assert rd.lane_label("10NC Pay Schedule", "10NC Pay Schedule 8NC") == "10NC Pay Schedule"
+        assert rd.lane_label("New Hire Salary", "Years of New Hire Salary") == "New Hire Salary"
+
+    def test_pdf_checks_flag_prose_labels_and_partial_schedules(self) -> None:
+        from pay_pipeline.pdf_pipeline.run import pdf_checks
+        from pay_pipeline.schedules.model import Lane, ScheduleDraft, Step
+
+        draft = ScheduleDraft(
+            state="NV", state_district_id="x", district_name="x", school_year="2026-27",
+            lanes=[Lane("MA+16 V"), Lane("institution from an accredited X")],
+            steps=[Step("1")], cells={},
+        )  # fmt: skip
+        assert [i.code for i in pdf_checks({}, draft, NOW.date())] == ["lane_label"]
+        draft.lanes = [Lane("BA"), Lane("MA")]
+        assert pdf_checks({}, draft, NOW.date()) == []
+        assert [
+            i.code for i in pdf_checks({"scope_note": "hired prior to 2013"}, draft, NOW.date())
+        ] == ["schedule_scope"]
+        draft.school_year = "2023-24"  # more than two school years before 2026-27
+        assert [i.code for i in pdf_checks({}, draft, NOW.date())] == ["school_year"]
+        draft.school_year = "2024-25"
+        assert pdf_checks({}, draft, NOW.date()) == []
+        assert rd.lane_label("Annual Rate") == "Annual Rate"  # nothing else left: keep it
+
+    def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:
+        lines = [L("Step", "BA", "MA")] + [
+            L(str(s), f"{50000 + s * 900:,}", f"{52000 + s * 900:,}") for s in (1, 2)
+        ]
+        lines += [rd.Line([rd.Word("Masters", 80, 87), rd.Word("2,251", 90, 95)])] * 2  # side box
+        lines += [L("3", "52,700", "54,700"), L("4"), L("5"), L("6", "", "57,500")]
+        lines += [L("7", "", "58,400")]
+        tables = rd.find_tables(lines, 1)
+        assert len(tables) == 1
+        assert [r.label for r in tables[0].rows] == ["1", "2", "3", "6", "7"]
+        assert tables[0].grid[-2] == [None, 57500]

@@ -141,8 +141,16 @@ class TestChecks:
         assert "lưới" in compare_extractions(a, c)[0].message
         assert validate(a, today=TODAY, second_extraction=b)[0].code == "double_extraction"
 
+    def test_highest_lane_first_is_accepted_when_consistent(self) -> None:
+        ranks = [[60000, 55000, 50000], [61000, 56000, 51000], [62000, 57000, 52000]]
+        assert check_monotonic(grid(ranks)) == []
+        ranks[2][2] = 57500  # one pair breaks the falling pattern
+        assert [i.code for i in check_monotonic(grid(ranks))] == ["monotonic_lane"]
+        # a single falling pair in a two-lane table is not a pattern: flagged
+        assert [i.code for i in check_monotonic(grid([[70000, 65000]]))] == ["monotonic_lane"]
+
     def test_summarize_groups_by_check(self) -> None:
-        issues = check_monotonic(grid([[5, 4], [4, 3], [3, 2], [2, 1], [1, 0.5]]))
+        issues = check_monotonic(grid([[5, 6, 4], [4, 5, 3], [3, 4, 2], [2, 3, 1], [1, 2, 0.5]]))
         reasons = summarize(issues)
         assert len(reasons) == 2
         assert reasons[0].startswith("[monotonic_step]") and "chỗ khác" in reasons[0]

@@ -48,6 +48,20 @@ class SourceDocument:
     fetched_at: str
     mime: str | None
     release_tag: str
+    district_nces: str | None = None
+    """Set when the document belongs to one district (PDF pipeline); None for a state file."""
+
+
+@dataclass(frozen=True)
+class RunRecord:
+    """One extraction of a source document (``extraction_runs``)."""
+
+    url: str
+    sha256: str
+    model: str
+    prompt_version: str | None
+    raw_output: str
+    cost_usd_micros: int | None
 
 
 @dataclass(frozen=True)
@@ -76,6 +90,7 @@ class Prepared:
     source: SourceDocument
     importer: str
     issues: list[Issue]
+    confidence: float | None = 1.0
 
     @property
     def status(self) -> str:
@@ -102,6 +117,8 @@ class ImportResult:
     skipped: list[Skipped]
     catalog: dict[str, CatalogDistrict]
     states: list[str] = field(default_factory=list)
+    runs: list[RunRecord] | None = None
+    """Extraction runs to record; None = one summary run per state file."""
 
 
 def load_manifest_sources(directory: Path, release_tag: str) -> dict[str, SourceDocument]:

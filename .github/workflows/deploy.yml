@@ -216,3 +216,16 @@ jobs:
           url=$(grep -oE "https://pay-schedules\.[a-z0-9.-]+\.workers\.dev" deploy.log | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Production: $url" >> "$GITHUB_STEP_SUMMARY"
+      # Token cho POST /internal/purge (D-102). Pipeline không gọi thẳng: Worker xem tay gọi qua
+      # service binding, dùng cùng secret (D-023).
+      - name: Set cache purge token
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PURGE_TOKEN: ${{ secrets.PURGE_TOKEN }}
+        run: |
+          if [ -z "$PURGE_TOKEN" ]; then
+            echo "::warning::Chưa có secret PURGE_TOKEN: /internal/purge luôn trả 401."
+            exit 0
+          fi
+          printf '%s' "$PURGE_TOKEN" | npx wrangler secret put PURGE_TOKEN

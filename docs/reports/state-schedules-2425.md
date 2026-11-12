@@ -259,7 +259,7 @@ Học khu đang hoạt động trong danh mục của site nhưng không có b�
 | Môi trường | Lần chạy | Tệp nguồn | Bảng | Ô | Phụ cấp | Lý do xem tay đang mở | district_summary |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | preview | Import schedules 43213316129 (2026-11-12) | 3 | 2,015 | 322,290 | 4,775 | 215 | 1,813 |
-| production | sau khi merge PR Công đoạn 4 | | | | | | |
+| production | Import schedules 43213807082 (2026-11-12) | 3 | 2,015 | 322,290 | 4,775 | 215 | 1,813 |
 
 Chạy lại trên preview với cùng dữ liệu (lần 43212173733): số dòng mọi bảng giữ nguyên. Lần chạy có
 `review-holds.json` đưa 3 bảng đã published về draft (Placentia-Yorba Linda, Pittsburg, Elk Grove

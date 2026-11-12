@@ -208,7 +208,22 @@ def write_ky(path: Path) -> None:
         ):
             ws.append(row)
         ws.append(("", "State Summary:", "", "", None, "", "", ""))
+    # fixed document dates: the same content always has the same sha256
+    wb.properties.created = wb.properties.modified = dt.datetime(2026, 1, 1)  # noqa: DTZ001
     wb.save(path)
+    _fix_zip_times(path)
+
+
+FIXED_ZIP_TIME = (2026, 1, 1, 0, 0, 0)
+
+
+def _fix_zip_times(path: Path) -> None:
+    """Rewrite a zip with fixed member times, so its bytes do not depend on the clock."""
+    with zipfile.ZipFile(path) as zf:
+        members = [(i.filename, zf.read(i)) for i in zf.infolist()]
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, data in members:
+            zf.writestr(zipfile.ZipInfo(name, FIXED_ZIP_TIME), data)
 
 
 # ---------------------------------------------------------------- CCD + catalogue
@@ -239,8 +254,8 @@ def write_sources(root: Path, ky_sha: str | None = None) -> tuple[Path, Path]:
     src = root / "sources"
     src.mkdir(parents=True)
     with zipfile.ZipFile(src / "j902425.exe", "w") as zf:
-        zf.writestr("j902425readme.docx", b"readme")
-        zf.writestr("tsal2425.accdb", b"not really access")
+        zf.writestr(zipfile.ZipInfo("j902425readme.docx", FIXED_ZIP_TIME), b"readme")
+        zf.writestr(zipfile.ZipInfo("tsal2425.accdb", FIXED_ZIP_TIME), b"not really access")
     write_ky(src / "ky_certified_salary_schedule_2014-2026.xlsx")
     files = []
     for name, url in (
@@ -303,7 +318,7 @@ def load(db: sqlite3.Connection, result: ImportResult) -> None:
 
 def counts(db: sqlite3.Connection) -> dict[str, int]:
     tables = ("source_documents", "extraction_runs", "schedules", "lanes", "steps", "cells",
-              "stipends", "review_queue", "district_summary")  # fmt: skip
+              "stipends", "review_queue", "district_summary", "cache_purge_queue")  # fmt: skip
     return {t: db.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in tables}  # noqa: S608
 
 
@@ -418,6 +433,11 @@ class TestSql:
             " JOIN districts d ON d.id = s.district_id WHERE d.nces_id = '2100001' AND s.school_year = '2025-26'"
         ).fetchone()
         assert summary == (4100000, 5000000)
+        # every district with a schedule is queued once for the website cache purge (D-023)
+        queued = db.execute("SELECT count(*) FROM cache_purge_queue").fetchone()[0]
+        assert (
+            queued == db.execute("SELECT count(DISTINCT district_id) FROM schedules").fetchone()[0]
+        )
 
     def test_new_source_supersedes_published(self, tmp_path: Path) -> None:
         db = fresh_db()

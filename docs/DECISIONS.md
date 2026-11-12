@@ -324,6 +324,126 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   của lane MA (với KY là 9 năm kinh nghiệm), `max_salary_cents` = ô lớn nhất. Không có lane BA/MA rõ
   nghĩa thì để trống.
 
+## D-019: Pipeline PDF (Công đoạn 5): kiến trúc, model, secret, điểm lưu
+
+- Ngày: 2026-11-12. Claude quyết.
+- **Đã thay một phần bởi D-022**: bước Extract không gọi Claude, không có secret
+  `ANTHROPIC_API_KEY`, không dùng pypdf. Các phần khác (Discover, Classify, điểm lưu, lưu trữ) giữ
+  nguyên.
+- Chạy theo lô trong workflow `pdf-pipeline.yml` (chạy tay: target, limit, budget_usd, state). Hàng
+  đợi lấy từ D1: học khu đang hoạt động, chưa có bảng lương nào, chưa xử lý hoặc đã đến hạn chạy
+  lại, đông học sinh trước.
+- **Discover**: dò website học khu trong danh mục NCES (không dùng API tìm kiếm trả phí ở bản đầu):
+  trang chủ, các link về HR / employment / salary / bargaining (cùng site, sâu ≤ 2, tối đa 20 trang),
+  `/sitemap.xml`. Link tới PDF/DOCX/XLSX hoặc host tài liệu quen (Finalsite, Thrillshare, edl.io...)
+  thành ứng viên, chấm điểm theo chữ trong link. Tải tối đa 4 ứng viên tốt nhất.
+- **Lịch sự**: robots.txt, User-Agent có liên hệ, 2 giây giữa hai request tới cùng host (PLAN cho
+  phép ≥ 1 giây; D-014 dùng 5 giây cho tệp nguồn lớn). 16 luồng song song, một đồng hồ chung theo host
+  cho mọi luồng (`acquisition/shared.py`).
+- **Classify**: không dùng model. Đọc chữ (`pdftotext -layout`; XML của DOCX; ô của XLSX), chấm từng
+  trang theo số lượng số tiền cỡ lương năm, chữ step/BA/MA/Rank/teacher, trừ điểm chữ
+  classified/administrator. PDF gần như không có chữ là bản quét: gửi ảnh trang cho model.
+- **Extract**: Claude qua Messages API, trả lời bắt buộc qua một tool có JSON schema cố định
+  (`record_salary_schedule`), prompt có phiên bản (`p1`). Chỉ gửi các trang đã chọn (cắt bằng
+  **pypdf**, tối đa 6 trang; bản quét 8 trang đầu). Hai lần trích độc lập bằng hai model khác nhau:
+  `claude-sonnet-5-5` (bản chính) và `claude-haiku-5-5` (bản đối chiếu). Kết quả thô lưu nguyên văn ở
+  `extraction_runs`, kèm chi phí (µUSD) tính theo bảng giá ngày 12/11/2026.
+- **Validate**: bộ kiểm tra D-018, lần này bật cả so khớp hai lần trích và kiểm tra năm học không cũ
+  hơn bảng đang published. Model nói tài liệu không phải bảng lương giáo viên thì học khu ghi
+  `no_schedule`. Không đọc được năm học thì không lưu bảng, học khu chuyển `review`.
+- Một bảng giáo viên mỗi học khu mỗi năm: tiêu đề in trên tài liệu chuyển vào `notes`, cột `title`
+  để trống (khóa published của D-012 không trùng do tiêu đề khác nhau).
+- **Lưu trữ**: tệp tải về và báo cáo lưu ở Release `docs-<target>-<ngày>-<run>`; `source_documents`
+  ghi `district_id`, `release_tag`, `asset_name`.
+- **Điểm lưu**: migration 0004 thêm `district_pipeline` (trạng thái, số lần thử, hạn chạy lại),
+  `document_candidates`, `document_classifications`. Hạn chạy lại: không có website 180 ngày, không
+  mở được 30, không thấy tài liệu / không phải bảng lương 90, lỗi 7, published 180, chờ xem tay thì
+  không tự chạy lại. Tệp đã trích có sha256 không đổi thì bỏ qua (`unchanged`). Hết hạn giờ (45 phút)
+  hay hết ngân sách thì học khu còn lại giữ nguyên trạng thái, lô sau làm tiếp.
+- **Secret mới `ANTHROPIC_API_KEY`**: chủ dự án tạo trong Claude Console (workspace riêng, có giới
+  hạn chi tiêu) và đặt trong GitHub Actions secrets. Chỉ nằm ở `env` của bước `pay-pipeline
+  pdf-extract`; `test_repo_consistency.py` kiểm tra. Thiếu key thì workflow chỉ chạy Discover/Classify.
+- Phụ thuộc mới: `pypdf` (cắt trang). Công cụ hệ thống: `poppler-utils` (pdftotext) cài trong CI và
+  workflow.
+
+## D-020: Bộ chuẩn đo độ chính xác của pipeline PDF
+
+- Ngày: 2026-11-12. Claude quyết.
+- `pipeline/gold/*.json`: mỗi tệp là một bảng lương nhập tay từ tài liệu của học khu (Release, URL,
+  sha256, trang, năm học, lane, bậc, ô). Bảng đầu tiên lấy từ các tài liệu đã kiểm tra chéo ở Công
+  đoạn 4, đọc bằng `pdftotext` và đối chiếu với dữ liệu của bang; phần còn lại lấy từ lô chạy thử.
+- `pay-pipeline pdf-eval` (workflow `pdf-eval.yml`) chạy classify → extract → validate trên từng tài
+  liệu, so bản trích chính với bộ chuẩn: lane và bậc khớp theo nhãn (trùng hẳn trước, rồi chứa nhau),
+  không khớp nhãn thì theo vị trí khi cùng số lượng; chỉ tính ô có số trong bộ chuẩn, đúng đến cent.
+- Nghiệm thu (PLAN): trên các bảng sẽ publish, ≥ 99% ô đúng; không bảng nào có ô sai (hoặc sai năm
+  học) mà vẫn qua Validate.
+
+## D-021: Trang xem tay nội bộ
+
+- Ngày: 2026-11-12. Claude quyết.
+- Worker riêng `apps/review` (`pay-schedules-review`, bản preview `pay-schedules-review-preview`),
+  không chung code với `apps/web` để không đụng Công đoạn 6. Không lập chỉ mục, không cache.
+- Bảo vệ bằng HTTP Basic; mật khẩu là secret `REVIEW_PASSWORD` (GitHub secret, workflow
+  `deploy-review.yml` đặt bằng `wrangler secret put`). Thiếu secret thì trả 503. POST phải có
+  Origin trùng site (chống CSRF).
+- Chức năng: hàng chờ (lọc theo bang), xem lưới cạnh link tài liệu gốc (kèm số trang), tô ô mà bản
+  trích đối chiếu khác, sửa ô (ghi `review_edits`, migration 0005), duyệt (publish, thay bảng
+  published cũ cùng khóa, đóng `review_queue`, tính lại `district_summary`), loại (kèm lý do; học
+  khu chạy lại sau 90 ngày).
+
+## D-022: Đọc bảng lương tất định, không dùng API AI
+
+- Ngày: 2026-11-12. Chủ dự án quyết: không dùng API key (không gọi model trả phí).
+- `pdf_pipeline/read.py` đọc bảng từ lớp chữ của tài liệu theo vị trí, như travienphi (ADR-0002 của
+  travienphi cũng cấm API AI trả phí):
+  - hàng dữ liệu = nhãn bậc (`1`, `31+`, `Step 4`, `0-3 Years`) + các số tiền cỡ lương năm; hàng chỉ
+    có số ngay dưới thì nối vào (bảng in hai dòng mỗi bậc);
+  - cột = gom mép phải các số tiền (số căn phải); mỗi số vào cột gần nhất, nên ô trống của bảng bậc
+    thang vẫn trống; hai số rơi vào một cột thì coi như không hiểu bố cục;
+  - nhãn lane = chữ tiêu đề ngay trên hàng đầu, đặt vào cột gần nhất; tiêu đề bảng chặn lại;
+  - chọn bảng lớn nhất có chữ "teacher/certificated" gần đó và không có chữ classified/administrator.
+- **Hai lần đọc độc lập** (thay cho hai model): pdfplumber (tọa độ chữ) và `pdftotext -layout`
+  (cột ký tự). `compare_extractions` so số lane, nhãn bậc và từng ô; lệch thì chờ xem tay. Excel và
+  bảng Word có ô rõ ràng nên đọc một lần.
+- Không đọc được: PDF dạng ảnh quét (cần OCR, chưa làm), bảng không có nhãn bậc ở đầu hàng, bảng
+  nằm trong trang HTML. Những học khu này ghi `no_schedule` với lý do, để xem tay hoặc làm sau.
+- Kiểm tra lane: lane in từ cao xuống thấp (Rank I trước, cột Doctorate trước) được chấp nhận khi đó
+  rõ ràng là chiều của bảng (≥ 3 cặp giảm và gấp ≥ 3 lần số cặp tăng); mọi cặp phải theo cùng chiều.
+- Chi phí đọc: 0 USD. Phụ thuộc: `pdfplumber` thay `pypdf`.
+- Bộ chuẩn (D-020) đo trên bộ đọc này. Bộ chuẩn ban đầu dựng bằng `pdftotext` nên chưa độc lập
+  hoàn toàn với bộ đọc; các bảng thêm sau được đối chiếu bằng mắt trên ảnh trang.
+- Kiểm tra thêm cho bảng đọc từ website (ngoài Validate chung, `pdf_checks` trong `run.py`, dùng
+  chung với bộ chuẩn), thêm sau chạy thử ngày 2026-11-12:
+  - `schedule_scope`: bảng chỉ cho một nhóm giáo viên (thuê trước một ngày, ngoài lớp học) xếp sau
+    bảng chung; nếu chỉ có nó thì chờ xem tay;
+  - `lane_label`: nhãn lane lẫn chữ của đoạn văn bên cạnh bảng thì chờ xem tay;
+  - `school_year`: bảng cũ hơn hai năm học so với năm học hiện tại thì chờ xem tay.
+- Bộ đọc có số phiên bản (`layout-text@N`, `pdfplumber-words@N`...). Tài liệu chỉ được coi là đã xử lý
+  (bỏ qua khi sha256 không đổi) nếu đã đọc bằng phiên bản hiện tại; đổi cách đọc thì tăng số.
+
+## D-023: Xóa cache website sau khi publish: hàng chờ trong D1, Worker xem tay gửi đi
+
+- Ngày: 2026-11-12. Claude quyết (nối D-102: "Pipeline gọi endpoint này sau bước Publish").
+- Bối cảnh: Worker web cache trang theo thẻ và mở `POST /internal/purge` (Bearer `PURGE_TOKEN`).
+  Pipeline chạy trên GitHub Actions nạp D1 bằng `wrangler d1 execute`; nếu gọi thẳng endpoint thì
+  workflow phải biết URL của Worker web và cầm thêm một secret ngay cạnh bước nạp.
+- Nội dung:
+  - Migration 0006: bảng `cache_purge_queue (district_id PK, queued_at, attempts, last_error)`.
+  - SQL nạp bảng lương (`schedules/d1sql.py`, dùng cho cả nhập từ bang và pipeline PDF) ghi mọi học
+    khu được chạm vào hàng chờ, trong cùng tệp SQL với dữ liệu. Nút "Duyệt" của trang xem tay cũng
+    ghi vào, rồi gửi ngay một lô.
+  - Worker xem tay (`apps/review`) có service binding `WEB` tới Worker web và cron mỗi 10 phút: lấy
+    tối đa 10 lô × 100 học khu (giới hạn của endpoint), gọi `/internal/purge`; thành công thì xóa dòng
+    (chỉ khi `queued_at` chưa đổi), lỗi thì tăng `attempts`, ghi `last_error`, dừng và thử lại lần
+    sau; quá 20 lần thì nằm lại, trang hàng chờ hiện số dòng và lỗi gần nhất.
+  - Secret mới **`PURGE_TOKEN`** (GitHub secret, chủ dự án tạo, một chuỗi ngẫu nhiên). `deploy.yml`
+    đặt nó cho Worker web production, `deploy-review.yml` đặt cho Worker xem tay production, mỗi chỗ
+    ở một bước `wrangler secret put PURGE_TOKEN` riêng. Workflow pipeline không cầm secret này.
+  - Bản preview không xóa cache: Worker web preview chạy theo alias của từng PR, mỗi alias có cache
+    riêng; Worker xem tay preview không có binding `WEB` và không có cron.
+- Hệ quả: trang web cập nhật trong vòng ~10 phút sau khi nạp hoặc duyệt. Thiếu `PURGE_TOKEN` thì
+  không có lỗi, chỉ là cache hết hạn theo `s-maxage` (1 ngày).
+
 ## D-100: URL, lập chỉ mục và thứ tự trang của web (Công đoạn 6)
 
 - Ngày: 2026-11-12. Claude quyết.

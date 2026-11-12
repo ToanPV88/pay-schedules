@@ -19,8 +19,10 @@ reasons. The checks:
 from __future__ import annotations
 
 import datetime as dt
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from itertools import pairwise
 
 from pay_pipeline.schedules.model import ScheduleDraft, school_year_start
 
@@ -67,17 +69,27 @@ def check_monotonic(s: ScheduleDraft) -> list[Issue]:
                 )
             prev = (step, cell.amount_cents)
     if s.lanes:
+        # Lanes are usually printed lowest qualification first; some schedules (Kentucky ranks,
+        # "Doctorate" first) print them highest first. Highest-first is accepted only when it is
+        # clearly the pattern (at least 3 falling pairs and 3x more falling than rising pairs);
+        # every pair must then follow that direction.
+        rising = falling = 0
+        for step in range(len(s.steps)):
+            row = [a for ln in range(len(s.lanes)) if (a := s.amount(step, ln)) is not None]
+            rising += sum(y > x for x, y in pairwise(row))
+            falling += sum(y < x for x, y in pairwise(row))
+        sign = -1 if falling >= 3 and falling >= 3 * rising else 1
         for step in range(len(s.steps)):
             prev = None
             for lane in range(len(s.lanes)):
                 cell = s.cells.get((step, lane))
                 if cell is None or cell.amount_cents is None:
                     continue
-                if prev is not None and cell.amount_cents < prev[1] and not cell.note:
+                if prev is not None and sign * (cell.amount_cents - prev[1]) < 0 and not cell.note:
                     issues.append(
                         Issue(
                             "monotonic_lane",
-                            f"Lương giảm khi sang lane cao hơn: bậc {s.steps[step].label_raw},"
+                            f"Lương đổi chiều giữa hai lane: bậc {s.steps[step].label_raw},"
                             f" {s.lanes[prev[0]].label_raw!r} {_fmt(prev[1])}"
                             f" → {s.lanes[lane].label_raw!r} {_fmt(cell.amount_cents)}",
                         )
@@ -105,6 +117,41 @@ def check_cell_count(s: ScheduleDraft) -> list[Issue]:
     if all(c.amount_cents is None for c in s.cells.values()):
         issues.append(Issue("cell_count", "Bảng không có ô nào có số tiền"))
     return issues
+
+
+_MONEY_IN_LABEL = re.compile(r"\$?\d{1,3},\d{3}")
+
+
+def check_labels(s: ScheduleDraft) -> list[Issue]:
+    """Lane labels must read as headings: no amounts in them, not a sentence."""
+    issues = []
+    bad = [
+        ln.label_raw
+        for ln in s.lanes
+        if _MONEY_IN_LABEL.search(ln.label_raw) or len(ln.label_raw) > 90
+    ]
+    if bad:
+        issues.append(Issue("lane_label", f"Nhãn lane không giống tiêu đề cột: {bad[0][:80]!r}"))
+    labels = [" ".join(ln.label_raw.lower().split()) for ln in s.lanes]
+    dupes = sorted({x for x in labels if labels.count(x) > 1})
+    if dupes:
+        issues.append(Issue("lane_label", f"Nhiều lane cùng nhãn {dupes[0]!r}: thiếu tiêu đề cột"))
+    return issues
+
+
+_STEP_NUMBER = re.compile(r"^\D{0,6}(\d{1,2})")
+
+
+def check_steps(s: ScheduleDraft) -> list[Issue]:
+    """A table that starts at a high step may have lost its first rows."""
+    if not s.steps:
+        return []
+    m = _STEP_NUMBER.match(s.steps[0].label_raw)
+    if m and int(m.group(1)) > 2:
+        return [
+            Issue("step_start", f"Bảng bắt đầu ở bậc {s.steps[0].label_raw}: có thể thiếu hàng đầu")
+        ]
+    return []
 
 
 def check_range(s: ScheduleDraft) -> list[Issue]:
@@ -177,16 +224,23 @@ def check_start_change(s: ScheduleDraft, previous_start_cents: int | None) -> li
     ]
 
 
+def _label(text: str) -> str:
+    return "".join(text.lower().split())
+
+
 def compare_extractions(a: ScheduleDraft, b: ScheduleDraft) -> list[Issue]:
-    """Cell-by-cell agreement of two independent extractions of the same document."""
+    """Cell-by-cell agreement of two independent readings of the same document.
+
+    Lane headers may be grouped differently by two readers, so only their number is compared;
+    step labels (spaces ignored) and every cell must match.
+    """
     issues: list[Issue] = []
     if a.school_year != b.school_year:
         issues.append(
             Issue("double_extraction", f"Năm học lệch: {a.school_year} / {b.school_year}")
         )
-    if [x.label_raw for x in a.lanes] != [x.label_raw for x in b.lanes] or len(a.steps) != len(
-        b.steps
-    ):
+    same_steps = [_label(x.label_raw) for x in a.steps] == [_label(x.label_raw) for x in b.steps]
+    if len(a.lanes) != len(b.lanes) or not same_steps:
         issues.append(Issue("double_extraction", "Hai lần trích ra lưới bậc × lane khác nhau"))
         return issues
     differ = [k for k in set(a.cells) | set(b.cells) if a.cells.get(k) != b.cells.get(k)]
@@ -207,6 +261,8 @@ def validate(
     issues: list[Issue] = []
     issues += check_cell_count(s)
     issues += check_monotonic(s)
+    issues += check_labels(s)
+    issues += check_steps(s)
     issues += check_range(s)
     issues += check_school_year(s, today, published_year, allow_history)
     issues += check_start_change(s, previous_start_cents)
