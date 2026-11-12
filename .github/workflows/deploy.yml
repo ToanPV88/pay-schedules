@@ -98,6 +98,8 @@ jobs:
         env:
           BASE_URL: ${{ needs.preview.outputs.url }}
         run: |
+          echo "== Toàn bộ header của /"
+          curl -sS -o /dev/null -D - "${BASE_URL}/"
           # Gọi mỗi trang hai lần: lần hai nên là HIT nếu Workers Cache chạy (D-102).
           for page in / /healthz /robots.txt /sitemap.xml /california /demo; do
             for n in 1 2; do
