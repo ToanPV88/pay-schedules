@@ -18,38 +18,13 @@
       "optional": true
     },
     {
-      "name": "ca-lausd-salary-tables-juldec2024.pdf",
-      "url": "https://www.lausd.org/cms/lib/CA01000043/Centricity/domain/280/salary%20tables/2024_2025_Salary_Tables_JulDec2024.pdf",
-      "optional": true
-    },
-    {
-      "name": "ca-rialto-teachers-184-days-24-25.pdf",
-      "url": "https://kec.rialto.k12.ca.us/cms/lib/CA50000591/Centricity/Domain/1398/TEACHERS_184dys__24_25.pdf",
-      "optional": true
-    },
-    {
       "name": "ca-rialto-teachers-194-days-24-25.pdf",
       "url": "https://kec.rialto.k12.ca.us/cms/lib/CA50000591/Centricity/Domain/1398/TEACHERS_194dys__24_25.pdf",
       "optional": true
     },
     {
-      "name": "ca-farmersville-teachers-2025-01-01.pdf",
-      "url": "https://www.farmersville.k12.ca.us/cms/lib/CA01001142/Centricity/Domain/297/Teachers%20Salary%20Schedule%20Eff%2001-01-2025.pdf",
-      "optional": true
-    },
-    {
       "name": "ca-chatom-2024-25-final.pdf",
       "url": "https://chatom.k12.ca.us/wp-content/uploads/2025/06/2024-25-Certificated-Salary-Schedule-Final.pdf",
-      "optional": true
-    },
-    {
-      "name": "ca-chatom-2024-25.pdf",
-      "url": "https://chatom.k12.ca.us/wp-content/uploads/2024/08/2024-2025-Certificated-Salary-Schedule.pdf",
-      "optional": true
-    },
-    {
-      "name": "ky-shelby-2025-26.pdf",
-      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/4851/Scps/0cca7dc7-d7b5-49c2-b51c-4c9f1ed62f35/2025-26-Salary-Schedules-July-1-2025-FINAL.pdf?disposition=inline",
       "optional": true
     },
     {
@@ -68,13 +43,48 @@
       "optional": true
     },
     {
-      "name": "ky-linknky-2025-26.pdf",
-      "url": "https://linknky.com/wp-content/uploads/2026/07/2025-2026_SALARY_SCHEDULE_-_BOE_Approved_June_.pdf",
+      "name": "ca-egusd-egea-10-17-2024-25.pdf",
+      "url": "https://www.egusd.net/documents/Employment/Quick-Links/Salary-Schedules/2024-25-EGEA-10-and-17.pdf",
       "optional": true
     },
     {
-      "name": "ky-montgomery-salary-schedules.html",
-      "url": "https://www.montgomery.kyschools.us/staff/salary-schedules",
+      "name": "ca-aple-certificated-24-25.pdf",
+      "url": "https://aple.org/wp-content/uploads/2024/01/Certificated-Sal-Schedule-24-25-2.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-salinas-city-esd-24-25.pdf",
+      "url": "https://resources.finalsite.net/images/v1736383845/salinascityesdorg/shuphwczaomg7ua6njw1/24-25CertificatedSalarySchedules.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-magnolia-sd-2024-25.pdf",
+      "url": "https://4.files.edl.io/ba3f/02/21/25/163122-3b990248-4118-4207-ace6-557c5b4f728a.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-bullitt-2025-26-ksba.pdf",
+      "url": "https://portal.ksba.org/public/Meeting/Attachments/DisplayAttachment.aspx?AttachmentID=883311",
+      "optional": true
+    },
+    {
+      "name": "ky-kenton-issue-paper-ksba.pdf",
+      "url": "https://portal.ksba.org/public/Meeting/Attachments/DisplayAttachment.aspx?AttachmentID=878263",
+      "optional": true
+    },
+    {
+      "name": "ky-pulaski-2025-26.pdf",
+      "url": "https://resources.finalsite.net/images/v1749648865/pulaskinet/zzebfwjkw8da274g3z2m/2025-2026SalarySchedule.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-mclean-2025-26.pdf",
+      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/5659/Mcsd/98c46af5-4582-4b57-9358-59022753f043/2025-2026-Salary-Schedule-(1).pdf?disposition=inline",
+      "optional": true
+    },
+    {
+      "name": "ky-mccracken-2025-26.pdf",
+      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/4273/Mccrackencps/7af2cd24-83bd-4919-b891-574248b6ce32/Salary-Schedule-2025-2026-Updated-10-23-25.pdf?disposition=inline",
       "optional": true
     }
   ]
