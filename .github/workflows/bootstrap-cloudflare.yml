@@ -1,4 +1,5 @@
-# Tạo tài nguyên Cloudflare một lần (PLAN Công đoạn 1 bước 3): hai CSDL D1 và một bucket R2.
+# Tạo tài nguyên Cloudflare một lần (PLAN Công đoạn 1 bước 3): hai CSDL D1.
+# Không tạo R2: tài liệu gốc lưu trong GitHub Release (docs/DECISIONS.md D-011).
 # Chạy lại an toàn: tài nguyên đã có thì bỏ qua. Không xóa gì.
 # ID của CSDL được in ra tóm tắt job để ghi vào apps/web/wrangler.jsonc qua pull request.
 # Worker do deploy.yml tạo ở lần deploy đầu.
@@ -13,7 +14,7 @@ permissions:
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   WRANGLER_VERSION: 4.160.1
-  # D-007: dữ liệu đặt gần người dùng Mỹ.
+  # D-007: CSDL đặt gần người dùng Mỹ.
   LOCATION: enam
 
 jobs:
@@ -35,15 +36,6 @@ jobs:
               npx --yes "wrangler@${WRANGLER_VERSION}" d1 create "$name" --location "$LOCATION"
             fi
           done
-      - name: Create R2 bucket
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if npx --yes "wrangler@${WRANGLER_VERSION}" r2 bucket info pay-schedules-docs > /dev/null 2>&1; then
-            echo "R2 pay-schedules-docs đã có, bỏ qua."
-          else
-            npx --yes "wrangler@${WRANGLER_VERSION}" r2 bucket create pay-schedules-docs --location "$LOCATION"
-          fi
       - name: Report database IDs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

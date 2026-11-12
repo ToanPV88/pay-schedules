@@ -113,3 +113,26 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   `.gitignore` và `bootstrap-cloudflare.yml`. Workflow này phải nằm sẵn trên `main` vì GitHub chỉ cho
   chạy tay workflow có trên nhánh mặc định; nó không đọc mã nào của repo. Toàn bộ mã còn lại của
   Công đoạn 1 đi qua pull request.
+
+## D-011: Tài liệu gốc lưu trong GitHub Release, không dùng R2 (thay D-005 và mục R2 của D-007)
+
+- Ngày: 2026-11-12. Chủ dự án chốt lúc 14:31.
+- Bối cảnh: lần chạy đầu của `bootstrap-cloudflare.yml` tạo được hai CSDL D1 nhưng tạo bucket R2 thất
+  bại (`Please enable R2 through the Cloudflare Dashboard`, mã 10042). Bật R2 cần đăng ký gói R2
+  gắn thẻ thanh toán của tài khoản (miễn phí trong hạn mức, tính tiền khi vượt).
+- Nội dung: như travienphi (ADR-0009), mỗi lần chạy pipeline đóng gói các tài liệu **mới** theo
+  SHA-256 và đính vào một GitHub Release riêng tư của repo. Không bật R2, không có binding R2 trong
+  Worker. Bỏ bước tạo R2 khỏi `bootstrap-cloudflare.yml`.
+- Lý do: không thêm đăng ký dịch vụ tính tiền; dung lượng tệp trong Release không tính vào phút
+  GitHub Actions.
+- Hệ quả, phải xử lý ở các công đoạn sau:
+  - Worker không đọc được Release của repo private. Trang công khai chỉ trỏ link gốc của học khu.
+    Trang xem tay nội bộ (Công đoạn 5) cần cách khác để hiện PDF cạnh bảng đã trích, ví dụ mở link
+    gốc hoặc link Release cho người đã đăng nhập GitHub.
+  - Tránh lỗi travienphi đã gặp (khôi phục phải tải mọi Release; API liệt kê Release trả thiếu ngày
+    2026-10-22): D1 lưu tên Release và tên tệp của từng tài liệu, để pipeline tải đúng tệp cần,
+    không khôi phục toàn bộ.
+  - Tải lên và tải về Release tốn phút Actions; 2.000 phút miễn phí mỗi tháng tính chung cho cả tài
+    khoản GitHub, chia với các repo khác.
+- Token Cloudflare `pay-schedules-github-actions` có thừa quyền R2 Storage Edit. Quyền này vô hại khi
+  R2 chưa bật; có thể bỏ khi sửa token lần sau.

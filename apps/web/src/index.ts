@@ -3,7 +3,6 @@ import { html } from "hono/html";
 
 export type Env = {
   DB: D1Database;
-  DOCS: R2Bucket;
   ASSETS: Fetcher;
   ENVIRONMENT: string;
   INDEXABLE: string;
