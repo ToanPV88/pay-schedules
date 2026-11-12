@@ -220,3 +220,43 @@ def find_file(directory: Path, pattern: str) -> Path:
 
 def iter_operating(rows: list[DirectoryRow]) -> Iterator[DirectoryRow]:
     return (r for r in rows if r.sy_status in OPERATING_STATUS)
+
+
+@dataclass(frozen=True)
+class StateLea:
+    """A CCD LEA seen from a state's own district code (ST_LEAID, e.g. 'CA-0161119')."""
+
+    leaid: str
+    st_leaid: str
+    name: str
+    lea_type: str
+    lea_type_text: str
+    sy_status: str
+    union: str = ""
+    """Supervisory union code shared by a union (LEA_TYPE 3) and its members (LEA_TYPE 2)."""
+
+
+STATE_ID_COLUMNS = ("ST", "ST_LEAID", "LEAID", "LEA_NAME", "LEA_TYPE", "SY_STATUS", "UNION")
+
+
+def read_state_ids(path: Path, states: set[str]) -> dict[str, list[StateLea]]:
+    """LEAs of ``states`` from the CCD directory, grouped by state code."""
+    out: dict[str, list[StateLea]] = {s: [] for s in states}
+    with zipfile.ZipFile(path) as zf, zf.open(_member(zf, ".csv")) as raw:
+        reader = csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8-sig", newline=""))
+        _require(list(reader.fieldnames or []), STATE_ID_COLUMNS, path.name)
+        for r in reader:
+            st = r["ST"].strip()
+            if st in out:
+                out[st].append(
+                    StateLea(
+                        leaid=r["LEAID"].strip(),
+                        st_leaid=r["ST_LEAID"].strip(),
+                        name=r["LEA_NAME"].strip(),
+                        lea_type=r["LEA_TYPE"].strip(),
+                        lea_type_text=(r.get("LEA_TYPE_TEXT") or "").strip(),
+                        sy_status=r["SY_STATUS"].strip(),
+                        union=r["UNION"].strip(),
+                    )
+                )
+    return out

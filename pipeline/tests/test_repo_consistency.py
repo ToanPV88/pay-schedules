@@ -23,6 +23,7 @@ ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN"}
 WRITE_JOBS = {
     ("fetch-sources.yml", "archive"): {"contents": "write"},
     ("import-districts.yml", "publish-report"): {"contents": "write"},
+    ("import-schedules.yml", "publish-report"): {"contents": "write"},
 }
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")

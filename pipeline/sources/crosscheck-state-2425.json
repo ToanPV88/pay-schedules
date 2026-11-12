@@ -1,0 +1,91 @@
+{
+  "release_prefix": "src-crosscheck-state-2425",
+  "description": "Bảng lương do học khu tự công bố, dùng để kiểm tra chéo dữ liệu J-90 (CA) và KDE (KY) ở Công đoạn 4. Mọi tệp đều tùy chọn: học khu có thể gỡ hoặc chặn.",
+  "files": [
+    {
+      "name": "ca-iusd-2425-certsal-ce.pdf",
+      "url": "https://iusd.org/sites/default/files/documents/2425-CERTSAL_CE.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-rbhsd-cta-agreement-2023-10-21.pdf",
+      "url": "https://www.rbhsd.org/documents/Departments/Human-Resources/Bargaining-Agreements/CTA-Bargaining-Agreement-rev.-2023-10-21.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-anderson-2024-2025.pdf",
+      "url": "https://www.anderson.kyschools.us/Downloads/Approved%20Salary%20Schedules%20for%202024-2025.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-rialto-teachers-194-days-24-25.pdf",
+      "url": "https://kec.rialto.k12.ca.us/cms/lib/CA50000591/Centricity/Domain/1398/TEACHERS_194dys__24_25.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-chatom-2024-25-final.pdf",
+      "url": "https://chatom.k12.ca.us/wp-content/uploads/2025/06/2024-25-Certificated-Salary-Schedule-Final.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-ftis-2025-26.pdf",
+      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/5483/Ftis/dadabab3-c8bd-4352-8c9e-44649708266f/2025-26_Salary_Schedules_Combined.pdf?disposition=inline",
+      "optional": true
+    },
+    {
+      "name": "ky-henry-fy2026-certified.pdf",
+      "url": "https://resources.finalsite.net/images/v1745335293/henrykyschoolsus/qvel6e2vmp9jxxlfbduh/FY2026187CERTIFIEDSALARY.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-hcs-2025-26.pdf",
+      "url": "https://core-docs.s3.us-east-1.amazonaws.com/documents/asset/uploaded_file/3112/HCS/5809284/2025-26_Salary_Schedules.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-egusd-egea-10-17-2024-25.pdf",
+      "url": "https://www.egusd.net/documents/Employment/Quick-Links/Salary-Schedules/2024-25-EGEA-10-and-17.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-aple-certificated-24-25.pdf",
+      "url": "https://aple.org/wp-content/uploads/2024/01/Certificated-Sal-Schedule-24-25-2.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-salinas-city-esd-24-25.pdf",
+      "url": "https://resources.finalsite.net/images/v1736383845/salinascityesdorg/shuphwczaomg7ua6njw1/24-25CertificatedSalarySchedules.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-bullitt-2025-26-ksba.pdf",
+      "url": "https://portal.ksba.org/public/Meeting/Attachments/DisplayAttachment.aspx?AttachmentID=883311",
+      "optional": true
+    },
+    {
+      "name": "ky-pulaski-2025-26.pdf",
+      "url": "https://resources.finalsite.net/images/v1749648865/pulaskinet/zzebfwjkw8da274g3z2m/2025-2026SalarySchedule.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-mclean-2025-26.pdf",
+      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/5659/Mcsd/98c46af5-4582-4b57-9358-59022753f043/2025-2026-Salary-Schedule-(1).pdf?disposition=inline",
+      "optional": true
+    },
+    {
+      "name": "ca-fresno-teacher-librarian-2024-07-01.pdf",
+      "url": "https://resources.finalsite.net/images/v1721246054/fresnouorg/t7o9hdb3ykj8u00zemjb/TeacherLibrariansSalarySchedulesEffectiveJuly12024.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-pittsburg-certificated-2024-07-01.pdf",
+      "url": "https://pittsburgusd.net/documents/Departments/Human-Resources/Human-Resources-Home/2024-2025%20salary%20increase%201%20percent/2024-2025-Certificated-1.07-effective-July-1-2024-Final.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-mccreary-2025-26-handbook.pdf",
+      "url": "https://resources.finalsite.net/images/v1754489962/mccrearyk12kyus/e1mu6imgxpqjs9ybnku4/McCrearyCounty2025-2026EmployeeHandbookFINALver2.pdf",
+      "optional": true
+    }
+  ]
+}
