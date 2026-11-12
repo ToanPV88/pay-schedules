@@ -9,7 +9,7 @@ Kế hoạch: [`docs/PLAN.md`](docs/PLAN.md). Quy tắc làm việc: [`AGENTS.md
 
 ```text
 apps/web             Worker (TypeScript, Hono): render trang từ D1
-packages/db          migration SQL của D1, dùng chung cho web và pipeline
+packages/db          migration SQL của D1 và hàm đọc (TypeScript), dùng chung cho web và pipeline
 pipeline             Python: discover, fetch, classify, extract, validate, publish
 data/seeds           tệp nhập ban đầu (không commit dữ liệu, chỉ README)
 docs                 PLAN, DECISIONS, REUSE_AUDIT
