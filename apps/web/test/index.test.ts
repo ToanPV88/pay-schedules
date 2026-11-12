@@ -9,21 +9,20 @@ function get(path: string): Promise<Response> {
   return exports.default.fetch(new Request(`${BASE}${path}`));
 }
 
-describe("trang thử (Công đoạn 1)", () => {
-  it("trang chủ render HTML và đọc được D1", async () => {
+describe("vận hành", () => {
+  it("trang chủ render HTML từ D1", async () => {
     const res = await get("/");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const body = await res.text();
     expect(body).toContain("Pay Schedules");
-    // Migration đã được áp trong setup, nên trang báo số migration thay vì lỗi.
-    expect(MIGRATIONS).toBeGreaterThanOrEqual(2);
-    expect(body).toContain(`${MIGRATIONS} migration(s) applied`);
+    expect(body).toContain("Browse by state");
   });
 
   it("healthz báo đã áp migration", async () => {
     const res = await get("/healthz");
     expect(res.status).toBe(200);
+    expect(MIGRATIONS).toBeGreaterThanOrEqual(3);
     expect(await res.json()).toEqual({
       ok: true,
       environment: "production",
@@ -34,7 +33,7 @@ describe("trang thử (Công đoạn 1)", () => {
 
 describe("chưa cho lập chỉ mục (DECISIONS.md D-002)", () => {
   it("mọi phản hồi có X-Robots-Tag noindex", async () => {
-    for (const path of ["/", "/healthz", "/robots.txt", "/khong-co"]) {
+    for (const path of ["/", "/healthz", "/robots.txt", "/sitemap.xml", "/about", "/khong-co"]) {
       const res = await get(path);
       expect(res.headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
     }
@@ -60,5 +59,10 @@ describe("an toàn", () => {
   it("có header chống đoán kiểu nội dung", async () => {
     const res = await get("/");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("trang mẫu /demo không có ở production", async () => {
+    const res = await get("/demo");
+    expect(res.status).toBe(404);
   });
 });
