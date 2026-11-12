@@ -1,0 +1,107 @@
+# =====================================================================
+# pay-schedules — .gitignore (chép từ travienphi, xem docs/REUSE_AUDIT.md)
+# Nguyên tắc: KHÔNG đưa vào Git bí mật, dữ liệu thu thập, CSDL, tệp lớn.
+# Ngoại lệ duy nhất cho tài liệu nhị phân: tests/fixtures/ (chỉ dữ liệu TỔNG HỢP/giả lập).
+# =====================================================================
+
+# ---- Bí mật & thông tin xác thực ----
+.env
+.env.*
+!.env.example
+*.env
+secrets/
+.secrets/
+credentials*.json
+service-account*.json
+*client_secret*.json
+token*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+.netrc
+.pgpass
+*.kdbx
+
+# ---- Dữ liệu thu thập & sinh ra (chỉ giữ README/.gitkeep) ----
+data/**
+!data/
+!data/README.md
+!data/*/
+!data/*/.gitkeep
+!data/*/README.md
+reports/output/
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.db
+*.db-journal
+*.duckdb
+*.parquet
+*.feather
+*.dump
+*.bak
+
+# ---- Tài liệu nguồn / tệp lớn (ngoài fixtures kiểm thử) ----
+*.pdf
+*.xls
+*.xlsx
+*.xlsm
+*.doc
+*.docx
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+!**/tests/fixtures/**
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.ipynb_checkpoints/
+
+# ---- Nhật ký & tạm ----
+logs/
+*.log
+tmp/
+.cache/
+
+# ---- IDE / hệ điều hành ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Node / Cloudflare ----
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+worker-configuration.d.ts

@@ -1,0 +1,61 @@
+# Tạo tài nguyên Cloudflare một lần (PLAN Công đoạn 1 bước 3): hai CSDL D1 và một bucket R2.
+# Chạy lại an toàn: tài nguyên đã có thì bỏ qua. Không xóa gì.
+# ID của CSDL được in ra tóm tắt job để ghi vào apps/web/wrangler.jsonc qua pull request.
+# Worker do deploy.yml tạo ở lần deploy đầu.
+name: Bootstrap Cloudflare
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  WRANGLER_VERSION: 4.160.1
+  # D-007: dữ liệu đặt gần người dùng Mỹ.
+  LOCATION: enam
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Create D1 databases
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          for name in pay-schedules pay-schedules-preview; do
+            if npx --yes "wrangler@${WRANGLER_VERSION}" d1 info "$name" > /dev/null 2>&1; then
+              echo "D1 $name đã có, bỏ qua."
+            else
+              npx --yes "wrangler@${WRANGLER_VERSION}" d1 create "$name" --location "$LOCATION"
+            fi
+          done
+      - name: Create R2 bucket
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if npx --yes "wrangler@${WRANGLER_VERSION}" r2 bucket info pay-schedules-docs > /dev/null 2>&1; then
+            echo "R2 pay-schedules-docs đã có, bỏ qua."
+          else
+            npx --yes "wrangler@${WRANGLER_VERSION}" r2 bucket create pay-schedules-docs --location "$LOCATION"
+          fi
+      - name: Report database IDs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          {
+            echo "## CSDL D1 (ghi vào apps/web/wrangler.jsonc)"
+            echo '```'
+            npx --yes "wrangler@${WRANGLER_VERSION}" d1 list --json | python3 -c '
+          import json, sys
+          for db in json.load(sys.stdin):
+              if db["name"] in ("pay-schedules", "pay-schedules-preview"):
+                  print(db["name"], db["uuid"])
+          '
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
