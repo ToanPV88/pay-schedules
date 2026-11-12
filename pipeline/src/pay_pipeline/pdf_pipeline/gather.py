@@ -143,9 +143,23 @@ _LANDING_HINTS = (
 )
 
 
+_URL_IN_PAGE = re.compile(r"https?:(?://|\\/\\/)[^\s\"'<>]+")
+
+
+def _urls_in_scripts(html: str) -> list[Link]:
+    """File URLs written in scripts or JSON (viewers that render the link with JavaScript)."""
+    out = []
+    for raw in _URL_IN_PAGE.findall(html):
+        url = raw.replace("\\/", "/").replace("\\u002F", "/").replace("&amp;", "&").rstrip("\\")
+        if urlsplit(url).path.lower().endswith(DOC_EXTENSIONS) or is_document_url(url):
+            out.append(Link(url, ""))
+    return out
+
+
 def landing_target(data: bytes, page_url: str, anchor: str) -> str | None:
     """The file a document landing page points to, or None."""
-    links = extract_links(data.decode("utf-8", errors="replace"), page_url)
+    html = data.decode("utf-8", errors="replace")
+    links = extract_links(html, page_url) + _urls_in_scripts(html)
     files = [
         ln
         for ln in links

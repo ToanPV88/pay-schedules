@@ -191,6 +191,24 @@ class TestDiscoverUnits:
         assert not is_document_url(f"{SITE}/departments/hr")
         assert same_site("https://www.test-usd.example.invalid/hr", f"{SITE}/")
 
+    def test_landing_pages_and_google_links(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import export_url, landing_target
+
+        html = (
+            b'<script>var d={"file":"https:\\/\\/files-backend.assets.thrillshare.com\\/documents'
+            b'\\/asset\\/uploaded_file\\/1\\/X\\/a\\/2025-26-Teacher-Salary.pdf"}</script>'
+            b'<a href="/menu">Lunch menu</a>'
+        )
+        target = landing_target(html, f"{SITE}/documents/hr/123456", "Teacher salary")
+        assert target is not None and target.endswith("/2025-26-Teacher-Salary.pdf")
+        assert landing_target(b"<a href='/menu'>Menu</a>", f"{SITE}/documents/1", "") is None
+        assert export_url("https://drive.google.com/file/d/1AbCdEfGhIjK/view?usp=sharing") == (
+            "https://drive.google.com/uc?export=download&id=1AbCdEfGhIjK"
+        )
+        assert export_url(
+            "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit#gid=0"
+        ).endswith("/spreadsheets/d/1AbCdEfGhIjK/export?format=xlsx")
+
     def test_school_years(self) -> None:
         assert school_years("Salary Schedule 2025-2026 and 2024-25, FY26") == ["2025-26", "2024-25"]
         assert school_years("Effective 7/1/2021 - 6/30/2022") == ["2021-22"]
