@@ -126,10 +126,7 @@ def _cmd_pdf_gather(args: argparse.Namespace) -> int:
         )
         for r in _wrangler_rows(Path(args.queue))
     ]
-    known: dict[str, set[str]] = {}
-    if args.known:
-        for r in _wrangler_rows(Path(args.known)):
-            known.setdefault(str(r["url"]), set()).add(str(r["sha256"]))
+    known = pdf_gather.known_documents(_wrangler_rows(Path(args.known)) if args.known else [])
     works = pdf_gather.gather(
         queue, Path(args.out), known, user_agent(), workers=args.workers,
         deadline_seconds=args.deadline_minutes * 60,
@@ -225,7 +222,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("pdf-gather", help="Pipeline PDF: Discover, Fetch, Classify một lô")
     p.add_argument("--queue", required=True, help="JSON hàng đợi từ D1 (wrangler --json)")
-    p.add_argument("--known", help="JSON tài liệu đã xử lý (url, sha256)")
+    p.add_argument("--known", help="JSON tài liệu đã xử lý (url, sha256, model)")
     p.add_argument("--out", required=True, help="Thư mục làm việc")
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--deadline-minutes", type=float, default=40)

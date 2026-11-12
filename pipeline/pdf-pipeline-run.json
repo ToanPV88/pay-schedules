@@ -1,11 +1,13 @@
 {
   "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*. rerun: trạng thái district_pipeline được chạy lại ngay.",
-  "limit": 100,
+  "limit": 120,
   "state": "",
   "rerun": [
     "no_schedule",
     "no_candidates",
     "found",
-    "unreachable"
+    "unreachable",
+    "unchanged",
+    "review"
   ]
 }

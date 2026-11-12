@@ -213,6 +213,8 @@ class TestDiscoverUnits:
         assert school_years("Salary Schedule 2025-2026 and 2024-25, FY26") == ["2025-26", "2024-25"]
         assert school_years("Effective 7/1/2021 - 6/30/2022") == ["2021-22"]
         assert school_years("2025-2027 agreement") == []
+        assert school_years("2026\u20102027 Teacher Salary") == ["2026-27"]  # Unicode hyphen
+        assert school_years("2 0 2 5 \u2013 2026 Pay Schedule") == ["2025-26"]  # letter-spaced
 
     def test_shared_throttle_spaces_requests_per_host(self) -> None:
         clock = [0.0]
@@ -264,6 +266,16 @@ class TestPipeline:
         manifest = json.loads((tmp_path / "docs" / "manifest.json").read_text())
         assert {f["name"] for f in manifest["files"]} == {d.asset_name for d in by["0600001"].docs}
         assert [w.nces_id for w in load_work(tmp_path)] == [w.nces_id for w in works]
+
+    def test_known_documents_only_count_current_readers(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import known_documents
+
+        rows = [
+            {"url": "u1", "sha256": "a", "model": rd.WORDS},
+            {"url": "u2", "sha256": "b", "model": "pdfplumber-words@0"},  # older reader: read again
+            {"url": "u3", "sha256": "c"},
+        ]
+        assert known_documents(rows) == {"u1": {"a"}, "u3": {"c"}}
 
     def test_known_document_is_not_processed_again(self, tmp_path: Path) -> None:
         url = f"{SITE}/files/2025-26%20Certificated%20Salary%20Schedule.pdf"
@@ -505,6 +517,15 @@ class TestReader:
         row = rd.parse_row(side, 0)
         assert row is not None and [a for _, _, a in row.amounts] == [60880]
         assert rd.parse_row(L("3", "61,118", "abc"), 0) is None  # words mixed in: not a row
+        # hourly rate with four decimals before each annual amount (Hillsborough)
+        row = rd.parse_row(L("1", "29.9874", "47,500.04", "31.8174", "50,398.76"), 0)
+        assert row is not None and row.label == "1"
+        assert [a for _, _, a in row.amounts] == [47500.04, 50398.76]
+
+    def test_lane_label_drops_unit_words(self) -> None:
+        assert rd.lane_label("Bachelor’s Degree  Hourly Rate Rate") == "Bachelor’s Degree"
+        assert rd.lane_label("MA (Annual)") == "MA"
+        assert rd.lane_label("Annual Rate") == "Annual Rate"  # nothing else left: keep it
 
     def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:
         lines = [L("Step", "BA", "MA")] + [

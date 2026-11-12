@@ -37,7 +37,7 @@ from pay_pipeline.schedules.state_import import (
 )
 from pay_pipeline.schedules.validate import Issue, validate
 
-CLASSIFIER = "heuristic@1"
+CLASSIFIER = "heuristic@2"
 RETRY_DAYS = {
     "no_website": 180, "unreachable": 30, "no_candidates": 90, "no_schedule": 90, "found": 0,
     "unchanged": 120, "published": 180, "error": 7, "review": None,

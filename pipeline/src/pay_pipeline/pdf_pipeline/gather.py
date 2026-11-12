@@ -21,7 +21,7 @@ import json
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -44,6 +44,7 @@ from pay_pipeline.discover.crawl import (
     score_document,
 )
 from pay_pipeline.documents.classify import Classification, classify, detect_kind
+from pay_pipeline.pdf_pipeline.read import READERS
 
 MAX_DOCS_PER_DISTRICT = 4
 MIN_CANDIDATE_SCORE = 2.0
@@ -171,6 +172,20 @@ def landing_target(data: bytes, page_url: str, anchor: str) -> str | None:
         return None
     best = max(files, key=lambda ln: score_document(Link(ln.url, ln.text or anchor)))
     return best.url
+
+
+def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
+    """URL -> SHA-256 of documents already read by the current readers.
+
+    A document read only by an older reader version is left out, so it is read again even if the
+    file has not changed.
+    """
+    known: dict[str, set[str]] = {}
+    for r in rows:
+        if r.get("model") is not None and r["model"] not in READERS:
+            continue
+        known.setdefault(str(r["url"]), set()).add(str(r["sha256"]))
+    return known
 
 
 def gather_one(

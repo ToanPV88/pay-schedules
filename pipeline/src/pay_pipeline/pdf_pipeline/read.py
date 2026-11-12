@@ -39,8 +39,13 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@1"
-WORDS = "pdfplumber-words@1"
+LAYOUT = "layout-text@2"
+WORDS = "pdfplumber-words@2"
+XLSX = "xlsx-cells@2"
+DOCX = "docx-cells@2"
+# Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
+# đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
+READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
 MIN_AMOUNT, MAX_AMOUNT = 10_000.0, 400_000.0
 MIN_ROWS, MIN_CELLS = 3, 8
 
@@ -52,7 +57,7 @@ _LABEL = re.compile(
 )
 _PLACEMENT = re.compile(r"^[\d,\-–+]+$")
 _CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
-_NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,2}\)?\**$")
+_NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,4}\)?\**$")
 _TITLE = re.compile(
     r"salary|salaries|schedule|district|schools?\b|board|approved|adopted|effective|revised|"
     r"unified|county|fiscal|\b20\d\d\b",
@@ -441,7 +446,7 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
         "title": " ".join(title.split())[:300],
         "contract_days": _days(table, page_text),
         "pay_basis": "annual",
-        "lanes": [" ".join(x.split()) for x in table.lanes],
+        "lanes": [lane_label(x) for x in table.lanes],
         "steps": [
             {"label": r.label, "years_experience": _label_number(r.label) if years else None}
             for r in table.rows
@@ -452,6 +457,16 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
         "source_pages": [table.page],
         "other_schedules": [],
     }
+
+
+# Column-unit words printed under each lane ("Hourly Rate | Annual Rate"): not part of the lane.
+_UNIT_WORDS = frozenset({"hourly", "daily", "annual", "annualized", "rate", "rates"})
+
+
+def lane_label(text: str) -> str:
+    words = text.split()
+    kept = [w for w in words if w.lower().strip("()") not in _UNIT_WORDS]
+    return " ".join(kept or words)
 
 
 def read_pages(pages: list[list[Line]], prefer: list[int], reader: str) -> dict[str, Any]:
@@ -510,7 +525,7 @@ def read_xlsx(path: Path) -> dict[str, Any]:
     finally:
         wb.close()
     table = pick_table(tables)
-    return to_answer(table, texts.get(table.page, "") if table else "", "xlsx-cells@1")
+    return to_answer(table, texts.get(table.page, "") if table else "", XLSX)
 
 
 def read_docx(path: Path) -> dict[str, Any]:
@@ -527,4 +542,4 @@ def read_docx(path: Path) -> dict[str, Any]:
         tables += find_tables(grid_lines(rows), i)
     table = pick_table(tables)
     text = re.sub(r"<[^>]+>", " ", xml)
-    return to_answer(table, text if table else "", "docx-cells@1")
+    return to_answer(table, text if table else "", DOCX)

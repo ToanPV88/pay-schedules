@@ -104,7 +104,7 @@ jobs:
             "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND (p.district_id IS NULL OR p.status IN ($rerun) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status IN ('published', 'draft')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
             > "$GITHUB_WORKSPACE/queue.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT DISTINCT d.url, d.sha256 FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \
+            "SELECT DISTINCT d.url, d.sha256, e.model FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \
             > "$GITHUB_WORKSPACE/known.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT nces_id, state, name, active FROM districts WHERE nces_id IS NOT NULL" \

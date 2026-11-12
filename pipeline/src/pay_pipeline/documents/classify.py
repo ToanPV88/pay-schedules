@@ -35,11 +35,13 @@ NEGATIVE_RE = re.compile(
     re.I,
 )
 YEAR_PATTERNS = (
-    re.compile(r"\b(20\d\d)\s*[-–—/]\s*(20\d\d)\b"),
-    re.compile(r"\b(20\d\d)\s*[-–—/]\s*(\d\d)\b"),
+    re.compile(r"\b(20\d\d)\s*[-‐‑‒–—/]\s*(20\d\d)\b"),
+    re.compile(r"\b(20\d\d)\s*[-‐‑‒–—/]\s*(\d\d)\b"),
     re.compile(r"\bFY\s*-?\s*(20)?(\d\d)\b", re.I),
-    re.compile(r"\b\d{1,2}/\d{1,2}/(20\d\d)\s*[-–—]\s*\d{1,2}/\d{1,2}/(20\d\d)\b"),
+    re.compile(r"\b\d{1,2}/\d{1,2}/(20\d\d)\s*[-‐‑‒–—]\s*\d{1,2}/\d{1,2}/(20\d\d)\b"),
 )
+# Letter-spaced headings ("2 0 2 5 – 2026"): join the digits before matching.
+_SPACED_YEAR = re.compile(r"\b2 0 (\d) (\d)\b")
 MIN_TEXT_CHARS = 200
 
 
@@ -139,6 +141,7 @@ def annual_amounts(text: str) -> int:
 def school_years(text: str) -> list[str]:
     """School years written in the text, as 'YYYY-YY', most recent first."""
     found: set[int] = set()
+    text = _SPACED_YEAR.sub(r"20\1\2", text)
     for m in YEAR_PATTERNS[0].finditer(text):
         a, b = int(m.group(1)), int(m.group(2))
         if b == a + 1:
