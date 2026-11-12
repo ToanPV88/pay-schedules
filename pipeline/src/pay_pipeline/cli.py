@@ -14,7 +14,7 @@ from pay_pipeline.acquisition.http import PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
 from pay_pipeline.catalog.d1sql import catalog_sql, render_sql
 from pay_pipeline.catalog.districts import build_catalog, render_report
-from pay_pipeline.sources import fetch_sources, load_manifest, required_failures
+from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
 
 DEFAULT_USER_AGENT = f"pay-schedules/{__version__} (+https://github.com/ToanPV88/pay-schedules)"
 
@@ -34,6 +34,15 @@ def _cmd_fetch_sources(args: argparse.Namespace) -> int:
         tag = "SKIP" if bad.optional else "FAIL"
         print(f"{tag} {bad.name}  {bad.error}")
     return 1 if required_failures(failed) else 0
+
+
+def _cmd_verify_sources(args: argparse.Namespace) -> int:
+    problems = verify_sources(Path(args.directory))
+    for problem in problems:
+        print(problem)
+    if not problems:
+        print("Mọi tệp khớp SHA-256 trong manifest.json")
+    return 1 if problems else 0
 
 
 def load_existing_slugs(path: Path | None) -> dict[str, tuple[str, str]]:
@@ -74,6 +83,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("manifest", help="Tệp kê khai, vd. pipeline/sources/nces-ccd-2425.json")
     p.add_argument("--out", required=True, help="Thư mục đầu ra (phải trống)")
     p.set_defaults(func=_cmd_fetch_sources)
+
+    p = sub.add_parser("verify-sources", help="Kiểm SHA-256 các tệp theo manifest.json")
+    p.add_argument("directory")
+    p.set_defaults(func=_cmd_verify_sources)
 
     p = sub.add_parser("districts-build", help="Dựng danh mục học khu từ tệp NCES CCD")
     p.add_argument("--sources", required=True, help="Thư mục chứa tệp của Release nguồn")

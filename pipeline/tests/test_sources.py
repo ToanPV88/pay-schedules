@@ -12,7 +12,7 @@ import pytest
 
 from pay_pipeline.acquisition.http import PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
-from pay_pipeline.sources import fetch_sources, load_manifest, required_failures
+from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
 
 UA = "pay-schedules/0.1 (+https://example.invalid/about)"
 HOST = "https://stats.example.invalid"
@@ -117,3 +117,21 @@ class TestFetchSources:
         (out / "old").write_text("x")
         with fetcher({}) as f, pytest.raises(FileExistsError):
             fetch_sources(m, out, f, now=NOW)
+
+
+class TestVerifySources:
+    def test_detects_changed_and_missing_files(self, tmp_path: Path) -> None:
+        m = load_manifest(
+            write_manifest(tmp_path, [{"url": f"{HOST}/a.zip"}, {"url": f"{HOST}/b.zip"}])
+        )
+        routes = {
+            f"{HOST}/a.zip": httpx.Response(200, content=b"A"),
+            f"{HOST}/b.zip": httpx.Response(200, content=b"B"),
+        }
+        out = tmp_path / "out"
+        with fetcher(routes) as f:
+            fetch_sources(m, out, f, now=NOW)
+        assert verify_sources(out) == []
+        (out / "a.zip").write_bytes(b"tampered")
+        (out / "b.zip").unlink()
+        assert verify_sources(out) == ["SHA-256 sai: a.zip", "Thiếu tệp b.zip"]

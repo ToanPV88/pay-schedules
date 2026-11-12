@@ -133,3 +133,22 @@ def fetch_sources(
 
 def required_failures(failed: list[FailedFile]) -> list[FailedFile]:
     return [f for f in failed if not f.optional]
+
+
+def verify_sources(directory: Path) -> list[str]:
+    """Check every file listed in ``directory/manifest.json`` against its SHA-256.
+
+    Returns a list of problems (empty when everything matches).
+    """
+    manifest = directory / "manifest.json"
+    if not manifest.exists():
+        return [f"Thiếu {manifest.name}"]
+    record = json.loads(manifest.read_text(encoding="utf-8"))
+    problems = []
+    for entry in record.get("files", []):
+        path = directory / entry["name"]
+        if not path.exists():
+            problems.append(f"Thiếu tệp {entry['name']}")
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
+            problems.append(f"SHA-256 sai: {entry['name']}")
+    return problems
