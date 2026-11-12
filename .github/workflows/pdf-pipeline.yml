@@ -1,6 +1,8 @@
 # Pipeline PDF (PLAN Công đoạn 5, DECISIONS.md D-019): một lô học khu chưa có bảng lương.
 # Discover → Fetch → Classify → Extract (Claude, 2 lần) → Validate → nạp D1.
-# - Chạy tay (workflow_dispatch). target=production chỉ chạy từ commit đã có trên `main`.
+# - Chạy tay (workflow_dispatch), hoặc đẩy commit lên `run/pdf-pipeline-preview` /
+#   `run/pdf-pipeline-production`: khi đó tham số lấy từ `pipeline/pdf-pipeline-run.json`.
+#   target=production chỉ chạy từ commit đã có trên `main`.
 # - CLOUDFLARE_API_TOKEN chỉ ở bước gọi wrangler; ANTHROPIC_API_KEY chỉ ở bước `pdf-extract`.
 #   Thiếu ANTHROPIC_API_KEY thì bỏ qua Extract (chỉ tìm và phân loại tài liệu).
 # - Tài liệu tải về và báo cáo lưu vào Release `docs-<target>-<ngày>-<run>`; job `archive` chỉ có
@@ -25,6 +27,8 @@ on:
       state:
         description: "Chỉ một bang (mã 2 chữ), để trống = mọi bang"
         default: ""
+  push:
+    branches: ["run/pdf-pipeline-preview", "run/pdf-pipeline-production"]
 
 permissions:
   contents: read
@@ -35,7 +39,7 @@ concurrency:
 
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-  TARGET: ${{ inputs.target }}
+  TARGET: ${{ inputs.target || (github.ref_name == 'run/pdf-pipeline-production' && 'production' || 'preview') }}
   LIMIT: ${{ inputs.limit }}
   BUDGET: ${{ inputs.budget_usd }}
   ONLY_STATE: ${{ inputs.state }}
@@ -55,6 +59,13 @@ jobs:
         env:
           RUN_ID: ${{ github.run_id }}
         run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            cfg=pipeline/pdf-pipeline-run.json
+            LIMIT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["limit"])' "$cfg")
+            BUDGET=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["budget_usd"])' "$cfg")
+            ONLY_STATE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$cfg")
+            { echo "LIMIT=$LIMIT"; echo "BUDGET=$BUDGET"; echo "ONLY_STATE=$ONLY_STATE"; } >> "$GITHUB_ENV"
+          fi
           [[ "$TARGET" =~ ^(preview|production)$ ]] || { echo "::error::target sai"; exit 1; }
           [[ "$LIMIT" =~ ^[0-9]{1,4}$ ]] || { echo "::error::limit phải là số"; exit 1; }
           [[ "$BUDGET" =~ ^[0-9]{1,3}(\.[0-9]{1,2})?$ ]] || { echo "::error::budget_usd sai"; exit 1; }

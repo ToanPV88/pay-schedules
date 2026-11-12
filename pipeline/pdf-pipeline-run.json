@@ -1,0 +1,6 @@
+{
+  "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*.",
+  "limit": 100,
+  "budget_usd": 0,
+  "state": ""
+}
