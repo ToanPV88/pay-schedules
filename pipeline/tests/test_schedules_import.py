@@ -208,7 +208,22 @@ def write_ky(path: Path) -> None:
         ):
             ws.append(row)
         ws.append(("", "State Summary:", "", "", None, "", "", ""))
+    # fixed document dates: the same content always has the same sha256
+    wb.properties.created = wb.properties.modified = dt.datetime(2026, 1, 1)
     wb.save(path)
+    _fix_zip_times(path)
+
+
+FIXED_ZIP_TIME = (2026, 1, 1, 0, 0, 0)
+
+
+def _fix_zip_times(path: Path) -> None:
+    """Rewrite a zip with fixed member times, so its bytes do not depend on the clock."""
+    with zipfile.ZipFile(path) as zf:
+        members = [(i.filename, zf.read(i)) for i in zf.infolist()]
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, data in members:
+            zf.writestr(zipfile.ZipInfo(name, FIXED_ZIP_TIME), data)
 
 
 # ---------------------------------------------------------------- CCD + catalogue
@@ -239,8 +254,8 @@ def write_sources(root: Path, ky_sha: str | None = None) -> tuple[Path, Path]:
     src = root / "sources"
     src.mkdir(parents=True)
     with zipfile.ZipFile(src / "j902425.exe", "w") as zf:
-        zf.writestr("j902425readme.docx", b"readme")
-        zf.writestr("tsal2425.accdb", b"not really access")
+        zf.writestr(zipfile.ZipInfo("j902425readme.docx", FIXED_ZIP_TIME), b"readme")
+        zf.writestr(zipfile.ZipInfo("tsal2425.accdb", FIXED_ZIP_TIME), b"not really access")
     write_ky(src / "ky_certified_salary_schedule_2014-2026.xlsx")
     files = []
     for name, url in (

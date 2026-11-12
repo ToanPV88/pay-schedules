@@ -125,7 +125,7 @@ def compare(gold: Gold, draft: ScheduleDraft) -> tuple[int, int, list[str]]:
 
 
 def evaluate(golds: list[Gold], docs_dir: Path, *, today: dt.date) -> list[GoldResult]:
-    from pay_pipeline.pdf_pipeline.run import read_document
+    from pay_pipeline.pdf_pipeline.run import pdf_checks, read_document
 
     results = []
     for gold in golds:
@@ -149,6 +149,7 @@ def evaluate(golds: list[Gold], docs_dir: Path, *, today: dt.date) -> list[GoldR
         if not draft.school_year and c.best_year:
             draft.school_year = c.best_year
         issues: list[Issue] = validate(draft, today=today, second_extraction=second)
+        issues += pdf_checks(data[0], draft)
         if len(data) > 1 and second is None:
             issues.append(Issue("double_extraction", "Lần đọc thứ hai không thấy bảng"))
         total, right, wrong = compare(gold, draft)

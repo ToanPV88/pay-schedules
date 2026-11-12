@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from collections import Counter
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -134,6 +135,26 @@ def merge_lane_labels(a: list[Lane], b: list[Lane]) -> list[Lane]:
     return out
 
 
+# Prose in a lane label: words from a paragraph beside the table were taken as the heading.
+_PROSE_IN_LABEL = re.compile(
+    r"\b(?:from|an|the|through|will|can|must|employees|accredited|institution|negotiated)\b|•",
+    re.I,
+)
+
+
+def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft) -> list[Issue]:
+    """Checks only for tables read from a document's layout (on top of the shared Validate)."""
+    issues = []
+    if answer.get("scope_note"):
+        issues.append(
+            Issue("schedule_scope", f"Bảng chỉ cho một nhóm giáo viên: {answer['scope_note']}")
+        )
+    bad = [ln.label_raw for ln in draft.lanes if _PROSE_IN_LABEL.search(ln.label_raw)]
+    if bad:
+        issues.append(Issue("lane_label", f"Nhãn lane lẫn chữ của đoạn văn: {bad[0][:80]!r}"))
+    return issues
+
+
 def prepare(
     works: list[DistrictWork],
     extractions: dict[str, dict[str, Any]],
@@ -195,10 +216,6 @@ def prepare(
                 )
             except ex.ExtractionError as exc:
                 issues.append(Issue("double_extraction", f"{exruns[1].model}: {exc}"))
-        if data[0].get("scope_note"):
-            issues.append(
-                Issue("schedule_scope", f"Bảng chỉ cho một nhóm giáo viên: {data[0]['scope_note']}")
-            )
         if second is not None and len(second.lanes) == len(draft.lanes):
             draft = replace(draft, lanes=merge_lane_labels(draft.lanes, second.lanes))
         try:
@@ -210,6 +227,7 @@ def prepare(
             )  # fmt: skip
             continue
         prior = school_year_from_start(start - 1)
+        issues += pdf_checks(data[0], draft)
         issues += validate(
             draft,
             today=today,

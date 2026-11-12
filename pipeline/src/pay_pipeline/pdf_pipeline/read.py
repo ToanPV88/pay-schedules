@@ -39,10 +39,10 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@3"
-WORDS = "pdfplumber-words@3"
-XLSX = "xlsx-cells@3"
-DOCX = "docx-cells@3"
+LAYOUT = "layout-text@4"
+WORDS = "pdfplumber-words@4"
+XLSX = "xlsx-cells@4"
+DOCX = "docx-cells@4"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -453,7 +453,12 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
             ln.strip()
             for ln in reversed(table.context.splitlines())
             if re.search(r"schedule|salary|scale|pay plan", ln, re.I)
-            and not re.search(r"years of experience|daily rate|^\s*steps?\b", ln, re.I)
+            and not re.search(
+                r"years of experience|daily rate|^\s*steps?\b|do not use|"
+                r"\b(?:can|will|may|must)\b",
+                ln,
+                re.I,
+            )
         ),
         "",
     )
@@ -465,7 +470,7 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
         "title": " ".join(title.split())[:300],
         "contract_days": _days(table, page_text),
         "pay_basis": "annual",
-        "lanes": [lane_label(x) for x in table.lanes],
+        "lanes": [lane_label(x, title) for x in table.lanes],
         "steps": [
             {"label": r.label, "years_experience": _label_number(r.label) if years else None}
             for r in table.rows
@@ -481,12 +486,43 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
 
 # Column-unit words printed under each lane ("Hourly Rate | Annual Rate"): not part of the lane.
 _UNIT_WORDS = frozenset({"hourly", "daily", "annual", "annualized", "rate", "rates"})
+# Words that name a lane: never removed even when the title uses them too.
+_LANE_WORDS = re.compile(
+    r"^(ba|bs|ma|ms|bachelors?|masters?|bachelor's|master's|doctor\w*|degrees?|phd|eds?|"
+    r"specialist|plus|lane|class|column|rank|teachers?|credits?|hours?|units?)$",
+    re.I,
+)
+_DATE_WORD = re.compile(r"^\d{1,2}/\d{1,2}/\d{2,4}$")
+_ABBREV = re.compile(r"^[A-Z][A-Z0-9+/&.-]*$")
 
 
-def lane_label(text: str) -> str:
-    words = text.split()
-    kept = [w for w in words if re.sub(r"\(\d\)$", "", w.lower()).strip("()") not in _UNIT_WORDS]
-    return " ".join(kept or words)
+def _word_key(w: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", w.lower())
+
+
+def lane_label(text: str, title: str = "") -> str:
+    """Lane heading without unit words and dates, and without title words swept in front of it.
+
+    Title words are dropped only from the start of the label and only when what is left starts
+    like a lane name ("Licensed MA" under "... Licensed ... Schedule" -> "MA").
+    """
+    words = [
+        w
+        for w in text.split()
+        if re.sub(r"\(\d\)$", "", w.lower()).strip("()") not in _UNIT_WORDS
+        and not _DATE_WORD.match(w)
+        and w.lower() != "effective"
+    ] or text.split()
+    title_words = {
+        _word_key(w) for w in title.split() if len(_word_key(w)) >= 4 and not _LANE_WORDS.match(w)
+    }
+    start = 0
+    while start < len(words) - 1 and _word_key(words[start]) in title_words:
+        start += 1
+    rest = words[start:]
+    if start and (_LANE_WORDS.match(rest[0]) or _ABBREV.match(rest[0])):
+        words = rest
+    return " ".join(words)
 
 
 def read_pages(pages: list[list[Line]], prefer: list[int], reader: str) -> dict[str, Any]:

@@ -544,6 +544,29 @@ class TestReader:
         assert rd.lane_label("Bachelor’s Degree  Hourly Rate Rate") == "Bachelor’s Degree"
         assert rd.lane_label("MA (Annual)") == "MA"
         assert rd.lane_label("Bachelors ANNUAL(1) DAILY(2)") == "Bachelors"
+        # title words swept in front of the lane name (Douglas County), date in the heading
+        title = "2025-2026 Licensed General Compensation Schedule Effective 7/1/2025"
+        assert rd.lane_label("General Compensation MA + 15", title) == "MA + 15"
+        assert rd.lane_label("Effective 7/1/2025 PHDEDS", title) == "PHDEDS"
+        # kept when what is left would not start like a lane name
+        assert rd.lane_label("10NC Pay Schedule", "10NC Pay Schedule 8NC") == "10NC Pay Schedule"
+        assert rd.lane_label("New Hire Salary", "Years of New Hire Salary") == "New Hire Salary"
+
+    def test_pdf_checks_flag_prose_labels_and_partial_schedules(self) -> None:
+        from pay_pipeline.pdf_pipeline.run import pdf_checks
+        from pay_pipeline.schedules.model import Lane, ScheduleDraft, Step
+
+        draft = ScheduleDraft(
+            state="NV", state_district_id="x", district_name="x", school_year="2026-27",
+            lanes=[Lane("MA+16 V"), Lane("institution from an accredited X")],
+            steps=[Step("1")], cells={},
+        )  # fmt: skip
+        assert [i.code for i in pdf_checks({}, draft)] == ["lane_label"]
+        draft.lanes = [Lane("BA"), Lane("MA")]
+        assert pdf_checks({}, draft) == []
+        assert [i.code for i in pdf_checks({"scope_note": "hired prior to 2013"}, draft)] == [
+            "schedule_scope"
+        ]
         assert rd.lane_label("Annual Rate") == "Annual Rate"  # nothing else left: keep it
 
     def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:
