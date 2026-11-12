@@ -1,7 +1,9 @@
-import { exports } from "cloudflare:workers";
+import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 const BASE = "https://example.invalid";
+// Số migration trong packages/db/migrations, đã áp trong test/apply-migrations.ts.
+const MIGRATIONS = (env as unknown as { TEST_MIGRATIONS: unknown[] }).TEST_MIGRATIONS.length;
 
 function get(path: string): Promise<Response> {
   return exports.default.fetch(new Request(`${BASE}${path}`));
@@ -14,14 +16,19 @@ describe("trang thử (Công đoạn 1)", () => {
     expect(res.headers.get("content-type")).toContain("text/html");
     const body = await res.text();
     expect(body).toContain("Pay Schedules");
-    // Migration 0001 đã được áp trong setup, nên trang báo số migration thay vì lỗi.
-    expect(body).toContain("1 migration(s) applied");
+    // Migration đã được áp trong setup, nên trang báo số migration thay vì lỗi.
+    expect(MIGRATIONS).toBeGreaterThanOrEqual(2);
+    expect(body).toContain(`${MIGRATIONS} migration(s) applied`);
   });
 
   it("healthz báo đã áp migration", async () => {
     const res = await get("/healthz");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, environment: "production", migrations: 1 });
+    expect(await res.json()).toEqual({
+      ok: true,
+      environment: "production",
+      migrations: MIGRATIONS,
+    });
   });
 });
 

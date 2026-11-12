@@ -136,3 +136,50 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
     khoản GitHub, chia với các repo khác.
 - Token Cloudflare `pay-schedules-github-actions` có thừa quyền R2 Storage Edit. Quyền này vô hại khi
   R2 chưa bật; có thể bỏ khi sửa token lần sau.
+
+## D-012: Schema D1 của Công đoạn 2 (migration 0002) và các chỗ khác PLAN
+
+- Ngày: 2026-11-12. Claude quyết.
+- Đã kiểm tra trước khi viết:
+  - D1 hỗ trợ FTS5 ([SQL statements](https://developers.cloudflare.com/d1/sql-api/sql-statements/),
+    tra ngày 2026-11-12); travienphi cũng đang chạy FTS5 trên D1 thật (`REUSE_AUDIT.md` §1).
+  - D1 kiểm tra khóa ngoại mặc định, kể cả trong migration
+    ([Foreign keys](https://developers.cloudflare.com/d1/sql-api/foreign-keys/)).
+- Giữ đúng PLAN: 12 bảng và cột chính; tên bảng `districts` (đổi tên ở Công đoạn 10 như PLAN);
+  `employer_type` mặc định `school_district`, `pay_basis`, `hours_per_year`; bảng không lane;
+  tiền là số nguyên cents; nhãn gốc ở `label_raw`.
+- Khác PLAN, kèm lý do:
+  1. **Khóa duy nhất của `schedules`** chỉ áp cho bảng `published` (chỉ mục duy nhất có điều kiện).
+     Nếu áp cho mọi trạng thái, bản trích lại của cùng năm học không lưu được dưới dạng draft trong
+     khi bản cũ đang published, nên không có bước "bảng cũ chuyển superseded" của Công đoạn 5.
+  2. **`schedule_type` và `employer_type` dùng bảng mã** (`schedule_types`, `employer_types`) thay vì
+     CHECK. SQLite không sửa được CHECK nếu không dựng lại bảng; với bảng mã, Công đoạn 10 chỉ cần
+     INSERT thêm giá trị.
+  3. **`source_documents`:** bỏ `r2_key`, thêm `release_tag` + `asset_name` (D-011). `district_id` cho
+     phép NULL vì tệp của bang (CA, KY) phủ nhiều học khu. Thêm `last_seen_at`; khóa duy nhất
+     `(url, sha256)`.
+  4. **Tiền đều là số nguyên:** `extraction_runs.cost_usd` thành `cost_usd_micros`; cột của
+     `district_summary` có hậu tố `_cents`.
+  5. **Cột thêm:** `schedules.source_sheet` (nguồn Excel không có số trang), `extraction_run_id`,
+     `superseded_by`, `published_at`, `notes`; `stipends.amount_raw` (phụ cấp dạng "2% of base");
+     `review_queue.resolution`; `district_summary.schedule_id`, `computed_at`.
+- Ràng buộc trong schema (không chỉ trong mã):
+  - năm học dạng `YYYY-YY`, hai số sau là năm kế tiếp;
+  - ô trống phải có ghi chú;
+  - khóa ngoại kép `(step_id, schedule_id)` và `(lane_id, schedule_id)`, nên ô không trỏ được sang
+    bậc hay cột của bảng khác;
+  - bảng không lane có tối đa một ô mỗi bậc;
+  - `published` phải có `published_at`; `superseded` phải có `superseded_by`;
+  - sha256 là 64 ký tự hex thường.
+- `district_summary` vẫn giữ ba mốc của giáo viên như PLAN (BA bậc 1, MA bậc 10, tối đa). Cách tính
+  viết ở Công đoạn 5 (bước Publish).
+- `packages/db` là package TypeScript: chứa migration và hàm đọc (`getSchedule`) cho Worker. Pipeline
+  Python ghi vào D1 qua API của Cloudflare (Công đoạn 4).
+- Tìm kiếm: `districts_fts` (FTS5, bỏ dấu) đồng bộ với `districts` bằng trigger.
+
+## D-013: Claude tự merge pull request khi mọi check xanh
+
+- Ngày: 2026-11-12. Chủ dự án cho phép lúc 14:35.
+- Nội dung: Claude được merge PR vào `main` khi mọi workflow chạy cho commit mới nhất của PR đều xanh
+  (`skipped` của job chỉ chạy trên `main` được tính là bình thường). Không merge khi có check đỏ,
+  đang chạy hoặc chưa chạy. Kiểu merge: squash.

@@ -2,7 +2,8 @@
   "name": "pay-schedules",
   "private": true,
   "workspaces": [
-    "apps/web"
+    "apps/web",
+    "packages/db"
   ],
   "engines": {
     "node": ">=22.12.0"

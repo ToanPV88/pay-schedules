@@ -40,8 +40,10 @@ Khung tệp này lấy từ travienphi (`docs/REUSE_AUDIT.md` §8).
 ## 5. Git và quy trình
 
 - Làm trên nhánh riêng (`feat/…`, `fix/…`, `docs/…`); mọi thay đổi vào `main` qua pull request.
+- Claude được tự merge PR (squash) khi mọi check của commit mới nhất đều xanh (D-013). Có check đỏ,
+  đang chạy hoặc chưa chạy thì không merge.
 - Không force-push, không viết lại lịch sử nhánh chung.
-- Trước khi kết thúc: chạy `npm run lint && npm run typecheck && npm test` và, trong `pipeline/`,
+- Trước khi kết thúc: chạy `npm run lint && npm run typecheck && npm test` (web và `packages/db`) và, trong `pipeline/`,
   `uv run ruff check src tests && uv run mypy && uv run pytest`. Báo kết quả thật.
 - Không sửa CI để "xanh giả". Action mới ghim theo commit SHA, quyền token ở mức tối thiểu.
 - Repo travienphi (`ToanPV88/hospital-price-ai`) chỉ được đọc.
