@@ -316,6 +316,9 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
      Năm trước lấy trong cùng lần nhập, hoặc từ bảng đang published trong D1.
 - Lane giảm ở chỗ nối hai khối của một bảng J-90 (vd. khối "NON-CRED" rồi khối "CRED", hoặc khối SPED)
   là cấu trúc thật, nhưng vẫn chuyển xem tay: tự đoán khối dễ publish sai.
+- Giữ tay: `pipeline/review-holds.json` liệt kê bảng (bang, mã học khu của bang, năm học) cần người xem,
+  kèm lý do, vd. khi kiểm tra chéo thấy ô sai. Bảng đó thành `draft` với lý do `[cross_check]`, kể cả
+  khi lần nạp trước đã publish. Bảng nào nay trượt kiểm tra cũng bị đưa về `draft` như vậy.
 - `district_summary` tính lại sau mỗi lần nạp cho các học khu vừa đụng tới, từ bảng teacher published
   đầu tiên của năm: `start_ba_cents` = bậc 1 của lane chuẩn hóa BA, `ma_step10_cents` = vị trí bậc 10
   của lane MA (với KY là 9 năm kinh nghiệm), `max_salary_cents` = ô lớn nhất. Không có lane BA/MA rõ

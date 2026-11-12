@@ -253,3 +253,14 @@ Học khu đang hoạt động trong danh mục của site nhưng không có b�
 | KY | Knott County | 2103120 | 2025-26 | $36,716 | $73,571 |
 | KY | Estill County | 2101760 | 2025-26 | $31,228 | $65,010 |
 | KY | Somerset Independent | 2105430 | 2025-26 | $37,627 | $66,997 |
+
+## Nạp vào D1
+
+| Môi trường | Lần chạy | Tệp nguồn | Bảng | Ô | Phụ cấp | Lý do xem tay đang mở | district_summary |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| preview | Import schedules 43213316129 (2026-11-12) | 3 | 2,015 | 322,290 | 4,775 | 215 | 1,813 |
+| production | sau khi merge PR Công đoạn 4 | | | | | | |
+
+Chạy lại trên preview với cùng dữ liệu (lần 43212173733): số dòng mọi bảng giữ nguyên. Lần chạy có
+`review-holds.json` đưa 3 bảng đã published về draft (Placentia-Yorba Linda, Pittsburg, Elk Grove
+2024-25) và thêm 3 lý do xem tay.
