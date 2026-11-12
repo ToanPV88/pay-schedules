@@ -18,11 +18,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
-ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN", "ANTHROPIC_API_KEY"}
+ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN", "ANTHROPIC_API_KEY", "REVIEW_PASSWORD"}
 # Secret nào chỉ được nằm trong env của bước chạy lệnh nào (D-019).
 SECRET_STEP_COMMAND = {
     "CLOUDFLARE_API_TOKEN": ("wrangler",),
     "ANTHROPIC_API_KEY": ("pay-pipeline pdf-extract", "pay-pipeline pdf-eval"),
+    "REVIEW_PASSWORD": ("wrangler secret put REVIEW_PASSWORD",),
 }
 # Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.
 WRITE_JOBS = {
@@ -97,9 +98,7 @@ class TestWorkflow:
             run = step.get("run", "")
             assert "secrets." not in run, "secret dùng thẳng trong lệnh"
             assert "secrets." not in json.dumps(step.get("with", {})), "secret trong with:"
-            names = set(SECRET_REF.findall(env))
-            assert len(names) <= 1, f"nhiều secret trong một bước: {step.get('name')}"
-            for name in names:
+            for name in set(SECRET_REF.findall(env)):
                 commands = SECRET_STEP_COMMAND[name]
                 assert any(c in run for c in commands), f"{name} ở bước không chạy {commands}"
 

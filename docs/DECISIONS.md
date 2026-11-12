@@ -362,3 +362,28 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   pdf-extract`; `test_repo_consistency.py` kiểm tra. Thiếu key thì workflow chỉ chạy Discover/Classify.
 - Phụ thuộc mới: `pypdf` (cắt trang). Công cụ hệ thống: `poppler-utils` (pdftotext) cài trong CI và
   workflow.
+
+## D-020: Bộ chuẩn đo độ chính xác của pipeline PDF
+
+- Ngày: 2026-11-12. Claude quyết.
+- `pipeline/gold/*.json`: mỗi tệp là một bảng lương nhập tay từ tài liệu của học khu (Release, URL,
+  sha256, trang, năm học, lane, bậc, ô). Bảng đầu tiên lấy từ các tài liệu đã kiểm tra chéo ở Công
+  đoạn 4, đọc bằng `pdftotext` và đối chiếu với dữ liệu của bang; phần còn lại lấy từ lô chạy thử.
+- `pay-pipeline pdf-eval` (workflow `pdf-eval.yml`) chạy classify → extract → validate trên từng tài
+  liệu, so bản trích chính với bộ chuẩn: lane và bậc khớp theo nhãn (trùng hẳn trước, rồi chứa nhau),
+  không khớp nhãn thì theo vị trí khi cùng số lượng; chỉ tính ô có số trong bộ chuẩn, đúng đến cent.
+- Nghiệm thu (PLAN): trên các bảng sẽ publish, ≥ 99% ô đúng; không bảng nào có ô sai (hoặc sai năm
+  học) mà vẫn qua Validate.
+
+## D-021: Trang xem tay nội bộ
+
+- Ngày: 2026-11-12. Claude quyết.
+- Worker riêng `apps/review` (`pay-schedules-review`, bản preview `pay-schedules-review-preview`),
+  không chung code với `apps/web` để không đụng Công đoạn 6. Không lập chỉ mục, không cache.
+- Bảo vệ bằng HTTP Basic; mật khẩu là secret `REVIEW_PASSWORD` (GitHub secret, workflow
+  `deploy-review.yml` đặt bằng `wrangler secret put`). Thiếu secret thì trả 503. POST phải có
+  Origin trùng site (chống CSRF).
+- Chức năng: hàng chờ (lọc theo bang), xem lưới cạnh link tài liệu gốc (kèm số trang), tô ô mà bản
+  trích đối chiếu khác, sửa ô (ghi `review_edits`, migration 0005), duyệt (publish, thay bảng
+  published cũ cùng khóa, đóng `review_queue`, tính lại `district_summary`), loại (kèm lý do; học
+  khu chạy lại sau 90 ngày).
