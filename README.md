@@ -42,6 +42,12 @@ uv run ruff check src tests && uv run mypy && uv run pytest
   `run/import-districts-preview` để nạp CSDL preview, `run/import-districts-production` để nạp production
   (chỉ với commit đã có trên `main`). Báo cáo: `docs/reports/districts-ccd-2024-25.md` (D-015).
 - Chạy cục bộ trên các tệp đã tải: `pay-pipeline districts-build --sources <thư mục> --sql out.sql --report out.md`.
+- Workflow **Import schedules** nạp bảng lương do bang công bố (CA J-90, KY) vào D1, qua bộ kiểm tra
+  Validate: nhánh `run/import-schedules-preview` / `run/import-schedules-production` (D-016…D-018).
+  Báo cáo: `docs/reports/state-schedules-2425.md`; nguồn tập trung của các bang khác:
+  `docs/STATE_SOURCES.md`. Chạy cục bộ cần `mdbtools` (`apt install mdbtools`):
+  `pay-pipeline schedules-build --sources <Release src-state-salaries> --ccd <Release src-nces-ccd>
+  --catalog catalog.json --release-tag <tag> --sql out.sql --report out.md`.
 
 ## Hạ tầng Cloudflare
 

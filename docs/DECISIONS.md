@@ -239,3 +239,84 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Nạp D1 (`import-districts.yml`): upsert theo mã NCES, dòng không đổi thì không ghi; học khu không còn
   trong tệp chuyển `active = 0`, không xóa; lân cận thay toàn bộ. Production chỉ nạp từ commit đã có
   trên `main`. Báo cáo lưu ở Release `report-districts-*` và `docs/reports/districts-ccd-2024-25.md`.
+
+## D-016: Importer bảng lương của bang (Công đoạn 4): định dạng và công cụ đọc
+
+- Ngày: 2026-11-12. Claude quyết.
+- Nguồn (Release `src-state-salaries-2425-20261112-43205697035`, kê khai ở
+  `pipeline/sources/state-salaries-2425.json`):
+  - California J-90 2024-25 và 2023-24: https://www3.cde.ca.gov/ds-downloads/fd/cs/j902425.exe,
+    `j902324.exe`, kèm readme. Tệp `.exe` là ZIP tự giải nén: mở bằng `zipfile`, **không chạy**. Bên
+    trong là CSDL Access (`tsalYYZZ.accdb`), đọc bằng `mdb-export` của **mdbtools** (gói apt, cài trong
+    workflow). Bảng dùng: `TSAL1ZZ` (học khu), `TSAL2ZZ` (tên cột), `TSAL3ZZ` (lương theo cột × bậc).
+  - Kentucky: workbook "Certified Salary Schedule (2014-2026)" của KDE, mỗi năm tài chính một sheet,
+    đọc bằng **openpyxl** (phụ thuộc runtime mới của pipeline).
+- Phần đọc file tách khỏi phần dựng bảng (`read_j90` / `j90_schedules`): từ 2025-26 California chuyển
+  sang C-90, chỉ cần thay phần đọc.
+- Năm học: CA lấy từ tên bảng Access (`tsal325` = 2024-25); KY lấy từ cột Fiscal Year của sheet
+  ("2025 - 2026" = 2025-26). Nhập mọi tệp J-90 có trong Release (hiện 2023-24, 2024-25) và 2 năm mới
+  nhất của KY (2024-25, 2025-26), để có năm trước cho kiểm tra lương khởi điểm.
+- Map mã học khu của bang sang NCES qua cột `ST_LEAID` của danh mục CCD 2024-25: `CA-<CDS 7 số>`,
+  `KY-<quận 3 số><học khu 3 số>000` (mã KDE là 3 số giữa). Khớp 100% ở cả hai bang.
+- Nạp D1 bằng workflow `import-schedules.yml` (preview qua nhánh `run/import-schedules-preview`,
+  production qua `run/import-schedules-production`, chỉ từ commit đã có trên `main`). SQL đi qua bảng
+  tạm `_imp_*`, chạy lại không tạo bản ghi trùng; bản mới của cùng khóa (học khu, năm, loại, tiêu đề)
+  từ tệp nguồn khác sẽ thay bản published cũ (cũ chuyển `superseded`).
+- Migration 0003 thêm chỉ mục `cells(schedule_id)`: hai chỉ mục duy nhất của `cells` là chỉ mục một
+  phần nên truy vấn "mọi ô của một bảng" phải quét cả bảng (đo trên bản sao: 30 giây → dưới 1 giây).
+
+## D-017: Dữ liệu nào của bang được nhập, dữ liệu nào bỏ (Công đoạn 4)
+
+- Ngày: 2026-11-12. Claude quyết.
+- **Không đọc** (nguyên tắc 3 của PLAN: không thu thập lương cá nhân): lương superintendent
+  (`TS1_Supt`), lương trung bình hiệu trưởng (`TS1_Prin*`, `TS1_DPrin*`), số FTE theo từng ô
+  (`TS3_FTE`, `TS3_Salcost`), các bảng phúc lợi TSAL4-6. Tệp "Superintendent's Salaries" của KY không
+  được kê khai tải.
+- CA, một bảng J-90 cho mỗi học khu, tiêu đề rỗng:
+  - lane = cột J-90 theo thứ tự số cột, nhãn ghép nguyên văn từ 5 trường tên cột; bậc = số bậc J-90,
+    `years_experience` để trống (bậc 1 không chắc là 0 năm);
+  - ô không có lương trong J-90 (cột bắt đầu hoặc dừng ở bậc khác) ghi trống kèm ghi chú;
+  - `contract_days` = `TS1_RDays` (số ngày làm việc của giáo viên cũ); `notes` ghi ngày hiệu lực;
+  - phụ cấp ngoài bảng (bằng thạc sĩ, tiến sĩ, giáo dục đặc biệt, song ngữ, CLAD/BCLAD, National Board,
+    4 khoản "khác" có mô tả) vào `stipends`. Giá trị dưới 100 USD (vd. "14" cho "SLP yr 1-5") không rõ
+    đơn vị nên giữ nguyên văn ở `amount_raw`, không quy ra tiền.
+- **Học khu hành chính chung của California** (5 supervisory union trong CCD: Modesto City Schools,
+  Santa Rosa City Schools, Petaluma City, Santa Cruz City, Arena Union/Point Arena): J-90 nộp theo
+  đơn vị chung, giáo viên hai học khu thành viên dùng một hợp đồng. Bảng được ghi cho từng học khu
+  thành viên (LEA_TYPE 2, cùng mã UNION), `notes` ghi rõ "Shared schedule of …". Học khu thành viên có
+  J-90 riêng thì giữ bảng riêng.
+- Học khu trong tệp của bang mà CCD xếp là charter độc lập (LEA_TYPE 7) nằm ngoài danh mục site (D-015)
+  nên bị bỏ qua, có ghi lý do trong báo cáo (4-6 học khu CA mỗi năm).
+- KY, một bảng cho mỗi học khu:
+  - lane = Rank V, IV, III, II, I (thấp đến cao); chuẩn hóa III → BA, II → MA, I → MA+30, IV/V để trống;
+  - bậc = số năm kinh nghiệm 0-40 (`years_experience` = số năm);
+  - chỉ lấy cột x1 (mã hạng 11/21/31…) là bảng cơ bản. Cột x2, x3 là bảng tùy chọn, nghĩa khác nhau
+    theo học khu (KDE: "Optional"), nên không nhập;
+  - hạng toàn 0.00 là không áp dụng, bỏ lane; một ô 0.00 trong hạng có áp dụng thành ô trống có ghi chú;
+  - workbook không có số ngày làm việc nên `contract_days` để trống.
+- Chuẩn hóa lane chỉ nhận nhãn rõ nghĩa: BA, BA+N, MA, MA+N, PhD. Nhãn như "BA+45 OR MA",
+  "BA+60+CRED", "BA NON-CRED" để `lane_normalized` trống, tránh so sánh sai.
+
+## D-018: Bộ kiểm tra Validate và quy tắc publish (Công đoạn 4, dùng lại ở Công đoạn 5)
+
+- Ngày: 2026-11-12. Claude quyết.
+- Module `pay_pipeline.schedules.validate`, sáu kiểm tra của PLAN Công đoạn 5. Trượt bất kỳ kiểm tra nào
+  thì bảng ghi `draft` và mỗi loại lỗi một dòng `review_queue`; qua hết thì `published`.
+  1. Không giảm theo bậc trong một lane, không giảm sang lane kế tiếp ở cùng bậc. So các ô có số liền
+     nhau, bỏ qua ô trống. Ô có ghi chú là ngoại lệ được chấp nhận.
+  2. Đủ ô bậc × lane; ô trống phải có ghi chú; bảng phải có ít nhất một ô có tiền.
+  3. Khoảng hợp lý theo `pay_basis`: năm 15.000-300.000 USD, tháng 1.250-30.000, ngày 75-1.500,
+     giờ 10-250.
+  4. Năm học đúng dạng, không quá năm học kế tiếp (năm học bắt đầu 1/7) và không cũ hơn bảng đang
+     published. Riêng tệp của bang được coi là lịch sử chính thức: năm cũ hơn vẫn được nhập và
+     published, vì khóa gồm cả năm học nên không thay bảng mới hơn.
+  5. Trích hai lần: hàm `compare_extractions` so từng ô; không áp dụng cho tệp của bang (đọc tất định),
+     dùng ở Công đoạn 5.
+  6. Lương khởi điểm (bậc 1, lane thấp nhất có số) đổi quá 20% so với năm trước của cùng học khu.
+     Năm trước lấy trong cùng lần nhập, hoặc từ bảng đang published trong D1.
+- Lane giảm ở chỗ nối hai khối của một bảng J-90 (vd. khối "NON-CRED" rồi khối "CRED", hoặc khối SPED)
+  là cấu trúc thật, nhưng vẫn chuyển xem tay: tự đoán khối dễ publish sai.
+- `district_summary` tính lại sau mỗi lần nạp cho các học khu vừa đụng tới, từ bảng teacher published
+  đầu tiên của năm: `start_ba_cents` = bậc 1 của lane chuẩn hóa BA, `ma_step10_cents` = vị trí bậc 10
+  của lane MA (với KY là 9 năm kinh nghiệm), `max_salary_cents` = ô lớn nhất. Không có lane BA/MA rõ
+  nghĩa thì để trống.

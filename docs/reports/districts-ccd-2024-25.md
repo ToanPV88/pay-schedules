@@ -121,7 +121,7 @@ vì môi trường làm việc của Claude không mở được các website n�
 | Môi trường | Lần chạy | Học khu active | Cặp lân cận | Bang |
 | --- | --- | ---: | ---: | ---: |
 | preview | Import districts 43180806542 (2026-11-12) | 13,289 | 150,768 | 51 |
-| production | sau khi merge PR Công đoạn 3 | | | |
+| production | Import districts 43181240587 (2026-11-12) | 13,289 | 150,768 | 51 |
 
 Nạp lại lần hai trên cùng dữ liệu (thử trên D1 cục bộ): không dòng nào bị ghi lại (`updated_at` giữ nguyên),
 không slug nào đổi.
