@@ -36,20 +36,18 @@ uv run ruff check src tests && uv run mypy && uv run pytest
 
 ## Hạ tầng Cloudflare
 
-Tài khoản dùng chung với travienphi, gói Workers Paid (D-001).
+Tài khoản dùng chung với travienphi, gói Workers Paid (D-001). Tài liệu gốc lưu trong GitHub
+Release riêng tư của repo, không dùng R2 (D-011).
 
 | Tài nguyên | Production | Preview |
 | --- | --- | --- |
 | Worker | `pay-schedules` | `pay-schedules-preview`, mỗi PR một alias `pr-<số>` |
 | D1 | `pay-schedules` | `pay-schedules-preview` |
-| R2 | `pay-schedules-docs` (dùng chung) | |
 
 Thiết lập một lần:
 
 1. Trong repo GitHub, thêm secret `CLOUDFLARE_API_TOKEN` (quyền tài khoản: Workers Scripts Edit,
-   D1 Edit, R2 Storage Edit) và biến `CLOUDFLARE_ACCOUNT_ID`.
+   D1 Edit) và biến `CLOUDFLARE_ACCOUNT_ID`. Đã làm ngày 2026-11-12.
 2. Chạy workflow **Bootstrap Cloudflare** (Actions → Run workflow). Tóm tắt job in ID của hai CSDL.
 3. Ghi hai ID vào `apps/web/wrangler.jsonc` qua pull request. Từ đó `deploy.yml` tạo bản xem trước
    cho mỗi PR và deploy production khi merge vào `main`.
-
-Khi chưa có ID thật, các bước deploy được bỏ qua kèm cảnh báo; CI vẫn chạy.
