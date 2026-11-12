@@ -4,6 +4,8 @@
  * loại `teacher`; các loại khác thuộc Công đoạn 10.
  */
 
+import { displayName, displayNameOrNull } from "./names";
+
 export interface State {
   code: string;
   name: string;
@@ -188,10 +190,10 @@ function toDistrict(r: DistrictRow): District {
   return {
     id: r.id,
     ncesId: r.nces_id,
-    name: r.name,
+    name: displayName(r.name),
     slug: r.slug,
-    city: r.city,
-    county: r.county,
+    city: displayNameOrNull(r.city),
+    county: displayNameOrNull(r.county),
     website: r.website,
     enrollment: r.enrollment,
     active: r.active === 1,
@@ -266,10 +268,10 @@ export async function listDistrictsOfState(
   const { results } = await stmt.all<DistrictListRow>();
   return results.map((r) => ({
     id: r.id,
-    name: r.name,
+    name: displayName(r.name),
     slug: r.slug,
-    city: r.city,
-    county: r.county,
+    city: displayNameOrNull(r.city),
+    county: displayNameOrNull(r.county),
     hasSchedule: r.has_schedule === 1,
     summary: toSummary(r),
   }));
@@ -412,7 +414,7 @@ export async function listNeighbors(
     if (summary) {
       neighbors.push({
         id: r.id,
-        name: r.name,
+        name: displayName(r.name),
         slug: r.slug,
         stateSlug: r.state_slug,
         distanceKm: r.distance_km,
@@ -478,10 +480,10 @@ export async function searchDistricts(
   const { results } = await stmt.all<SearchRow>();
   return results.map((r) => ({
     id: r.id,
-    name: r.name,
+    name: displayName(r.name),
     slug: r.slug,
-    city: r.city,
-    county: r.county,
+    city: displayNameOrNull(r.city),
+    county: displayNameOrNull(r.county),
     state: { code: r.state_code, name: r.state_name, slug: r.state_slug },
     hasSchedule: r.has_schedule === 1,
   }));

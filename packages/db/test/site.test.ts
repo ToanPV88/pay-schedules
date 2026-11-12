@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildSearchQuery,
   countDistrictsOfState,
+  displayName,
   getDistrictBySlug,
   getLatestSummary,
   getPublishedScheduleDistrict,
@@ -146,5 +147,40 @@ describe("báo lỗi", () => {
     const id = await insertErrorReport(db, report);
     expect(id).toBeGreaterThan(0);
     await expect(insertErrorReport(db, { ...report, message: "short" })).rejects.toThrow();
+  });
+});
+
+describe("tên hiển thị (D-105)", () => {
+  it("tên viết hoa toàn bộ đổi sang Title Case, giữ viết tắt và số La Mã", () => {
+    expect(displayName("LITTLEFIELD ISD")).toBe("Littlefield ISD");
+    expect(displayName("SCHOOL DISTRICT OF THE CITY OF ERIE")).toBe(
+      "School District of the City of Erie",
+    );
+    expect(displayName("SPRINGFIELD R-XII")).toBe("Springfield R-XII");
+    const stMarys = displayName("ST. MARY'S COUNTY PUBLIC SCHOOLS");
+    expect(stMarys).toBe("St. Mary's County Public Schools");
+    expect(displayName("O'NEILL PUBLIC SCHOOLS")).toBe("O'Neill Public Schools");
+    expect(displayName("CAÑON CITY RE-1")).toBe("Cañon City RE-1");
+  });
+
+  it("tên đã có chữ thường thì giữ nguyên", () => {
+    expect(displayName("DeSoto Cons SD 86")).toBe("DeSoto Cons SD 86");
+    expect(displayName("MS Achievement SD Of Yazoo City")).toBe("MS Achievement SD Of Yazoo City");
+  });
+
+  it("trang trả tên hiển thị, dữ liệu gốc không đổi", async () => {
+    const { a } = await seed();
+    await db
+      .prepare("UPDATE districts SET name = 'TEST VALLEY ISD', city = 'TESTVILLE' WHERE id = ?")
+      .bind(a.districtId)
+      .run();
+    const district = await getDistrictBySlug(db, "test-state", "test-valley-unified");
+    expect(district?.name).toBe("Test Valley ISD");
+    expect(district?.city).toBe("Testville");
+    const raw = await db
+      .prepare("SELECT name FROM districts WHERE id = ?")
+      .bind(a.districtId)
+      .first<{ name: string }>();
+    expect(raw?.name).toBe("TEST VALLEY ISD");
   });
 });
