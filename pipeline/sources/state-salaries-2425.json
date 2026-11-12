@@ -1,0 +1,12 @@
+{
+  "release_prefix": "src-state-salaries-2425",
+  "description": "Bảng lương giáo viên do Sở Giáo dục bang công bố: California J-90 (2024-25, 2023-24) và Kentucky certified salary schedules. Công đoạn 4. Không tải tệp lương cá nhân (vd. lương superintendent).",
+  "files": [
+    {"url": "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902425.exe", "note": "CA J-90 2024-25 (gói tự giải nén, không chạy)"},
+    {"url": "https://www.cde.ca.gov/ds/fd/cs/documents/j902425readme.docx", "note": "Readme J-90 2024-25"},
+    {"url": "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902324.exe", "note": "CA J-90 2023-24, để kiểm tra lệch giữa hai năm và lịch sử"},
+    {"url": "https://www.cde.ca.gov/ds/fd/cs/documents/j902324readme.docx", "note": "Readme J-90 2023-24"},
+    {"url": "https://www.education.ky.gov/districts/FinRept/Documents/Certified%20Salary%20Schedule%20%282014-2026%29.xlsx", "name": "ky_certified_salary_schedule_2014-2026.xlsx", "note": "KY certified salary schedules"},
+    {"url": "https://www.education.ky.gov/districts/FinRept/Documents/Kentucky%27s%20Historical%20Minimum%20Salary%20Schedules.xlsx", "name": "ky_historical_minimum_salary_schedules.xlsx", "note": "KY lương tối thiểu theo luật bang (tham khảo)", "optional": true}
+  ]
+}
