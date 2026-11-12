@@ -94,6 +94,28 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+      - name: Smoke check (status, cache, noindex)
+        env:
+          BASE_URL: ${{ needs.preview.outputs.url }}
+        run: |
+          # Gọi mỗi trang hai lần: lần hai nên là HIT nếu Workers Cache chạy (D-102).
+          for page in / /healthz /robots.txt /sitemap.xml /california /demo; do
+            for n in 1 2; do
+              echo "== ${page} (lần ${n})"
+              curl -sS -o /dev/null -D - "${BASE_URL}${page}" \
+                | grep -iE '^(HTTP/|cf-cache-status|cache-control|cache-tag|x-robots-tag)' || true
+            done
+          done
+          # 20 trang học khu California đầu tiên trong sitemap: mã trạng thái và tiêu đề.
+          curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+/california/[^<]+</loc>' \
+            | sed -E 's#</?loc>##g' | head -20 > ca.txt || true
+          echo "Trang California trong sitemap (20 đầu): $(wc -l < ca.txt)"
+          while read -r url; do
+            code=$(curl -sS -o page.html -w '%{http_code}' "$url")
+            title=$(grep -oE '<title>[^<]*</title>' page.html | sed -E 's#</?title>##g')
+            rows=$(grep -c '<td data-cents=' page.html || true)
+            echo "${code} | ô có tiền: ${rows} | ${title} | ${url}"
+          done < ca.txt
       - name: Lighthouse mobile
         env:
           BASE_URL: ${{ needs.preview.outputs.url }}
@@ -133,7 +155,7 @@ jobs:
             a=$(echo "$a11y" | median)
             b=$(echo "$bp" | median)
             s=$(echo "$seo" | median)
-            echo "| \`${page}\` | $p | $a | $b | $s |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| \`${page}\` | $p | $a | $b | $s |" | tee -a "$GITHUB_STEP_SUMMARY"
             # SEO không tính vì toàn site đang noindex có chủ đích (D-002).
             for v in "$p" "$a" "$b"; do
               if [ "$v" -lt "$MIN_SCORE" ]; then
