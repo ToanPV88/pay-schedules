@@ -19,6 +19,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN"}
+# Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.
+WRITE_JOBS = {
+    ("fetch-sources.yml", "archive"): {"contents": "write"},
+    ("import-districts.yml", "publish-report"): {"contents": "write"},
+}
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
 
@@ -49,7 +54,7 @@ def tracked_files() -> list[Path]:
 
 def test_workflows_exist() -> None:
     names = {p.name for p in WORKFLOWS}
-    assert {"ci.yml", "deploy.yml", "bootstrap-cloudflare.yml"} <= names
+    assert {"ci.yml", "deploy.yml", "bootstrap-cloudflare.yml", "fetch-sources.yml"} <= names
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
@@ -59,7 +64,11 @@ class TestWorkflow:
         assert wf.get("permissions") == {"contents": "read"}
         for name, job in wf["jobs"].items():
             perms = job.get("permissions", {})
-            assert "write" not in json.dumps(perms), f"{name} xin quyền ghi"
+            allowed = WRITE_JOBS.get((path.name, name))
+            if allowed is not None:
+                assert perms == allowed, f"{name}: quyền khác danh sách cho phép"
+            else:
+                assert "write" not in json.dumps(perms), f"{name} xin quyền ghi"
 
     def test_actions_pinned_by_sha(self, path: Path) -> None:
         for step in steps(load(path)):
@@ -86,6 +95,15 @@ class TestWorkflow:
         # `set -x` in lại lệnh kèm biến môi trường đã mở rộng.
         for step in steps(load(path)):
             assert not re.search(r"set\s+-[a-z]*x", step.get("run", "")), step.get("name")
+
+
+def test_write_jobs_do_not_fetch_or_use_secrets() -> None:
+    for (file_name, job_name), _ in WRITE_JOBS.items():
+        job = load(ROOT / ".github" / "workflows" / file_name)["jobs"][job_name]
+        text = json.dumps(job)
+        assert "secrets." not in text
+        for tool in ("pay-pipeline", "curl", "wget", "uv run", "pip install", "npm"):
+            assert tool not in text, f"{job_name} không được chạy {tool}"
 
 
 def test_no_secret_values_in_repo() -> None:

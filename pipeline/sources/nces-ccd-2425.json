@@ -1,0 +1,35 @@
+{
+  "release_prefix": "src-nces-ccd-2425",
+  "description": "NCES Common Core of Data 2024-25: danh mục LEA (029), sĩ số LEA (052), vị trí LEA của EDGE, bảng tổng hợp theo bang. Công đoạn 3.",
+  "files": [
+    {
+      "url": "https://nces.ed.gov/ccd/Data/zip/ccd_lea_029_2425_w_1a_073025.zip",
+      "note": "LEA directory 2024-25 (029)"
+    },
+    {
+      "url": "https://nces.ed.gov/ccd/Data/zip/ccd_lea_052_2425_l_1a_073025.zip",
+      "note": "LEA membership 2024-25 (052)"
+    },
+    {
+      "url": "https://nces.ed.gov/programs/edge/data/EDGE_GEOCODE_PUBLICLEA_2425.zip",
+      "note": "EDGE: vị trí văn phòng học khu, tên quận, tọa độ"
+    },
+    {
+      "url": "https://nces.ed.gov/programs/edge/docs/EDGE_GEOCODE_PUBLIC_TECHDOC.pdf",
+      "note": "Tài liệu cột của tệp EDGE",
+      "optional": true
+    },
+    {
+      "url": "https://nces.ed.gov/ccd/tables/202425_summary_2.asp",
+      "name": "ccd_202425_summary_2.html",
+      "note": "Bảng tổng hợp số học khu đang hoạt động theo bang, 2024-25 (có thể chưa công bố)",
+      "optional": true
+    },
+    {
+      "url": "https://nces.ed.gov/ccd/tables/202324_summary_2.asp",
+      "name": "ccd_202324_summary_2.html",
+      "note": "Bảng tổng hợp 2023-24 để đối chiếu khi chưa có bảng 2024-25",
+      "optional": true
+    }
+  ]
+}

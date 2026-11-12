@@ -183,3 +183,59 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Nội dung: Claude được merge PR vào `main` khi mọi workflow chạy cho commit mới nhất của PR đều xanh
   (`skipped` của job chỉ chạy trên `main` được tính là bình thường). Không merge khi có check đỏ,
   đang chạy hoặc chưa chạy. Kiểu merge: squash.
+
+## D-014: Tải tệp nguồn công khai qua workflow, lưu vào GitHub Release
+
+- Ngày: 2026-11-12. Claude quyết.
+- Bối cảnh: môi trường làm việc của Claude không ra được nces.ed.gov (proxy chặn), còn máy chạy GitHub
+  Actions thì ra được.
+- Nội dung:
+  - Tệp kê khai `pipeline/sources/*.json` liệt kê đúng các URL được tải. Lệnh
+    `pay-pipeline fetch-sources` tải qua `PoliteFetcher` (chép từ travienphi: robots.txt, ≥ 5 giây
+    giữa hai yêu cầu cùng host, thử lại có giới hạn, giới hạn kích thước) và ghi `manifest.json`
+    (URL, URL cuối, thời điểm tải, SHA-256, kích thước).
+  - Workflow `fetch-sources.yml`: job `fetch` (chỉ đọc repo) là job duy nhất ra Internet; job
+    `archive` có quyền `contents: write` chỉ để tạo Release `<tiền tố>-<ngày>-<run>`, không ra Internet,
+    không dùng secret. Release đã có không bị ghi đè.
+  - Workflow nạp kiểm SHA-256 từng tệp theo `manifest.json` trước khi dùng (`pay-pipeline verify-sources`).
+- Phụ thuộc mới: `httpx` (bộ tải lịch sự).
+- `test_repo_consistency.py` liệt kê rõ các job được ghi repo (`WRITE_JOBS`) và chặn job đó chạy công
+  cụ tải hay dùng secret.
+
+## D-015: Danh mục học khu từ NCES CCD 2024-25 (Công đoạn 3)
+
+- Ngày: 2026-11-12. Claude quyết.
+- Nguồn (Release `src-nces-ccd-2425-20261112-43179049772`):
+  - Danh mục LEA: https://nces.ed.gov/ccd/Data/zip/ccd_lea_029_2425_w_1a_073025.zip
+  - Sĩ số LEA: https://nces.ed.gov/ccd/Data/zip/ccd_lea_052_2425_l_1a_073025.zip
+  - Vị trí, quận, tọa độ (EDGE): https://nces.ed.gov/programs/edge/data/EDGE_GEOCODE_PUBLICLEA_2425.zip
+  - Bảng đối chiếu: https://nces.ed.gov/ccd/tables/202425_summary_2.asp (CCD 2024-25 Final Version 1a,
+    cùng phiên bản với tệp danh mục).
+- Vì sao 2024-25 mà không phải 2025-26: bản 2025-26 hiện chỉ là danh mục sơ bộ (công bố 7/2026), chưa
+  có sĩ số và chưa có bảng tổng hợp để đối chiếu. Khi NCES công bố bản chính thức 2025-26, thêm tệp kê
+  khai mới; importer giữ slug cũ theo mã NCES.
+- Quy tắc lọc:
+  - Chỉ 50 bang + DC (bỏ lãnh thổ và Bureau of Indian Education).
+  - Đang hoạt động đầu năm học: `SY_STATUS` ∈ {1 Open, 3 New, 4 Added, 5 Changed, 8 Reopened}. Đây là
+    định nghĩa NCES dùng cho "operating districts" (đối chiếu khớp 50/51 bang; dùng `UPDATED_STATUS`
+    thì Missouri lệch 1).
+  - Loại LEA 1 và 2 ("regular", 2 = thành viên supervisory union). Bỏ supervisory union (3), service
+    agency (4), cơ quan bang (5), liên bang (6), charter độc lập (7), khác (8), chuyên biệt (9).
+  - **New York City:** 33 học khu con (UNION 300) được gộp vào "NYC Chancellor's Office" (LEAID
+    3620580), sĩ số là tổng các học khu con. NCES cũng tính NYC là một LEA trong bảng tổng hợp; giáo
+    viên NYC dùng chung một hợp đồng.
+- Rủi ro để xem lại ở Công đoạn 5: ở Vermont, Montana và vài nơi ở California, supervisory union có thể
+  là đơn vị thương lượng hợp đồng giáo viên. Theo PLAN, supervisory union bị loại; học khu thành viên
+  vẫn có trang.
+- Cột:
+  - sĩ số = "Derived - Education Unit Total minus Adult Education Count" (như bảng tổng hợp NCES);
+  - quận và tọa độ lấy từ EDGE;
+  - website giữ như NCES, chỉ thêm `http://` khi thiếu;
+  - tên giữ nguyên văn NCES (một số bang viết hoa toàn bộ). Cách hiển thị để Công đoạn 6 quyết.
+- Slug: `slugify(tên)`; trùng trong bang thì thêm quận, vẫn trùng thì thêm mã NCES. Học khu đã có slug
+  giữ nguyên mãi (tra theo mã NCES), kể cả khi đổi tên.
+- Lân cận: 10 học khu gần nhất theo tọa độ văn phòng, cộng tối đa 10 học khu cùng quận; khoảng cách
+  là km đường tròn lớn.
+- Nạp D1 (`import-districts.yml`): upsert theo mã NCES, dòng không đổi thì không ghi; học khu không còn
+  trong tệp chuyển `active = 0`, không xóa; lân cận thay toàn bộ. Production chỉ nạp từ commit đã có
+  trên `main`. Báo cáo lưu ở Release `report-districts-*` và `docs/reports/districts-ccd-2024-25.md`.

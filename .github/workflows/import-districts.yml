@@ -1,0 +1,130 @@
+# Nạp danh mục học khu NCES vào D1 (PLAN Công đoạn 3, DECISIONS.md D-015).
+# - Đẩy commit lên nhánh run/import-districts-preview: nạp vào CSDL preview.
+# - Đẩy lên run/import-districts-production (hoặc chạy tay với target=production): nạp vào CSDL
+#   production; chỉ chạy khi commit đã nằm trên main.
+# Tệp nguồn lấy từ Release mới nhất có tiền tố trong tệp kê khai (fetch-sources.yml), kiểm SHA-256.
+# Báo cáo đối chiếu được lưu vào một Release `report-districts-*` để đọc lại được.
+name: Import districts
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "CSDL đích"
+        type: choice
+        options: [preview, production]
+        default: preview
+  push:
+    branches: ["run/import-districts-preview", "run/import-districts-production"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-districts
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  MANIFEST: pipeline/sources/nces-ccd-2425.json
+  TARGET: ${{ inputs.target || (github.ref_name == 'run/import-districts-production' && 'production' || 'preview') }}
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Production only from main
+        if: env.TARGET == 'production'
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Nạp production chỉ được chạy từ commit đã merge vào main."
+            exit 1
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          (cd pipeline && uv sync --locked --no-dev)
+      - name: Download and verify sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prefix=$(python3 -c 'import json,os; print(json.load(open(os.environ["MANIFEST"]))["release_prefix"])')
+          tag=$(gh release list --limit 100 --json tagName --jq "[.[] | select(.tagName | startswith(\"$prefix-\"))][0].tagName")
+          if [ -z "$tag" ]; then echo "::error::Chưa có Release $prefix-*"; exit 1; fi
+          gh release download "$tag" --dir sources
+          (cd pipeline && uv run pay-pipeline verify-sources ../sources)
+          echo "SOURCE_TAG=$tag" >> "$GITHUB_ENV"
+      - name: Read existing slugs
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          npx wrangler d1 execute "$db" $flag --remote --json \
+            --command "SELECT nces_id, state, slug FROM districts WHERE nces_id IS NOT NULL" > "$GITHUB_WORKSPACE/existing.json"
+      - name: Build catalogue
+        working-directory: pipeline
+        run: |
+          uv run pay-pipeline districts-build --sources "$GITHUB_WORKSPACE/sources" \
+            --existing "$GITHUB_WORKSPACE/existing.json" \
+            --sql "$GITHUB_WORKSPACE/districts.sql" --report "$GITHUB_WORKSPACE/report.md"
+      - name: Load into D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/districts.sql"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT state, COUNT(*) AS districts, SUM(active) AS active FROM districts GROUP BY state ORDER BY state" > "$GITHUB_WORKSPACE/after.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT (SELECT COUNT(*) FROM districts WHERE active = 1) AS active, (SELECT COUNT(*) FROM district_neighbors) AS neighbors, (SELECT COUNT(*) FROM states) AS states" > "$GITHUB_WORKSPACE/totals.json"
+      - name: Report
+        run: |
+          {
+            echo
+            echo "## Sau khi nạp vào D1 ($TARGET, nguồn $SOURCE_TAG)"
+            echo
+            echo '```json'
+            cat totals.json
+            echo '```'
+          } >> report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          mkdir out && cp report.md after.json out/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: report
+          path: out/
+          retention-days: 7
+
+  publish-report:
+    needs: import
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: report
+          path: out
+      - name: Create report release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          tag="report-districts-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
+          gh release create "$tag" out/* --repo "$REPO" --title "$tag" --notes "Báo cáo nạp danh mục học khu (${TARGET})." --prerelease
