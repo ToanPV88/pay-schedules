@@ -209,7 +209,7 @@ def write_ky(path: Path) -> None:
             ws.append(row)
         ws.append(("", "State Summary:", "", "", None, "", "", ""))
     # fixed document dates: the same content always has the same sha256
-    wb.properties.created = wb.properties.modified = dt.datetime(2026, 1, 1)
+    wb.properties.created = wb.properties.modified = dt.datetime(2026, 1, 1)  # noqa: DTZ001
     wb.save(path)
     _fix_zip_times(path)
 

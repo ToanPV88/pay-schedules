@@ -561,12 +561,16 @@ class TestReader:
             lanes=[Lane("MA+16 V"), Lane("institution from an accredited X")],
             steps=[Step("1")], cells={},
         )  # fmt: skip
-        assert [i.code for i in pdf_checks({}, draft)] == ["lane_label"]
+        assert [i.code for i in pdf_checks({}, draft, NOW.date())] == ["lane_label"]
         draft.lanes = [Lane("BA"), Lane("MA")]
-        assert pdf_checks({}, draft) == []
-        assert [i.code for i in pdf_checks({"scope_note": "hired prior to 2013"}, draft)] == [
-            "schedule_scope"
-        ]
+        assert pdf_checks({}, draft, NOW.date()) == []
+        assert [
+            i.code for i in pdf_checks({"scope_note": "hired prior to 2013"}, draft, NOW.date())
+        ] == ["schedule_scope"]
+        draft.school_year = "2023-24"  # more than two school years before 2026-27
+        assert [i.code for i in pdf_checks({}, draft, NOW.date())] == ["school_year"]
+        draft.school_year = "2024-25"
+        assert pdf_checks({}, draft, NOW.date()) == []
         assert rd.lane_label("Annual Rate") == "Annual Rate"  # nothing else left: keep it
 
     def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:

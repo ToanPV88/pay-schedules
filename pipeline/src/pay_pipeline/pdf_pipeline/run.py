@@ -142,9 +142,22 @@ _PROSE_IN_LABEL = re.compile(
 )
 
 
-def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft) -> list[Issue]:
-    """Checks only for tables read from a document's layout (on top of the shared Validate)."""
+# A document on a district website that is more than two school years old is probably not the
+# schedule in force; a person checks before it goes on the site.
+MAX_AGE_YEARS = 2
+
+
+def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft, today: dt.date) -> list[Issue]:
+    """Checks only for tables read from a district website (on top of the shared Validate)."""
     issues = []
+    current = today.year if today.month >= 7 else today.year - 1
+    try:
+        if school_year_start(draft.school_year) < current - MAX_AGE_YEARS:
+            issues.append(
+                Issue("school_year", f"Bảng năm {draft.school_year} đã cũ: có thể có bảng mới hơn")
+            )
+    except ValueError:
+        pass  # an unreadable year is reported by the shared check
     if answer.get("scope_note"):
         issues.append(
             Issue("schedule_scope", f"Bảng chỉ cho một nhóm giáo viên: {answer['scope_note']}")
@@ -227,7 +240,7 @@ def prepare(
             )  # fmt: skip
             continue
         prior = school_year_from_start(start - 1)
-        issues += pdf_checks(data[0], draft)
+        issues += pdf_checks(data[0], draft, today)
         issues += validate(
             draft,
             today=today,
