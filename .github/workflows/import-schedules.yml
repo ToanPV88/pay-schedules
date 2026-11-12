@@ -94,7 +94,7 @@ jobs:
           uv run pay-pipeline schedules-build \
             --sources "$GITHUB_WORKSPACE/sources-state" --ccd "$GITHUB_WORKSPACE/sources-ccd" \
             --catalog "$GITHUB_WORKSPACE/catalog.json" --published "$GITHUB_WORKSPACE/published.json" \
-            --release-tag "$STATE_TAG" \
+            --release-tag "$STATE_TAG" --holds "$GITHUB_WORKSPACE/pipeline/review-holds.json" \
             --sql "$GITHUB_WORKSPACE/schedules.sql" --report "$GITHUB_WORKSPACE/report.md"
       - name: Load into D1
         working-directory: apps/web

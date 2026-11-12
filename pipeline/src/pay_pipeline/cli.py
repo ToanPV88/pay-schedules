@@ -89,6 +89,7 @@ def _cmd_schedules_build(args: argparse.Namespace) -> int:
         release_tag=args.release_tag,
         today=today,
         ky_years=args.ky_years,
+        holds=state_import.load_holds(Path(args.holds) if args.holds else None),
     )
     Path(args.sql).write_text(render_sql(schedules_sql(result)), encoding="utf-8")
     Path(args.report).write_text(state_import.render_report(result), encoding="utf-8")
@@ -128,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--published", help="JSON bảng lương đang published trong D1")
     p.add_argument("--release-tag", required=True, help="Tag Release chứa tệp nguồn")
     p.add_argument("--ky-years", type=int, default=state_import.KY_YEARS)
+    p.add_argument("--holds", help="JSON các bảng giữ lại để xem tay (kiểm tra chéo phát hiện sai)")
     p.add_argument("--today", help="Ngày chạy (YYYY-MM-DD), mặc định hôm nay theo UTC")
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")

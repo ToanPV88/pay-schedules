@@ -224,6 +224,13 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
             " OR (x.lane_pos IS NULL AND NOT EXISTS (SELECT 1 FROM cells c"
             " WHERE c.schedule_id = m.schedule_id AND c.step_id = t.id AND c.lane_id IS NULL)))"
         )
+    # Stipends are replaced as a set: rows no longer produced for a schedule are removed.
+    sql.append(
+        "DELETE FROM stipends WHERE schedule_id IN (SELECT schedule_id FROM _imp_map)"
+        " AND NOT EXISTS (SELECT 1 FROM _imp_stipends x JOIN _imp_map m ON m.k = x.k"
+        " WHERE m.schedule_id = stipends.schedule_id AND x.name = stipends.name"
+        " AND x.amount_cents IS stipends.amount_cents AND x.amount_raw IS stipends.amount_raw)"
+    )
     sql.append(
         "INSERT INTO stipends (schedule_id, name, amount_cents, amount_raw, condition)"
         " SELECT m.schedule_id, x.name, x.amount_cents, x.amount_raw, x.condition"
@@ -231,6 +238,13 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " WHERE NOT EXISTS (SELECT 1 FROM stipends p WHERE p.schedule_id = m.schedule_id"
         " AND p.name = x.name AND p.amount_cents IS x.amount_cents"
         " AND p.amount_raw IS x.amount_raw)"
+    )
+    # A schedule that now fails a check (new rule, or a hold from a manual cross-check) goes
+    # back to draft even if an earlier run published it.
+    sql.append(
+        "UPDATE schedules SET status = 'draft', published_at = NULL"
+        " WHERE status = 'published' AND id IN (SELECT m.schedule_id FROM _imp_map m"
+        " JOIN _imp_schedules i ON i.k = m.k WHERE i.status = 'draft')"
     )
     sql.append(
         "INSERT INTO review_queue (schedule_id, reason, created_at)"
@@ -270,6 +284,8 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = s.id"
         " AND t.position = {pos} AND l.lane_normalized = '{lane}')"
     )
+    touched = "SELECT t.district_id FROM schedules t JOIN _imp_map m ON m.schedule_id = t.id"
+    sql.append(f"DELETE FROM district_summary WHERE district_id IN ({touched})")
     sql.append(
         "INSERT INTO district_summary (district_id, school_year, schedule_id, start_ba_cents,"
         " ma_step10_cents, max_salary_cents, computed_at)"
@@ -283,8 +299,7 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " AND s.id = (SELECT min(x.id) FROM schedules x WHERE x.district_id = s.district_id"
         " AND x.school_year = s.school_year AND x.status = 'published'"
         " AND x.schedule_type = 'teacher')"
-        " AND s.district_id IN (SELECT t.district_id FROM schedules t"
-        " JOIN _imp_map m ON m.schedule_id = t.id)"
+        f" AND s.district_id IN ({touched})"
         " ON CONFLICT (district_id, school_year) DO UPDATE SET"
         " schedule_id = excluded.schedule_id, start_ba_cents = excluded.start_ba_cents,"
         " ma_step10_cents = excluded.ma_step10_cents,"

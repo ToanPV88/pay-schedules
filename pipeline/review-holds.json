@@ -1,0 +1,23 @@
+{
+  "description": "Bảng lương của bang giữ ở trạng thái draft để người xem tay, vì kiểm tra chéo với tài liệu của học khu phát hiện lệch (docs/reports/state-schedules-crosscheck.md). Gỡ một dòng khi đã xử lý.",
+  "holds": [
+    {
+      "state": "CA",
+      "state_district_id": "3066647",
+      "school_year": "2024-25",
+      "reason": "Kiểm tra chéo: bảng 2024-2025 của Placentia-Yorba Linda USD ghi bậc 6 cột V (BA+60 incl MA...) là $87,267; J-90 ghi $87,627 (đảo chữ số). 44/45 ô còn lại khớp."
+    },
+    {
+      "state": "CA",
+      "state_district_id": "3467314",
+      "school_year": "2024-25",
+      "reason": "Kiểm tra chéo: bảng EGEA #10 2024-2025 của Elk Grove USD (duyệt 25/6/2024) trùng J-90 2023-24; J-90 2024-25 cao hơn đều $2,550 mỗi ô. Cần bảng mới hơn của học khu để xác nhận."
+    },
+    {
+      "state": "CA",
+      "state_district_id": "0761788",
+      "school_year": "2024-25",
+      "reason": "Kiểm tra chéo: bảng 2024-2025 của Pittsburg USD (1.07%, hiệu lực 1/7/2024) ghi bậc 4 cột VI (BA+75 + credential) là $76,781; J-90 ghi $76,006 (trùng cột V). 86/87 ô còn lại khớp."
+    }
+  ]
+}

@@ -160,6 +160,32 @@ def load_published(path: Path | None) -> list[PublishedSchedule]:
     return out
 
 
+@dataclass(frozen=True)
+class Hold:
+    """A schedule held for review by a person (e.g. a cross-check found a wrong cell)."""
+
+    state: str
+    state_district_id: str
+    school_year: str
+    reason: str
+
+
+def load_holds(path: Path | None) -> dict[tuple[str, str, str], str]:
+    """``{"holds": [{"state", "state_district_id", "school_year", "reason"}]}`` -> lookup."""
+    if path is None:
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    out = {}
+    for h in data.get("holds", []):
+        hold = Hold(
+            str(h["state"]), str(h["state_district_id"]), str(h["school_year"]), str(h["reason"])
+        )
+        if not hold.reason.strip():
+            raise ValueError(f"Hold thiếu lý do: {h}")
+        out[(hold.state, hold.state_district_id, hold.school_year)] = hold.reason
+    return out
+
+
 def read_drafts(
     sources: Path,
     docs: dict[str, SourceDocument],
@@ -200,6 +226,7 @@ def build_import(
     today: dt.date,
     ky_years: int = KY_YEARS,
     runner: ca_j90.Runner = ca_j90.mdb_runner,
+    holds: dict[tuple[str, str, str], str] | None = None,
 ) -> ImportResult:
     docs = load_manifest_sources(sources, release_tag)
     with tempfile.TemporaryDirectory(prefix="state-import-") as tmp:
@@ -294,6 +321,9 @@ def build_import(
             published_year=latest_published.get((lea.leaid, draft.schedule_type, draft.title)),
             allow_history=True,
         )
+        hold = (holds or {}).get((draft.state, draft.state_district_id, draft.school_year))
+        if hold:
+            issues.append(Issue("cross_check", hold))
         prepared.append(
             Prepared(
                 key=len(prepared) + 1,
@@ -435,10 +465,11 @@ def render_report(result: ImportResult) -> str:
             lines += [f"  - {d.name} (NCES {d.nces_id})" for d in missing]
             lines += ["", "  </details>", ""]
 
-    lines += ["", "## Mẫu kiểm tra chéo với tài liệu của học khu", ""]
+    lines += ["", "## Mẫu ngẫu nhiên để kiểm tra chéo", ""]
     lines.append(
-        "10 học khu mỗi bang (năm mới nhất, chọn ngẫu nhiên có seed). Kết quả đối chiếu ghi trong"
-        " docs/reports/state-schedules-crosscheck.md."
+        "10 học khu mỗi bang (năm mới nhất, bảng published, chọn ngẫu nhiên có seed). Phần lớn"
+        " học khu nhỏ không đăng bảng lương công khai, nên kiểm tra chéo dùng thêm học khu có"
+        " tài liệu; kết quả ở docs/reports/state-schedules-crosscheck.md."
     )
     lines += [
         "",

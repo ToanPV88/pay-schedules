@@ -33,6 +33,7 @@ from pay_pipeline.schedules.state_import import (
     ImportResult,
     build_import,
     load_catalog,
+    load_holds,
     load_published,
     render_report,
 )
@@ -271,9 +272,13 @@ def catalog() -> dict[str, CatalogDistrict]:
     return {k: CatalogDistrict(k, st, name, True) for k, (st, name) in CATALOG.items()}
 
 
-def run_import(tmp_path: Path, ky_sha: str | None = None) -> ImportResult:
+def run_import(
+    tmp_path: Path, ky_sha: str | None = None, holds: dict[tuple[str, str, str], str] | None = None
+) -> ImportResult:
     src, ccd = write_sources(tmp_path, ky_sha)
-    return build_import(src, ccd, catalog(), [], "src-test-1", TODAY, ky_years=2, runner=fake_mdb)
+    return build_import(
+        src, ccd, catalog(), [], "src-test-1", TODAY, ky_years=2, runner=fake_mdb, holds=holds
+    )
 
 
 def fresh_db() -> sqlite3.Connection:
@@ -433,6 +438,59 @@ class TestSql:
             ).fetchone()[0]
             == 4
         )
+
+    def test_hold_sends_published_schedule_back_to_review(self, tmp_path: Path) -> None:
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a"))
+        hold = {("KY", "001", "2025-26"): "Kiểm tra chéo: ô lệch tài liệu học khu"}
+        load(db, run_import(tmp_path / "b", holds=hold))
+        row = db.execute(
+            "SELECT s.status, s.published_at, (SELECT group_concat(reason) FROM review_queue r"
+            " WHERE r.schedule_id = s.id) FROM schedules s JOIN districts x ON x.id = s.district_id"
+            " WHERE x.nces_id = '2100001' AND s.school_year = '2025-26'"
+        ).fetchone()
+        assert row == ("draft", None, "[cross_check] Kiểm tra chéo: ô lệch tài liệu học khu")
+        years = db.execute(
+            "SELECT s.school_year FROM district_summary s JOIN districts x ON x.id = s.district_id"
+            " WHERE x.nces_id = '2100001'"
+        ).fetchall()
+        assert years == [("2024-25",)]
+        assert db.execute("SELECT count(*) FROM schedules").fetchone()[0] == 8
+
+    def test_holds_file(self, tmp_path: Path) -> None:
+        path = tmp_path / "h.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "holds": [
+                        {
+                            "state": "CA",
+                            "state_district_id": "1",
+                            "school_year": "2024-25",
+                            "reason": "x",
+                        }
+                    ]
+                }
+            )
+        )
+        assert load_holds(path) == {("CA", "1", "2024-25"): "x"}
+        path.write_text(
+            json.dumps(
+                {
+                    "holds": [
+                        {
+                            "state": "CA",
+                            "state_district_id": "1",
+                            "school_year": "2024-25",
+                            "reason": " ",
+                        }
+                    ]
+                }
+            )
+        )
+        with pytest.raises(ValueError):
+            load_holds(path)
+        assert load_holds(REPO / "pipeline" / "review-holds.json")
 
 
 class TestWranglerJson:
