@@ -18,12 +18,15 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
-ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN"}
+ALLOWED_SECRETS = {"CLOUDFLARE_API_TOKEN", "ANTHROPIC_API_KEY"}
+# Secret nào chỉ được nằm trong env của bước chạy lệnh nào (D-019).
+SECRET_STEP_COMMAND = {"CLOUDFLARE_API_TOKEN": "wrangler", "ANTHROPIC_API_KEY": "pay-pipeline pdf-extract"}
 # Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.
 WRITE_JOBS = {
     ("fetch-sources.yml", "archive"): {"contents": "write"},
     ("import-districts.yml", "publish-report"): {"contents": "write"},
     ("import-schedules.yml", "publish-report"): {"contents": "write"},
+    ("pdf-pipeline.yml", "archive"): {"contents": "write"},
 }
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
@@ -89,8 +92,12 @@ class TestWorkflow:
             env = json.dumps(step.get("env", {}))
             run = step.get("run", "")
             assert "secrets." not in run, "secret dùng thẳng trong lệnh"
-            if "secrets." in env:
-                assert "wrangler" in run, f"secret ở bước không gọi wrangler: {step.get('name')}"
+            assert "secrets." not in json.dumps(step.get("with", {})), "secret trong with:"
+            for name in SECRET_REF.findall(env):
+                command = SECRET_STEP_COMMAND[name]
+                assert command in run, f"{name} ở bước không chạy {command}: {step.get('name')}"
+                others = set(SECRET_REF.findall(env)) - {name}
+                assert not others or all(SECRET_STEP_COMMAND[o] in run for o in others)
 
     def test_no_shell_tracing(self, path: Path) -> None:
         # `set -x` in lại lệnh kèm biến môi trường đã mở rộng.

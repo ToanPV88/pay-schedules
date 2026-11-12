@@ -44,7 +44,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: uv sync --locked
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+          uv sync --locked
       - name: Lint
         run: |
           uv run ruff check src tests

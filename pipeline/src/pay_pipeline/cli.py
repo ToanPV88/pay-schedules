@@ -15,6 +15,8 @@ from pay_pipeline.acquisition.http import PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
 from pay_pipeline.catalog.d1sql import catalog_sql, render_sql
 from pay_pipeline.catalog.districts import build_catalog, render_report
+from pay_pipeline.pdf_pipeline import gather as pdf_gather
+from pay_pipeline.pdf_pipeline import run as pdf_run
 from pay_pipeline.schedules import state_import
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
@@ -101,6 +103,82 @@ def _cmd_schedules_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _wrangler_rows(path: Path) -> list[dict[str, object]]:
+    data = json.loads(path.read_text(encoding="utf-8") or "[]")
+    rows: list[dict[str, object]] = []
+    for item in data if isinstance(data, list) else [data]:
+        if isinstance(item, dict) and "results" in item:
+            rows.extend(item["results"])
+        elif isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def _cmd_pdf_gather(args: argparse.Namespace) -> int:
+    queue = [
+        pdf_gather.QueueItem(
+            district_id=int(str(r["district_id"])),
+            nces_id=str(r["nces_id"]),
+            name=str(r["name"]),
+            state=str(r["state"]),
+            website=str(r["website"]) if r.get("website") else None,
+            enrollment=int(str(r["enrollment"])) if r.get("enrollment") is not None else None,
+        )
+        for r in _wrangler_rows(Path(args.queue))
+    ]
+    known: dict[str, set[str]] = {}
+    if args.known:
+        for r in _wrangler_rows(Path(args.known)):
+            known.setdefault(str(r["url"]), set()).add(str(r["sha256"]))
+    works = pdf_gather.gather(
+        queue, Path(args.out), known, user_agent(), workers=args.workers,
+        deadline_seconds=args.deadline_minutes * 60,
+    )  # fmt: skip
+    counts: dict[str, int] = {}
+    for w in works:
+        counts[w.status] = counts.get(w.status, 0) + 1
+    print(f"{len(works)}/{len(queue)} học khu: {counts}")
+    return 0
+
+
+def _cmd_pdf_extract(args: argparse.Namespace) -> int:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        print("Chưa có ANTHROPIC_API_KEY: bỏ qua bước Extract")
+        return 0
+    work_dir = Path(args.work)
+    works = pdf_gather.load_work(work_dir)
+    results = pdf_run.extract_all(works, work_dir, key, budget_usd=args.budget_usd)
+    cost = sum(r["cost_usd_micros"] for v in results.values() for r in v["runs"]) / 1e6
+    print(f"Đã trích {len(results)} học khu, chi phí {cost:.2f} USD")
+    return 0
+
+
+def _cmd_pdf_build(args: argparse.Namespace) -> int:
+    work_dir = Path(args.work)
+    works = pdf_gather.load_work(work_dir)
+    path = work_dir / "extractions.json"
+    extractions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    now = dt.datetime.now(dt.UTC)
+    result, outcomes = pdf_run.prepare(
+        works,
+        extractions,
+        state_import.load_catalog(Path(args.catalog)),
+        state_import.load_published(Path(args.published) if args.published else None),
+        args.release_tag,
+        now.date(),
+    )
+    statements = schedules_sql(result, now) + pdf_run.pipeline_sql(
+        works, outcomes, args.run_key, now
+    )
+    Path(args.sql).write_text(render_sql(statements), encoding="utf-8")
+    Path(args.report).write_text(
+        pdf_run.render_report(works, outcomes, args.run_key, args.budget_usd), encoding="utf-8"
+    )
+    print(f"{len(outcomes)} học khu, {len(result.prepared)} bảng lương")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pay-pipeline")
     parser.add_argument("--version", action="version", version=__version__)
@@ -134,6 +212,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
     p.set_defaults(func=_cmd_schedules_build)
+
+    p = sub.add_parser("pdf-gather", help="Pipeline PDF: Discover, Fetch, Classify một lô")
+    p.add_argument("--queue", required=True, help="JSON hàng đợi từ D1 (wrangler --json)")
+    p.add_argument("--known", help="JSON tài liệu đã xử lý (url, sha256)")
+    p.add_argument("--out", required=True, help="Thư mục làm việc")
+    p.add_argument("--workers", type=int, default=16)
+    p.add_argument("--deadline-minutes", type=float, default=40)
+    p.set_defaults(func=_cmd_pdf_gather)
+
+    p = sub.add_parser("pdf-extract", help="Pipeline PDF: trích bảng lương bằng Claude")
+    p.add_argument("--work", required=True)
+    p.add_argument("--budget-usd", type=float, default=5.0)
+    p.set_defaults(func=_cmd_pdf_extract)
+
+    p = sub.add_parser("pdf-build", help="Pipeline PDF: Validate, SQL cho D1, báo cáo")
+    p.add_argument("--work", required=True)
+    p.add_argument("--catalog", required=True)
+    p.add_argument("--published")
+    p.add_argument("--release-tag", required=True)
+    p.add_argument("--run-key", required=True)
+    p.add_argument("--budget-usd", type=float, default=5.0)
+    p.add_argument("--sql", required=True)
+    p.add_argument("--report", required=True)
+    p.set_defaults(func=_cmd_pdf_build)
     return parser
 
 

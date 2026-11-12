@@ -323,3 +323,42 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   đầu tiên của năm: `start_ba_cents` = bậc 1 của lane chuẩn hóa BA, `ma_step10_cents` = vị trí bậc 10
   của lane MA (với KY là 9 năm kinh nghiệm), `max_salary_cents` = ô lớn nhất. Không có lane BA/MA rõ
   nghĩa thì để trống.
+
+## D-019: Pipeline PDF (Công đoạn 5): kiến trúc, model, secret, điểm lưu
+
+- Ngày: 2026-11-12. Claude quyết; chủ dự án duyệt ngân sách chạy thử.
+- Chạy theo lô trong workflow `pdf-pipeline.yml` (chạy tay: target, limit, budget_usd, state). Hàng
+  đợi lấy từ D1: học khu đang hoạt động, chưa có bảng lương nào, chưa xử lý hoặc đã đến hạn chạy
+  lại, đông học sinh trước.
+- **Discover**: dò website học khu trong danh mục NCES (không dùng API tìm kiếm trả phí ở bản đầu):
+  trang chủ, các link về HR / employment / salary / bargaining (cùng site, sâu ≤ 2, tối đa 20 trang),
+  `/sitemap.xml`. Link tới PDF/DOCX/XLSX hoặc host tài liệu quen (Finalsite, Thrillshare, edl.io...)
+  thành ứng viên, chấm điểm theo chữ trong link. Tải tối đa 4 ứng viên tốt nhất.
+- **Lịch sự**: robots.txt, User-Agent có liên hệ, 2 giây giữa hai request tới cùng host (PLAN cho
+  phép ≥ 1 giây; D-014 dùng 5 giây cho tệp nguồn lớn). 16 luồng song song, một đồng hồ chung theo host
+  cho mọi luồng (`acquisition/shared.py`).
+- **Classify**: không dùng model. Đọc chữ (`pdftotext -layout`; XML của DOCX; ô của XLSX), chấm từng
+  trang theo số lượng số tiền cỡ lương năm, chữ step/BA/MA/Rank/teacher, trừ điểm chữ
+  classified/administrator. PDF gần như không có chữ là bản quét: gửi ảnh trang cho model.
+- **Extract**: Claude qua Messages API, trả lời bắt buộc qua một tool có JSON schema cố định
+  (`record_salary_schedule`), prompt có phiên bản (`p1`). Chỉ gửi các trang đã chọn (cắt bằng
+  **pypdf**, tối đa 6 trang; bản quét 8 trang đầu). Hai lần trích độc lập bằng hai model khác nhau:
+  `claude-sonnet-5-5` (bản chính) và `claude-haiku-5-5` (bản đối chiếu). Kết quả thô lưu nguyên văn ở
+  `extraction_runs`, kèm chi phí (µUSD) tính theo bảng giá ngày 12/11/2026.
+- **Validate**: bộ kiểm tra D-018, lần này bật cả so khớp hai lần trích và kiểm tra năm học không cũ
+  hơn bảng đang published. Model nói tài liệu không phải bảng lương giáo viên thì học khu ghi
+  `no_schedule`. Không đọc được năm học thì không lưu bảng, học khu chuyển `review`.
+- Một bảng giáo viên mỗi học khu mỗi năm: tiêu đề in trên tài liệu chuyển vào `notes`, cột `title`
+  để trống (khóa published của D-012 không trùng do tiêu đề khác nhau).
+- **Lưu trữ**: tệp tải về và báo cáo lưu ở Release `docs-<target>-<ngày>-<run>`; `source_documents`
+  ghi `district_id`, `release_tag`, `asset_name`.
+- **Điểm lưu**: migration 0004 thêm `district_pipeline` (trạng thái, số lần thử, hạn chạy lại),
+  `document_candidates`, `document_classifications`. Hạn chạy lại: không có website 180 ngày, không
+  mở được 30, không thấy tài liệu / không phải bảng lương 90, lỗi 7, published 180, chờ xem tay thì
+  không tự chạy lại. Tệp đã trích có sha256 không đổi thì bỏ qua (`unchanged`). Hết hạn giờ (45 phút)
+  hay hết ngân sách thì học khu còn lại giữ nguyên trạng thái, lô sau làm tiếp.
+- **Secret mới `ANTHROPIC_API_KEY`**: chủ dự án tạo trong Claude Console (workspace riêng, có giới
+  hạn chi tiêu) và đặt trong GitHub Actions secrets. Chỉ nằm ở `env` của bước `pay-pipeline
+  pdf-extract`; `test_repo_consistency.py` kiểm tra. Thiếu key thì workflow chỉ chạy Discover/Classify.
+- Phụ thuộc mới: `pypdf` (cắt trang). Công cụ hệ thống: `poppler-utils` (pdftotext) cài trong CI và
+  workflow.

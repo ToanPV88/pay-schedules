@@ -22,17 +22,18 @@ import datetime as dt
 import json
 
 from pay_pipeline.catalog.d1sql import batched_insert, quote
-from pay_pipeline.schedules.state_import import ImportResult
+from pay_pipeline.schedules.state_import import ImportResult, RunRecord
 
 SLICE = 40
 """Schedules per statement when copying child rows from staging tables."""
 
 STAGING = {
     "_imp_sources": "asset_name TEXT, url TEXT, sha256 TEXT, fetched_at TEXT, mime TEXT,"
-    " release_tag TEXT, importer TEXT, raw TEXT",
+    " release_tag TEXT, district_nces TEXT",
+    "_imp_runs": "url TEXT, sha256 TEXT, model TEXT, prompt_version TEXT, raw TEXT, cost INTEGER",
     "_imp_schedules": "k INTEGER PRIMARY KEY, nces_id TEXT, school_year TEXT, schedule_type TEXT,"
     " title TEXT, contract_days INTEGER, pay_basis TEXT, url TEXT, sha256 TEXT, importer TEXT,"
-    " source_sheet TEXT, source_page INTEGER, notes TEXT, status TEXT",
+    " source_sheet TEXT, source_page INTEGER, notes TEXT, status TEXT, confidence REAL",
     "_imp_lanes": "k INTEGER, position INTEGER, label_raw TEXT, lane_normalized TEXT",
     "_imp_steps": "k INTEGER, position INTEGER, label_raw TEXT, years INTEGER",
     "_imp_cells": "k INTEGER, step_pos INTEGER, lane_pos INTEGER, amount_cents INTEGER, note TEXT",
@@ -40,6 +41,33 @@ STAGING = {
     "_imp_reviews": "k INTEGER, reason TEXT",
     "_imp_map": "k INTEGER PRIMARY KEY, schedule_id INTEGER NOT NULL",
 }
+
+
+def state_runs(result: ImportResult) -> list[RunRecord]:
+    """One summary run per state file: the raw data is the file itself (deterministic import)."""
+    importers = {p.source.asset_name: p.importer for p in result.prepared}
+    return [
+        RunRecord(
+            url=s.url,
+            sha256=s.sha256,
+            model=importers[s.asset_name],
+            prompt_version=None,
+            raw_output=json.dumps(
+                {
+                    "importer": importers[s.asset_name],
+                    "asset": s.asset_name,
+                    "release": s.release_tag,
+                    "schedules": sum(p.source == s for p in result.prepared),
+                    "note": "Deterministic import of a state file; the raw data is the"
+                    " source file kept in the GitHub Release.",
+                },
+                ensure_ascii=False,
+            ),
+            cost_usd_micros=None,
+        )
+        for s in result.sources
+        if s.asset_name in importers
+    ]
 
 
 def _stamp(now: dt.datetime) -> str:
@@ -55,39 +83,24 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         if columns.startswith("k INTEGER,"):
             sql.append(f"CREATE INDEX {table}_k ON {table} (k)")
 
-    importers: dict[str, str] = {}
-    for p in result.prepared:
-        importers[p.source.asset_name] = p.importer
     sql += batched_insert(
         "INSERT INTO _imp_sources (asset_name, url, sha256, fetched_at, mime, release_tag,"
-        " importer, raw)",
+        " district_nces)",
         (
-            (
-                s.asset_name,
-                s.url,
-                s.sha256,
-                s.fetched_at,
-                s.mime,
-                s.release_tag,
-                importers[s.asset_name],
-                json.dumps(
-                    {
-                        "importer": importers[s.asset_name],
-                        "asset": s.asset_name,
-                        "release": s.release_tag,
-                        "schedules": sum(p.source == s for p in result.prepared),
-                        "note": "Deterministic import of a state file; the raw data is the"
-                        " source file kept in the GitHub Release.",
-                    },
-                    ensure_ascii=False,
-                ),
-            )
+            (s.asset_name, s.url, s.sha256, s.fetched_at, s.mime, s.release_tag, s.district_nces)
             for s in result.sources
         ),
     )
     sql += batched_insert(
+        "INSERT INTO _imp_runs (url, sha256, model, prompt_version, raw, cost)",
+        (
+            (r.url, r.sha256, r.model, r.prompt_version, r.raw_output, r.cost_usd_micros)
+            for r in (result.runs if result.runs is not None else state_runs(result))
+        ),
+    )
+    sql += batched_insert(
         "INSERT INTO _imp_schedules (k, nces_id, school_year, schedule_type, title, contract_days,"
-        " pay_basis, url, sha256, importer, source_sheet, source_page, notes, status)",
+        " pay_basis, url, sha256, importer, source_sheet, source_page, notes, status, confidence)",
         (
             (
                 p.key,
@@ -104,6 +117,7 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
                 p.draft.source_page,
                 p.draft.notes,
                 p.status,
+                p.confidence,
             )
             for p in result.prepared
         ),
@@ -148,21 +162,23 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         ((p.key, reason) for p in result.prepared for reason in p.reasons),
     )
 
-    # Source documents: one row per state file (district_id NULL: the file covers many districts).
+    # Source documents: a state file has district_id NULL (it covers many districts).
     sql.append(
         "INSERT INTO source_documents (district_id, url, fetched_at, last_seen_at, sha256, mime,"
         " release_tag, asset_name)"
-        " SELECT NULL, url, fetched_at, fetched_at, sha256, mime, release_tag, asset_name"
-        " FROM _imp_sources WHERE true"
+        " SELECT (SELECT id FROM districts WHERE nces_id = i.district_nces), i.url, i.fetched_at,"
+        " i.fetched_at, i.sha256, i.mime, i.release_tag, i.asset_name"
+        " FROM _imp_sources i WHERE true"
         " ON CONFLICT (url, sha256) DO UPDATE SET"
         " last_seen_at = max(coalesce(source_documents.last_seen_at, ''), excluded.last_seen_at)"
     )
     sql.append(
-        "INSERT INTO extraction_runs (source_document_id, model, raw_output, created_at)"
-        f" SELECT d.id, i.importer, i.raw, {quote(stamp)}"
-        " FROM _imp_sources i JOIN source_documents d ON d.url = i.url AND d.sha256 = i.sha256"
-        " WHERE NOT EXISTS (SELECT 1 FROM extraction_runs e"
-        " WHERE e.source_document_id = d.id AND e.model = i.importer)"
+        "INSERT INTO extraction_runs (source_document_id, model, prompt_version, raw_output,"
+        " cost_usd_micros, created_at)"
+        f" SELECT d.id, i.model, i.prompt_version, i.raw, i.cost, {quote(stamp)}"
+        " FROM _imp_runs i JOIN source_documents d ON d.url = i.url AND d.sha256 = i.sha256"
+        " WHERE NOT EXISTS (SELECT 1 FROM extraction_runs e WHERE e.source_document_id = d.id"
+        " AND e.model = i.model AND e.prompt_version IS i.prompt_version)"
     )
 
     same_schedule = (
@@ -182,7 +198,7 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " d.id, i.source_sheet, i.source_page,"
         " (SELECT max(e.id) FROM extraction_runs e"
         " WHERE e.source_document_id = d.id AND e.model = i.importer),"
-        f" 'draft', 1.0, i.notes, {quote(stamp)}"
+        f" 'draft', i.confidence, i.notes, {quote(stamp)}"
         + joins
         + f" WHERE NOT EXISTS (SELECT 1 FROM schedules s WHERE {same_schedule})"
         " ORDER BY i.k"
