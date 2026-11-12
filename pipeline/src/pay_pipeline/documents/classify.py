@@ -37,8 +37,9 @@ NEGATIVE_RE = re.compile(
 YEAR_PATTERNS = (
     re.compile(r"\b(20\d\d)\s*[-‐‑‒–—/]\s*(20\d\d)\b"),
     re.compile(r"\b(20\d\d)\s*[-‐‑‒–—/]\s*(\d\d)\b"),
-    re.compile(r"\bFY\s*-?\s*(20)?(\d\d)\b", re.I),
+    re.compile(r"\bFY\s*-?\s*(20)?(\d\d)\b(?!\s*[-‐‑‒–—/]\s*\d)", re.I),
     re.compile(r"\b\d{1,2}/\d{1,2}/(20\d\d)\s*[-‐‑‒–—]\s*\d{1,2}/\d{1,2}/(20\d\d)\b"),
+    re.compile(r"\bFY\s*-?\s*(\d\d)\s*[-‐‑‒–—/]\s*(\d\d)\b", re.I),  # FY26-27 = 2026-27
 )
 # Letter-spaced headings ("2 0 2 5 – 2026"): join the digits before matching.
 _SPACED_YEAR = re.compile(r"\b2 0 (\d) (\d)\b")
@@ -154,6 +155,10 @@ def school_years(text: str) -> list[str]:
         a, b = int(m.group(1)), int(m.group(2))
         if b == a + 1:
             found.add(a)
+    for m in YEAR_PATTERNS[4].finditer(text):
+        a, b = int(m.group(1)), int(m.group(2))
+        if b == (a + 1) % 100:
+            found.add(2000 + a)
     for m in YEAR_PATTERNS[2].finditer(text):
         end = 2000 + int(m.group(2))
         found.add(end - 1)  # FY26 = 2025-26

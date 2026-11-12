@@ -37,7 +37,7 @@ from pay_pipeline.schedules.state_import import (
 )
 from pay_pipeline.schedules.validate import Issue, validate
 
-CLASSIFIER = "heuristic@2"
+CLASSIFIER = "heuristic@3"
 RETRY_DAYS = {
     "no_website": 180, "unreachable": 30, "no_candidates": 90, "no_schedule": 90, "found": 0,
     "unchanged": 120, "published": 180, "error": 7, "review": None,
@@ -195,6 +195,10 @@ def prepare(
                 )
             except ex.ExtractionError as exc:
                 issues.append(Issue("double_extraction", f"{exruns[1].model}: {exc}"))
+        if data[0].get("scope_note"):
+            issues.append(
+                Issue("schedule_scope", f"Bảng chỉ cho một nhóm giáo viên: {data[0]['scope_note']}")
+            )
         if second is not None and len(second.lanes) == len(draft.lanes):
             draft = replace(draft, lanes=merge_lane_labels(draft.lanes, second.lanes))
         try:

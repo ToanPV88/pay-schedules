@@ -39,10 +39,10 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@2"
-WORDS = "pdfplumber-words@2"
-XLSX = "xlsx-cells@2"
-DOCX = "docx-cells@2"
+LAYOUT = "layout-text@3"
+WORDS = "pdfplumber-words@3"
+XLSX = "xlsx-cells@3"
+DOCX = "docx-cells@3"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -390,6 +390,21 @@ def _header_lines(candidates: list[Line], centres: list[float], width: float) ->
     return out
 
 
+# A schedule for only part of the teachers: hired before a date (grandfathered), non-classroom.
+# Preferred less than the main schedule, and sent to review when chosen (D-022).
+_SCOPE = re.compile(
+    r"hired\s+(?:prior\s+to|before|on\s+or\s+before)|grandfather\w*|"
+    r"non[-\s]?classroom|non[-\s]?instructional",
+    re.I,
+)
+
+
+def scope_note(t: Table) -> str | None:
+    tail = t.context.splitlines()[-12:]
+    hit = next((ln for ln in reversed(tail) if _SCOPE.search(ln)), None)
+    return " ".join(hit.split())[:200] if hit else None
+
+
 def _score(t: Table) -> float:
     near = t.context[-900:]
     score = float(t.cells)
@@ -404,6 +419,9 @@ def pick_table(tables: list[Table]) -> Table | None:
     usable = [t for t in tables if _score(t) > 0]
     if not usable:
         return None
+    # A schedule for the whole staff beats one for part of it (hired before a date, non-classroom).
+    if any(not scope_note(t) for t in usable):
+        usable = [t for t in usable if not scope_note(t)]
     best = max(_score(t) for t in usable)
     # First table in document order that is nearly as good as the best one.
     return next(t for t in usable if _score(t) >= best * 0.6)
@@ -434,7 +452,8 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
         (
             ln.strip()
             for ln in reversed(table.context.splitlines())
-            if re.search(r"schedule|salary|scale", ln, re.I)
+            if re.search(r"schedule|salary|scale|pay plan", ln, re.I)
+            and not re.search(r"years of experience|daily rate|^\s*steps?\b", ln, re.I)
         ),
         "",
     )
@@ -455,6 +474,7 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
         "stipends": [],
         "notes": None,
         "source_pages": [table.page],
+        "scope_note": scope_note(table),
         "other_schedules": [],
     }
 
@@ -465,7 +485,7 @@ _UNIT_WORDS = frozenset({"hourly", "daily", "annual", "annualized", "rate", "rat
 
 def lane_label(text: str) -> str:
     words = text.split()
-    kept = [w for w in words if w.lower().strip("()") not in _UNIT_WORDS]
+    kept = [w for w in words if re.sub(r"\(\d\)$", "", w.lower()).strip("()") not in _UNIT_WORDS]
     return " ".join(kept or words)
 
 

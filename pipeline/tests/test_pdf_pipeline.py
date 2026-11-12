@@ -215,6 +215,8 @@ class TestDiscoverUnits:
         assert school_years("2025-2027 agreement") == []
         assert school_years("2026\u20102027 Teacher Salary") == ["2026-27"]  # Unicode hyphen
         assert school_years("2 0 2 5 \u2013 2026 Pay Schedule") == ["2025-26"]  # letter-spaced
+        assert school_years("Teachers Salary Scales FY26-27") == ["2026-27"]
+        assert school_years("FY25/26 and FY 2026") == ["2025-26"]
 
     def test_shared_throttle_spaces_requests_per_host(self) -> None:
         clock = [0.0]
@@ -522,9 +524,26 @@ class TestReader:
         assert row is not None and row.label == "1"
         assert [a for _, _, a in row.amounts] == [47500.04, 50398.76]
 
+    def test_schedule_for_part_of_the_staff_is_second_choice_and_flagged(self) -> None:
+        def block(title: str, base: int) -> list[rd.Line]:
+            return [L("", title), rd.Line([]), L("Step", "BA", "MA")] + [
+                L(str(s), f"{base + s * 900:,}", f"{base + 2000 + s * 900:,}") for s in range(1, 7)
+            ]
+
+        old = block("Teacher schedule for employees hired prior to July 1, 2013", 47000)
+        new = block("Teacher salary schedule", 50000)
+        tables = rd.find_tables(old + [rd.Line([])] * 3 + new, 1)
+        picked = rd.pick_table(tables)
+        assert picked is not None and picked.grid[0] == [50900, 52900]
+        assert rd.scope_note(picked) is None
+        only_old = rd.pick_table(rd.find_tables(old, 1))
+        assert only_old is not None and "hired prior to" in (rd.scope_note(only_old) or "")
+        assert rd.to_answer(only_old, "", rd.WORDS)["scope_note"]
+
     def test_lane_label_drops_unit_words(self) -> None:
         assert rd.lane_label("Bachelor’s Degree  Hourly Rate Rate") == "Bachelor’s Degree"
         assert rd.lane_label("MA (Annual)") == "MA"
+        assert rd.lane_label("Bachelors ANNUAL(1) DAILY(2)") == "Bachelors"
         assert rd.lane_label("Annual Rate") == "Annual Rate"  # nothing else left: keep it
 
     def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:

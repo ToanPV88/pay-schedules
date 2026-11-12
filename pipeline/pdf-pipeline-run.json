@@ -8,6 +8,7 @@
     "found",
     "unreachable",
     "unchanged",
-    "review"
+    "review",
+    "published"
   ]
 }
