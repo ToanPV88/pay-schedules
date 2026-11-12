@@ -2,29 +2,80 @@
   "release_prefix": "src-crosscheck-state-2425",
   "description": "Bảng lương do học khu tự công bố, dùng để kiểm tra chéo dữ liệu J-90 (CA) và KDE (KY) ở Công đoạn 4. Mọi tệp đều tùy chọn: học khu có thể gỡ hoặc chặn.",
   "files": [
-    {"name": "ca-lausd-t-table-juldec2024-annual.pdf", "url": "https://www.lausd.org/cms/lib/CA01000043/Centricity/domain/280/salary%20tables/T_Table_JulDec2024_Annual.pdf", "optional": true},
-    {"name": "ca-lausd-t-table-janjun2025-annual.pdf", "url": "https://www.lausd.org/cms/lib/CA01000043/Centricity/domain/280/salary%20tables/T_Table_JanJun2025_Annual.pdf", "optional": true},
-    {"name": "ca-sdusd-sdea-ta-article7-wages-2024-05-29.pdf", "url": "https://sdea.net/wp-content/uploads/2024-05-29_SDEA_TA_Article_7_-_Wages.pdf", "optional": true},
-    {"name": "ca-egusd-egea-10-17-nctq.pdf", "url": "https://nctq.org/dmsView/Elk_Grove_EGEA-10-and-17", "optional": true},
-    {"name": "ca-cnusd-certificated-basic-2024-25-nctq.pdf", "url": "https://nctq.org/dmsView/Corona_Norco_Certificated_Basic_2024-25", "optional": true},
-    {"name": "ca-capousd-certificated-with-base-credential.pdf", "url": "https://www.capousd.org/subsites/Human-Resource-Services/documents/Salaries/Certificated/Certificated-Salary-Schedule-With-Base-Credential.pdf", "optional": true},
-    {"name": "ca-iusd-2425-certsal-ce.pdf", "url": "https://iusd.org/sites/default/files/documents/2425-CERTSAL_CE.pdf", "optional": true},
-    {"name": "ca-iusd-2526-certsal-ce.pdf", "url": "https://iusd.org/sites/default/files/documents/2526-CERTSAL_CE.pdf", "optional": true},
-    {"name": "ca-ltusd-stea-2023-24.pdf", "url": "https://www.ltusd.org/Userfiles/DBFiles/server_2738240/202308/51031672/g_stea_salary_schedule.pdf", "optional": true},
-    {"name": "ca-rbhsd-cta-agreement-2023-10-21.pdf", "url": "https://www.rbhsd.org/documents/Departments/Human-Resources/Bargaining-Agreements/CTA-Bargaining-Agreement-rev.-2023-10-21.pdf", "optional": true},
-    {"name": "ca-lausd-nctq-24-25.pdf", "url": "https://teacherquality.nctq.org/dmsView/LAUSD_24-25", "optional": true},
-    {"name": "ky-anderson-2025-2026.pdf", "url": "https://www.anderson.kyschools.us/Downloads/Approved%20Salary%20Schedules%20for%202025%202026.pdf", "optional": true},
-    {"name": "ky-anderson-2024-2025.pdf", "url": "https://www.anderson.kyschools.us/Downloads/Approved%20Salary%20Schedules%20for%202024-2025.pdf", "optional": true},
-    {"name": "ky-paris-ind-2025-26.pdf", "url": "https://content.myconnectsuite.com/api/documents/0086ea6a25384bca95d87357d2062fca.pdf", "optional": true},
-    {"name": "ky-fulton-hickman.pdf", "url": "https://www.hickmanschools.org/_files/ugd/0338d1_e800b9370ae74484aa72144578937265.pdf", "optional": true},
-    {"name": "ky-warren-myconnect-a.pdf", "url": "https://content.myconnectsuite.com/api/documents/9cba6c60e6db4317b282b821c1493425.pdf", "optional": true},
-    {"name": "ky-warren-myconnect-b.pdf", "url": "https://content.myconnectsuite.com/api/documents/9da32cd1fcde4b92a0d27f0d57f0e8e6.pdf", "optional": true},
-    {"name": "ky-warren-myconnect-c.pdf", "url": "https://content.myconnectsuite.com/api/documents/d98b8bf3636d450597aed28b31df4ca3.pdf", "optional": true},
-    {"name": "ky-boone-16576851.pdf", "url": "https://www.boone.kyschools.us/documents/16576851", "optional": true},
-    {"name": "ky-jcps-applitrack-538599.pdf", "url": "https://www.applitrack.com/jefferson/onlineapp/1BrowseFile.aspx?id=538599", "optional": true},
-    {"name": "ky-jcps-applitrack-534316.pdf", "url": "https://www.applitrack.com/jefferson/onlineapp/1BrowseFile.aspx?id=534316", "optional": true},
-    {"name": "ky-jcps-applitrack-542409.pdf", "url": "https://www.applitrack.com/jefferson/onlineapp/1BrowseFile.aspx?id=542409", "optional": true},
-    {"name": "ky-jcps-applitrack-446798.pdf", "url": "https://phl.applitrack.com/jefferson/onlineapp/1BrowseFile.aspx?id=446798", "optional": true},
-    {"name": "ky-spencer-posting.html", "url": "https://www.careerbuilder.com/job-details/elementary-teacher-spencer-county-elementary-2026-2027-school-year-salary-range-45-953-78-131-contact-jared-scott-jared-scott-spencer-kyschools-us-for-additional-information-taylorsville-ky--cb927f01-1066-4f50-8406-100b0452c25a", "optional": true}
+    {
+      "name": "ca-iusd-2425-certsal-ce.pdf",
+      "url": "https://iusd.org/sites/default/files/documents/2425-CERTSAL_CE.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-rbhsd-cta-agreement-2023-10-21.pdf",
+      "url": "https://www.rbhsd.org/documents/Departments/Human-Resources/Bargaining-Agreements/CTA-Bargaining-Agreement-rev.-2023-10-21.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-anderson-2024-2025.pdf",
+      "url": "https://www.anderson.kyschools.us/Downloads/Approved%20Salary%20Schedules%20for%202024-2025.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-lausd-salary-tables-juldec2024.pdf",
+      "url": "https://www.lausd.org/cms/lib/CA01000043/Centricity/domain/280/salary%20tables/2024_2025_Salary_Tables_JulDec2024.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-rialto-teachers-184-days-24-25.pdf",
+      "url": "https://kec.rialto.k12.ca.us/cms/lib/CA50000591/Centricity/Domain/1398/TEACHERS_184dys__24_25.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-rialto-teachers-194-days-24-25.pdf",
+      "url": "https://kec.rialto.k12.ca.us/cms/lib/CA50000591/Centricity/Domain/1398/TEACHERS_194dys__24_25.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-farmersville-teachers-2025-01-01.pdf",
+      "url": "https://www.farmersville.k12.ca.us/cms/lib/CA01001142/Centricity/Domain/297/Teachers%20Salary%20Schedule%20Eff%2001-01-2025.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-chatom-2024-25-final.pdf",
+      "url": "https://chatom.k12.ca.us/wp-content/uploads/2025/06/2024-25-Certificated-Salary-Schedule-Final.pdf",
+      "optional": true
+    },
+    {
+      "name": "ca-chatom-2024-25.pdf",
+      "url": "https://chatom.k12.ca.us/wp-content/uploads/2024/08/2024-2025-Certificated-Salary-Schedule.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-shelby-2025-26.pdf",
+      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/4851/Scps/0cca7dc7-d7b5-49c2-b51c-4c9f1ed62f35/2025-26-Salary-Schedules-July-1-2025-FINAL.pdf?disposition=inline",
+      "optional": true
+    },
+    {
+      "name": "ky-ftis-2025-26.pdf",
+      "url": "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/5483/Ftis/dadabab3-c8bd-4352-8c9e-44649708266f/2025-26_Salary_Schedules_Combined.pdf?disposition=inline",
+      "optional": true
+    },
+    {
+      "name": "ky-henry-fy2026-certified.pdf",
+      "url": "https://resources.finalsite.net/images/v1745335293/henrykyschoolsus/qvel6e2vmp9jxxlfbduh/FY2026187CERTIFIEDSALARY.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-hcs-2025-26.pdf",
+      "url": "https://core-docs.s3.us-east-1.amazonaws.com/documents/asset/uploaded_file/3112/HCS/5809284/2025-26_Salary_Schedules.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-linknky-2025-26.pdf",
+      "url": "https://linknky.com/wp-content/uploads/2026/07/2025-2026_SALARY_SCHEDULE_-_BOE_Approved_June_.pdf",
+      "optional": true
+    },
+    {
+      "name": "ky-montgomery-salary-schedules.html",
+      "url": "https://www.montgomery.kyschools.us/staff/salary-schedules",
+      "optional": true
+    }
   ]
 }
