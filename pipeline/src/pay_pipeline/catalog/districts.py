@@ -5,6 +5,7 @@ Pure transformation: files in, :class:`Catalog` out. Writing to D1 is in ``d1sql
 
 from __future__ import annotations
 
+import csv
 import random
 import re
 from collections import Counter, defaultdict
@@ -84,6 +85,7 @@ class Catalog:
     summary: dict[str, SummaryRow]
     nyc_components: int
     websites_from_schools: int = 0
+    websites_from_directories: int = 0
 
 
 def normalize_website(raw: str) -> str | None:
@@ -102,6 +104,20 @@ _SHARED_HOST = re.compile(
 )
 #: Share of the schools that report a website that must agree on one host.
 SCHOOL_HOST_SHARE = 0.6
+
+
+def load_websites(path: Path | None) -> dict[str, str]:
+    """Curated district websites from state directories (D-037): NCES id -> URL."""
+    if path is None or not path.exists():
+        return {}
+    with path.open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    out = {}
+    for r in rows:
+        url = normalize_website(r.get("website") or "")
+        if url and re.fullmatch(r"\d{7}", (r.get("nces_id") or "").strip()):
+            out[r["nces_id"].strip()] = url
+    return out
 
 
 def school_website(sites: SchoolSites | None) -> str | None:
@@ -136,6 +152,7 @@ def build_catalog(
     existing_slugs: Mapping[str, tuple[str, str]],
     summary_file: str = "ccd_*_summary_2.html",
     schools: Path | None = None,
+    websites: Path | None = None,
 ) -> Catalog:
     directory = read_directory(find_file(sources, "ccd_lea_029_*.zip"))
     years = {r.school_year for r in directory}
@@ -186,11 +203,15 @@ def build_catalog(
     )
 
     school_sites = read_school_sites(schools) if schools else {}
+    curated = load_websites(websites)
     derived = 0
+    from_directory = 0
     districts = []
     for r in sorted(kept, key=lambda x: x.leaid):
         e = edge.get(r.leaid)
         website = normalize_website(r.website)
+        if website is None and (website := curated.get(r.leaid)):
+            from_directory += 1
         if website is None and (website := school_website(school_sites.get(r.leaid))):
             derived += 1
         districts.append(
@@ -227,6 +248,7 @@ def build_catalog(
         summary=summary,
         nyc_components=len(nyc_component_ids),
         websites_from_schools=derived,
+        websites_from_directories=from_directory,
     )
 
 
@@ -328,7 +350,8 @@ def render_report(catalog: Catalog, provenance: list[dict[str, str]] | None = No
         "## Độ đầy đủ",
         "",
         f"- Thiếu website: {sum(1 for x in d if not x.website):,}"
-        f" (đã suy {catalog.websites_from_schools:,} website từ website các trường, D-035)",
+        f" (đã suy {catalog.websites_from_schools:,} website từ website các trường, D-035;"
+        f" {catalog.websites_from_directories:,} từ danh bạ của bang, D-037)",
         f"- Thiếu sĩ số: {sum(1 for x in d if x.enrollment is None):,}",
         f"- Thiếu tọa độ: {sum(1 for x in d if x.lat is None):,}",
         f"- Thiếu quận: {sum(1 for x in d if not x.county):,}",

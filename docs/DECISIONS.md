@@ -749,3 +749,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Trên tệp thật: suy được 301 website (NH 92, GA 49, IL 47, VT 33, WA 30, MI 27...), ví dụ
   Tacoma (70 trường cùng `tacoma.k12.wa.us`). Nebraska, Idaho, Louisiana, Rhode Island bỏ trống
   website ở cả tệp trường; cần danh bạ riêng của bang (chưa làm).
+
+## D-037: Website học khu từ danh bạ của bang
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý. Bốn bang bỏ trống website ở cả danh mục học khu lẫn danh mục
+  trường của NCES (Nebraska, Idaho, Louisiana, Rhode Island).
+- `pipeline/sources/district-websites.csv` (`nces_id,website,source`): website lấy từ danh bạ do bang
+  công bố, ghép với NCES theo tên, chỉ giữ trang chủ (scheme + host). Dùng khi tệp học khu NCES bỏ
+  trống; đứng trước website suy từ trường (D-035).
+- Louisiana: "District Directory 2017-2018" của LDOE (Release `src-state-directories-*`), 69/69 học
+  khu ghép được. Danh bạ trường 2026-27 của LDOE không có cột website. Danh bạ cũ nên vài website có
+  thể đã đổi; pipeline sẽ ghi `unreachable` cho những chỗ đó.
+- Rhode Island, Idaho, Nebraska: danh bạ của bang chỉ có dạng trang tìm kiếm hoặc trang dựng bằng
+  JavaScript; chưa làm.

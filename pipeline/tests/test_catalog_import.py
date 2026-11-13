@@ -328,3 +328,24 @@ class TestSchoolWebsites:
         assert site["5000001"] is None
         assert cat.websites_from_schools == 2
         assert "đã suy 2 website" in render_report(cat)
+
+
+def test_curated_websites_fill_gaps_before_schools(tmp_path: Path) -> None:
+    """D-037: a state directory's website beats one derived from schools; the LEA file beats both."""
+    from pay_pipeline.catalog.districts import load_websites
+
+    curated = tmp_path / "websites.csv"
+    curated.write_text(
+        "nces_id,website,source\n"
+        "0600001,http://ignored.example.invalid/,test\n"
+        "0600002,www.beta-directory.example.invalid,test\n"
+        "bad,http://x.example.invalid/,test\n",
+        encoding="utf-8",
+    )
+    assert set(load_websites(curated)) == {"0600001", "0600002"}
+    assert load_websites(None) == {}
+    cat = build_catalog(write_sources(tmp_path / "src"), {}, websites=curated)
+    site = {d.nces_id: d.website for d in cat.districts}
+    assert site["0600001"] == "http://www.alpha.example.invalid"
+    assert site["0600002"] == "http://www.beta-directory.example.invalid"
+    assert cat.websites_from_directories == 1

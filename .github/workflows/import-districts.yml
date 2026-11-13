@@ -87,6 +87,7 @@ jobs:
         run: |
           uv run pay-pipeline districts-build --sources "$GITHUB_WORKSPACE/sources" \
             --existing "$GITHUB_WORKSPACE/existing.json" ${SCHOOLS_FILE:+--schools "$SCHOOLS_FILE"} \
+            --websites sources/district-websites.csv \
             --sql "$GITHUB_WORKSPACE/districts.sql" --report "$GITHUB_WORKSPACE/report.md"
       - name: Load into D1
         working-directory: apps/web
