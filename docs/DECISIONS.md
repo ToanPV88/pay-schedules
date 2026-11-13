@@ -814,3 +814,11 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Trước khi crawl, pipeline thử lần lượt: địa chỉ NCES, bản https, bản https có/không `www.`,
   rồi bản gốc có/không `www.`; lấy địa chỉ đầu tiên tải được robots.txt. Không biến thể nào trả
   lời thì vẫn coi như cấm (RFC 9309). robots.txt của địa chỉ được chọn vẫn được tuân thủ.
+
+## D-041: Bảng in từng khoản lương dưới mỗi bậc; bộ đọc phiên bản 6
+
+- Ngày: 2026-11-13. Seattle in dưới mỗi bậc các dòng Base Pay, Contractual Days, Tech Days,
+  Responsibility/Incentive và TOTAL. Trang có từ 3 dòng TOTAL trở lên thì mỗi bậc chỉ giữ dòng
+  TOTAL (lương năm), các dòng khoản lương khác bỏ.
+- Bộ đọc lên phiên bản 6 (`layout-text@6`…) để lượt chạy sau đọc lại cả tài liệu không đổi
+  (Garland ISD, Seattle) bằng các thay đổi của D-039 và D-041.
