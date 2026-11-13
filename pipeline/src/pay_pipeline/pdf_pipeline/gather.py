@@ -266,7 +266,7 @@ def gather_one(
     if item.seeds:
         # A schedule URL found by hand: no crawl, so a home page that blocks bots or a website
         # that moved does not matter; the fetcher still obeys the document host's robots.txt.
-        picked = [Candidate(u, "seed", "", "seed", SEED_SCORE) for u in item.seeds]
+        picked = [Candidate(u, "schedule-urls.csv", "", "manual", SEED_SCORE) for u in item.seeds]
         work.candidates = [asdict(c) for c in picked]
     else:
         found = discover(fetcher, item.nces_id, item.website, max_pages=max_pages)
