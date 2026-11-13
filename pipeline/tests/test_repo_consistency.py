@@ -31,6 +31,7 @@ WRITE_JOBS = {
     ("import-districts.yml", "publish-report"): {"contents": "write"},
     ("import-schedules.yml", "publish-report"): {"contents": "write"},
     ("pdf-pipeline.yml", "archive"): {"contents": "write"},
+    ("pdf-pipeline-resume.yml", "archive"): {"contents": "write", "actions": "read"},
     ("pdf-eval.yml", "publish-report"): {"contents": "write"},
 }
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
