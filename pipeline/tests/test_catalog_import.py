@@ -277,3 +277,54 @@ def test_load_existing_slugs_reads_wrangler_json(tmp_path: Path) -> None:
     assert load_existing_slugs(None) == {}
     with pytest.raises(FileNotFoundError):
         load_existing_slugs(tmp_path / "missing.json")
+
+
+class TestSchoolWebsites:
+    """D-035: website of a district derived from its schools when the LEA file has none."""
+
+    def _schools(self, path: Path, rows: list[tuple[str, str]]) -> Path:
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["LEAID", "SCH_NAME", "WEBSITE"])
+        for i, (leaid, site) in enumerate(rows):
+            w.writerow([leaid, f"School {i}", site])
+        _zip(path, "ccd_sch_029_2425_w_1a_073025.csv", out.getvalue())
+        return path
+
+    def test_rules(self) -> None:
+        from collections import Counter
+
+        from pay_pipeline.catalog.ccd import SchoolSites
+        from pay_pipeline.catalog.districts import school_website
+
+        assert school_website(SchoolSites(5, Counter({"beta.k12.ca.us": 4, "x.org": 1}))) == (
+            "http://beta.k12.ca.us"
+        )
+        assert school_website(SchoolSites(1, Counter({"one.org": 1}))) == "http://one.org"
+        # One school of many is not the district's site; a split vote is not either.
+        assert school_website(SchoolSites(9, Counter({"school.org": 1}))) is None
+        assert school_website(SchoolSites(4, Counter({"a.org": 2, "b.org": 2}))) is None
+        assert school_website(SchoolSites(3, Counter({"facebook.com": 3}))) is None
+        assert school_website(SchoolSites(3, Counter({"district.k12.ga.gov": 3}))) is None
+        assert school_website(None) is None
+
+    def test_build_fills_only_missing_websites(self, tmp_path: Path) -> None:
+        schools = self._schools(
+            tmp_path / "sch.zip",
+            [
+                ("0600001", "www.other.example.invalid"),
+                ("0600001", "www.other.example.invalid"),
+                ("0600002", "http://www.beta.example.invalid/elementary"),
+                ("0600002", "beta.example.invalid."),
+                ("0600002", ""),
+                ("0600005", "solo.example.invalid"),
+            ],
+        )
+        cat = build_catalog(write_sources(tmp_path / "src"), {}, schools=schools)
+        site = {d.nces_id: d.website for d in cat.districts}
+        assert site["0600001"] == "http://www.alpha.example.invalid"  # LEA file wins
+        assert site["0600002"] == "http://beta.example.invalid"
+        assert site["0600005"] == "http://solo.example.invalid"
+        assert site["5000001"] is None
+        assert cat.websites_from_schools == 2
+        assert "đã suy 2 website" in render_report(cat)

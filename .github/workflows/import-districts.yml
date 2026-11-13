@@ -66,6 +66,14 @@ jobs:
           gh release download "$tag" --dir sources
           (cd pipeline && uv run pay-pipeline verify-sources ../sources)
           echo "SOURCE_TAG=$tag" >> "$GITHUB_ENV"
+          # Danh mục trường (D-035): suy website học khu khi tệp LEA bỏ trống. Không có thì bỏ qua.
+          sprefix=$(python3 -c 'import json; print(json.load(open("pipeline/sources/nces-ccd-schools-2425.json"))["release_prefix"])')
+          stag=$(gh release list --limit 100 --json tagName --jq "[.[] | select(.tagName | startswith(\"$sprefix-\"))][0].tagName")
+          if [ -n "$stag" ]; then
+            gh release download "$stag" --dir schools
+            (cd pipeline && uv run pay-pipeline verify-sources ../schools)
+            echo "SCHOOLS_FILE=$(ls "$GITHUB_WORKSPACE"/schools/ccd_sch_029_*.zip)" >> "$GITHUB_ENV"
+          fi
       - name: Read existing slugs
         working-directory: apps/web
         env:
@@ -78,7 +86,7 @@ jobs:
         working-directory: pipeline
         run: |
           uv run pay-pipeline districts-build --sources "$GITHUB_WORKSPACE/sources" \
-            --existing "$GITHUB_WORKSPACE/existing.json" \
+            --existing "$GITHUB_WORKSPACE/existing.json" ${SCHOOLS_FILE:+--schools "$SCHOOLS_FILE"} \
             --sql "$GITHUB_WORKSPACE/districts.sql" --report "$GITHUB_WORKSPACE/report.md"
       - name: Load into D1
         working-directory: apps/web

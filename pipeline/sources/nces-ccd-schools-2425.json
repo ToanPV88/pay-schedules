@@ -1,0 +1,10 @@
+{
+  "release_prefix": "src-nces-ccd-schools-2425",
+  "description": "NCES CCD 2024-25 danh mục trường (029): cột WEBSITE của từng trường, dùng để suy website học khu khi danh mục học khu bỏ trống (NE, ID, LA, RI...).",
+  "files": [
+    {
+      "url": "https://nces.ed.gov/ccd/Data/zip/ccd_sch_029_2425_w_1a_073025.zip",
+      "note": "School directory 2024-25 (029)"
+    }
+  ]
+}
