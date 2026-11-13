@@ -910,5 +910,5 @@ class TestSeeds:
             sleep=lambda _: None,
         )  # fmt: skip
         assert works[0].status == "found"
-        assert works[0].candidates[0]["method"] == "seed"
+        assert works[0].candidates[0]["method"] == "manual"
         assert not any(u.startswith("https://empty.example.invalid/") for u in seen)
