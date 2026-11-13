@@ -70,7 +70,7 @@ def read_text(text: str) -> ScheduleDraft | None:
     labels = [f"Step {int(st[:2])}{st[2:]}" for st in steps]
     if entry_step == steps[0]:
         labels[0] += " (entry level)"
-    cells = {
+    cells: dict[tuple[int, int | None], Cell] = {
         (i, k): Cell(amounts[(step, cls)])
         for i, step in enumerate(steps)
         for k, cls in enumerate(classes)
