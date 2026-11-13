@@ -792,3 +792,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   hay trúng bảng hiệu trưởng hoặc bảng nhân viên); robots.txt của host tài liệu vẫn được tuân thủ.
   Thư hiệp hội giáo viên (bên ký hợp đồng lương với học khu) được dùng khi học khu không đăng.
 - `pdf-pipeline-run.json` có `seeded_only: true` để chạy riêng các học khu trong tệp, mọi trạng thái.
+
+## D-039: Bảng Florida theo hiệu suất, bảng hiệu trưởng và quản lý
+
+- Ngày: 2026-11-13. Chủ dự án quyết định sau khi so với salaryschedule.org (đối thủ phủ khoảng
+  21,6 triệu học sinh, mình 12,6 triệu; khác biệt chủ yếu ở 101 học khu trên 20 nghìn học sinh).
+- Lấy bảng lương giáo viên theo hiệu suất của Florida (lương khởi điểm theo năm kinh nghiệm và
+  phần tăng), hiển thị "như học khu công bố".
+- Lấy bảng lương hiệu trưởng, hiệu phó và quản lý (thay phần "bỏ lương hiệu trưởng" của bàn
+  giao). Vẫn bỏ superintendent: mỗi học khu một người, đăng ra là lương của một cá nhân.
+- Không lấy dữ liệu từ site đối thủ: robots.txt của họ chặn bot AI và bot thu thập, bảng là công
+  sức đọc của họ. Chỉ dùng tài liệu chính thức của học khu.
+- Bộ đọc bỏ qua số phụ bên cạnh lương năm: lương ngày, phụ cấp dưới 10.000 USD, ô "-" (Garland
+  ISD in phụ cấp giữ chân giáo viên TRA giữa hai cột lương).

@@ -564,6 +564,25 @@ class TestReader:
             [53000, 55000, 57500],
         ]
 
+    def test_side_figures_and_dashes(self) -> None:
+        # Garland ISD: daily rate, a stipend below the salary range and "-" for no stipend sit
+        # between the annual amounts; they are skipped, not taken as words inside the row.
+        lines = [
+            L("Years", "Daily", "Without", "Stipend", "With"),
+            L("0", "336.90", "63,000", "-", "63,000"),
+            L("1", "342.07", "63,967", "-", "63,967"),
+            L("2", "353.58", "66,119", "2,500", "68,619"),
+            L("3", "355.31", "66,442", "2,500", "68,942"),
+        ]
+        tables = rd.find_tables(lines, 1)
+        assert len(tables) == 1
+        assert tables[0].grid == [
+            [63000, 63000],
+            [63967, 63967],
+            [66119, 68619],
+            [66442, 68942],
+        ]
+
     def test_unreadable_layout_and_table_choice(self) -> None:
         clash = [L("Step", "BA"), L("1", "50,000"), L("2", "51,000"), rd.Line([rd.Word("3", 0, 1),
                  rd.Word("52,000", 14, 20), rd.Word("52,500", 15, 20.5)])]  # fmt: skip
