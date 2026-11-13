@@ -822,3 +822,10 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   TOTAL (lương năm), các dòng khoản lương khác bỏ.
 - Bộ đọc lên phiên bản 6 (`layout-text@6`…) để lượt chạy sau đọc lại cả tài liệu không đổi
   (Garland ISD, Seattle) bằng các thay đổi của D-039 và D-041.
+
+## D-042: Ghi lại trang chủ khi crawl không thấy gì
+
+- Ngày: 2026-11-14. Lượt toàn quốc: khoảng 4.700 học khu "không thấy tài liệu", phần lớn chỉ đọc
+  1–8 trang vì trang chủ không có link nào mang chữ việc làm/lương để đi tiếp.
+- Khi không thấy tài liệu, chi tiết ghi địa chỉ cuối của trang chủ, cỡ trang, số link, số link
+  cùng site và số link được đi tiếp; `work.json` giữ 40 link đầu của trang chủ để xem vì sao.

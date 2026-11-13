@@ -66,6 +66,9 @@ class Candidate:
     score: float
 
 
+HOME_SAMPLE = 40
+
+
 @dataclass
 class Discovery:
     nces_id: str
@@ -74,6 +77,19 @@ class Discovery:
     pages_fetched: int = 0
     candidates: list[Candidate] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    # What the home page offered the crawler, to explain an empty result.
+    home_url: str = ""
+    home_bytes: int = 0
+    home_links: int = 0
+    home_same_site: int = 0
+    home_followed: int = 0
+    home_sample: list[str] = field(default_factory=list)  # "text | url" of home links
+
+    def home_summary(self) -> str:
+        return (
+            f"trang chủ {self.home_url or '?'}: {self.home_bytes:,} byte, {self.home_links} link, "
+            f"{self.home_same_site} cùng site, {self.home_followed} được đi tiếp"
+        )
 
 
 class _LinkParser(HTMLParser):
@@ -281,14 +297,24 @@ def discover(
                 add(Link(response.final_url, ""), url, "crawl")
             continue
         html = response.content.decode("utf-8", errors="replace")
-        for link in extract_links(html, response.final_url):
+        links = extract_links(html, response.final_url)
+        if depth == 0:
+            result.home_url, result.home_bytes = response.final_url, len(response.content)
+            result.home_links = len(links)
+        for link in links:
             if is_document_url(link.url):
                 add(link, response.final_url, "crawl")
             elif link.url not in seen and same_site(link.url, home):
                 priority = score_page(link)
                 deeper = depth < max_depth or (depth == max_depth and priority >= DEEP_PRIORITY)
+                if depth == 0:
+                    result.home_same_site += 1
+                    if len(result.home_sample) < HOME_SAMPLE:
+                        result.home_sample.append(f"{link.text[:60]} | {link.url[:120]}")
                 if priority > 0 and deeper:
                     seen.add(link.url)
                     frontier.append((priority, depth + 1, link.url))
+                    if depth == 0:
+                        result.home_followed += 1
     result.candidates = sorted(candidates.values(), key=lambda c: (-c.score, c.url))
     return result
