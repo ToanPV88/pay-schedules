@@ -72,6 +72,7 @@ def _cmd_districts_build(args: argparse.Namespace) -> int:
         sources,
         load_existing_slugs(Path(args.existing) if args.existing else None),
         schools=Path(args.schools) if args.schools else None,
+        websites=Path(args.websites) if args.websites else None,
     )
     provenance = []
     manifest = sources / "manifest.json"
@@ -216,6 +217,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sources", required=True, help="Thư mục chứa tệp của Release nguồn")
     p.add_argument("--existing", help="JSON slug hiện có trong D1 (wrangler d1 execute --json)")
     p.add_argument("--schools", help="Tệp ccd_sch_029_*.zip: suy website học khu từ trường (D-035)")
+    p.add_argument(
+        "--websites", help="CSV website từ danh bạ của bang: nces_id,website,source (D-037)"
+    )
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra để nạp vào D1")
     p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
     p.set_defaults(func=_cmd_districts_build)
