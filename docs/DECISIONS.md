@@ -805,3 +805,11 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   sức đọc của họ. Chỉ dùng tài liệu chính thức của học khu.
 - Bộ đọc bỏ qua số phụ bên cạnh lương năm: lương ngày, phụ cấp dưới 10.000 USD, ô "-" (Garland
   ISD in phụ cấp giữ chân giáo viên TRA giữa hai cột lương).
+
+## D-040: Thử https và www khi không lấy được robots.txt
+
+- Ngày: 2026-11-13. 572 học khu chưa có dữ liệu (2,19 triệu học sinh) dừng ở "không truy cập
+  được robots.txt (lỗi mạng): coi như cấm", phần lớn vì NCES còn ghi địa chỉ `http://www.` cũ.
+- Trước khi crawl, pipeline thử lần lượt: địa chỉ NCES, bản https, bản https có/không `www.`,
+  rồi bản gốc có/không `www.`; lấy địa chỉ đầu tiên tải được robots.txt. Không biến thể nào trả
+  lời thì vẫn coi như cấm (RFC 9309). robots.txt của địa chỉ được chọn vẫn được tuân thủ.
