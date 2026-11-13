@@ -583,6 +583,21 @@ class TestReader:
             [66442, 68942],
         ]
 
+    def test_pay_components_keep_the_total(self) -> None:
+        # Seattle: each step prints its pay components; the TOTAL line is the annual salary.
+        lines = [L("Step", "Item", "BA", "MA")]
+        for step in range(1, 5):
+            base = 60000 + 1000 * step
+            lines += [
+                L(str(step), "Base Pay", f"${base:,}", f"${base + 9000:,}"),
+                L("", "Tech Days", "$1,403", "$1,626"),
+                L("", "TOTAL", f"${base + 9000:,}", f"${base + 19000:,}"),
+            ]
+        tables = rd.find_tables(lines, 1)
+        assert len(tables) == 1
+        assert [r.label for r in tables[0].rows] == ["1", "2", "3", "4"]
+        assert tables[0].grid[0] == [70000, 80000]
+
     def test_unreadable_layout_and_table_choice(self) -> None:
         clash = [L("Step", "BA"), L("1", "50,000"), L("2", "51,000"), rd.Line([rd.Word("3", 0, 1),
                  rd.Word("52,000", 14, 20), rd.Word("52,500", 15, 20.5)])]  # fmt: skip

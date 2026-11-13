@@ -41,10 +41,10 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@5"
-WORDS = "pdfplumber-words@5"
-XLSX = "xlsx-cells@5"
-DOCX = "docx-cells@5"
+LAYOUT = "layout-text@6"
+WORDS = "pdfplumber-words@6"
+XLSX = "xlsx-cells@6"
+DOCX = "docx-cells@6"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -287,7 +287,46 @@ def _right_of(line: Line, rows: list[Row]) -> bool:
     return min(w.x0 for w in line.words) > right + 2 * width
 
 
+_TOTAL = re.compile(r"^(?:total|annual\s+total|total\s+salary)$", re.I)
+
+
+def collapse_components(lines: list[Line]) -> list[Line]:
+    """Keep only the TOTAL line of each step when a step is printed as several pay components.
+
+    Seattle prints, under each step number, "Base Pay", "Contractual Days", "Tech Days",
+    "Responsibility/Incentive" and "TOTAL" lines; the annual salary is the TOTAL line. Pages
+    without at least three such TOTAL lines are returned unchanged. Dropped lines become empty
+    lines so that line numbers (used for headers and context) do not move.
+    """
+
+    def label_of(line: Line) -> str:
+        words = [w.text for w in line.words if money(w.text) is None and not _SIDE.match(w.text)]
+        return " ".join(words)
+
+    totals = [ln for ln in lines if ln.words and _TOTAL.match(label_of(ln))]
+    if len(totals) < 3:
+        return lines
+    out: list[Line] = []
+    step: Word | None = None
+    for line in lines:
+        words = line.words
+        has_money = any(money(w.text) is not None or _SIDE.match(w.text) for w in words)
+        if words and has_money and _LABEL.match(words[0].text):
+            step = words[0]  # "1  Base Pay  180.00  $63,117 ..."
+            out.append(Line([]))
+        elif words and has_money and step is not None and _TOTAL.match(label_of(line)):
+            amounts = [w for w in words if money(w.text) is not None]
+            out.append(Line([step, *amounts]))
+            step = None
+        elif words and has_money and step is not None:
+            out.append(Line([]))  # another component of the same step
+        else:
+            out.append(line)
+    return out
+
+
 def find_tables(lines: list[Line], page: int) -> list[Table]:
+    lines = collapse_components(lines)
     tables: list[Table] = []
     current: list[Row] = []
     gap = 0
