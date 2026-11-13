@@ -853,3 +853,26 @@ class TestOcr:
         assert answers[0]["cells"] == want
         assert answers[1]["cells"] == want
         assert answers[0]["school_year"] == "2025-26"
+
+
+def test_pdf_checks_hold_uncertain_scans() -> None:
+    """D-036: a scan needs three matching OCR readings, step 0 or 1 first and short lane labels."""
+    from pay_pipeline.pdf_pipeline.ocr import CONFIGS
+    from pay_pipeline.pdf_pipeline.run import pdf_checks
+    from pay_pipeline.schedules.model import Lane, ScheduleDraft, Step
+
+    draft = ScheduleDraft(
+        state="KY", state_district_id="x", district_name="x", school_year="2026-27",
+        lanes=[Lane("BA"), Lane("MA")], steps=[Step("1"), Step("2")], cells={},
+    )  # fmt: skip
+    ocr_answer = {"reader": CONFIGS[0][0], "ocr_agree": 3}
+    assert pdf_checks(ocr_answer, draft, NOW.date()) == []
+    assert [i.code for i in pdf_checks({**ocr_answer, "ocr_agree": 2}, draft, NOW.date())] == [
+        "ocr"
+    ]
+    draft.steps = [Step("2"), Step("3")]
+    assert [i.code for i in pdf_checks(ocr_answer, draft, NOW.date())] == ["ocr"]
+    draft.steps = [Step("1")]
+    draft.lanes = [Lane("Level 3 Theta Hanlon Instructors ATC at"), Lane("MA")]
+    assert [i.code for i in pdf_checks(ocr_answer, draft, NOW.date())] == ["ocr"]
+    assert pdf_checks({"reader": rd.WORDS}, draft, NOW.date()) == []  # text PDFs unaffected

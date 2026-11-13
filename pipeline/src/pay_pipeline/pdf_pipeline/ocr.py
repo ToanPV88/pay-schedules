@@ -107,7 +107,7 @@ def fix_token(text: str) -> str:
         return t
     if t[0] in "S§":
         t = "$" + t[1:]
-    t = t.translate(str.maketrans({"O": "0", "o": "0", "l": "1", "I": "1", "|": "1"}))
+    t = t.translate(str.maketrans("OolI|", "00111"))
     m = _THOUSANDS_DOT.match(t)
     if m:  # "45.123" is 45,123: cents have two digits
         t = f"{m.group(1)}{m.group(2)},{m.group(3)}"
@@ -226,6 +226,10 @@ def schedule_pages(pdf: Path, tmp: Path, pages: int) -> list[int]:
     # As the classifier: teacher schedule pages first, then other schedule-like pages.
     scores.sort(key=lambda s: (-(s.is_schedule and s.teacher and s.negative <= 2),
                                -s.is_schedule, -s.score))  # fmt: skip
+    if scores and scores[0].is_schedule and scores[0].teacher and scores[0].negative <= 2:
+        # A clear teacher schedule page: read it alone, so a fuller table on a page for other
+        # staff (classified, administrators) cannot win the table choice.
+        return [scores[0].page]
     return [s.page for s in scores[:MAX_READ_PAGES]]
 
 
@@ -265,6 +269,8 @@ def same_grid(a: dict[str, Any], b: dict[str, Any]) -> bool:
 #: Two readings of one engine share some mistakes (a dropped row, a misread digit), so two
 #: matching readings only send the table to review.
 AGREE_TO_PUBLISH = 3
+#: Longest lane label accepted from a scan without review.
+MAX_LANE_LABEL = 30
 
 
 def read_scanned(pdf: Path) -> list[dict[str, Any]]:

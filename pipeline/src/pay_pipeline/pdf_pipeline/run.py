@@ -188,6 +188,11 @@ def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft, today: dt.date) -> 
             issues.append(
                 Issue("ocr", f"Bản scan: {agree}/{ocr.AGREE_TO_PUBLISH} lượt OCR khớp nhau")
             )
+        long = [ln.label_raw for ln in draft.lanes if len(ln.label_raw) > ocr.MAX_LANE_LABEL]
+        if long:
+            # A header of several printed lines read as one long label often means OCR merged or
+            # lost columns (Bullitt): the grid may be another table's or incomplete.
+            issues.append(Issue("ocr", f"Bản scan: nhãn lane dài bất thường {long[0][:60]!r}"))
         first = re.match(r"\D{0,6}(\d{1,2})", draft.steps[0].label_raw) if draft.steps else None
         if first and int(first.group(1)) > 1:
             # OCR often drops the first row; a table read from a scan must start at step 0 or 1.
@@ -284,6 +289,15 @@ def prepare(
         )
         if work.nces_id not in catalog:
             outcomes.append(Outcome(work.nces_id, "error", "Học khu không có trong danh mục", cost))
+            continue
+        if str(data[0].get("reader", "")).startswith("tesseract") and issues:
+            # A scan that is not certain enough is not queued for review (the owner cannot review
+            # hundreds by hand, D-034): the district is searched again later (D-036).
+            reasons = "; ".join(f"[{i.code}] {i.message}" for i in issues)[:400]
+            outcomes.append(
+                Outcome(work.nces_id, "no_schedule", f"Bản scan, OCR chưa đủ chắc: {reasons}",
+                        cost, sorted({i.code for i in issues}))
+            )  # fmt: skip
             continue
         item = Prepared(
             key=len(prepared) + 1,
