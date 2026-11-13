@@ -31,6 +31,10 @@ KY_YEARS = 2
 CROSS_CHECK_SAMPLE = 10
 
 IMPORTERS = {"CA": "ca_j90@1", "KY": "ky_kde@1"}
+# A state file is what each district reported to the state: odd figures (pay falling between two
+# steps or lanes, a big change from last year) are published as reported, not held for a person
+# (D-028). Holds from a manual cross-check and structural problems still wait for review.
+AS_REPORTED = frozenset({"monotonic_step", "monotonic_lane", "start_change"})
 
 STATE_KEY: dict[str, Callable[[str], str | None]] = {
     # 'CA-0161119' -> CDS '0161119'
@@ -91,14 +95,27 @@ class Prepared:
     importer: str
     issues: list[Issue]
     confidence: float | None = 1.0
+    as_reported: frozenset[str] = frozenset()
+    """Checks whose findings do not hold the schedule back: the figures are published as the
+    source reported them, and the findings are kept as resolved review rows (D-028)."""
+
+    @property
+    def blocking(self) -> list[Issue]:
+        return [i for i in self.issues if i.code not in self.as_reported]
 
     @property
     def status(self) -> str:
-        return "draft" if self.issues else "published"
+        return "draft" if self.blocking else "published"
 
     @property
     def reasons(self) -> list[str]:
-        return summarize(self.issues)
+        """Open review reasons: every finding, when something holds the schedule back."""
+        return summarize(self.issues) if self.blocking else []
+
+    @property
+    def accepted_reasons(self) -> list[str]:
+        """Findings of a schedule published as reported."""
+        return [] if self.blocking else summarize(self.issues)
 
 
 @dataclass(frozen=True)
@@ -350,6 +367,7 @@ def build_import(
                 source=doc,
                 importer=IMPORTERS[draft.state],
                 issues=issues,
+                as_reported=AS_REPORTED,
             )
         )
     used = {p.source.asset_name for p in prepared}
@@ -442,16 +460,24 @@ def render_report(result: ImportResult) -> str:
     else:
         lines.append("Không có.")
 
-    lines += ["", "## Lý do chuyển xem tay", ""]
-    lines += ["| Bang | Năm học | Kiểm tra | Số bảng |", "|---|---|---|---:|"]
-    codes: Counter[tuple[str, str, str]] = Counter()
+    lines += ["", "## Kiểm tra báo lỗi", ""]
+    lines.append(
+        "Chờ xem tay: bảng bị giữ lại. Published như nguồn: kiểm tra chỉ thấy số lạ của chính"
+        " nguồn, bảng vẫn publish và trang web ghi rõ (D-028)."
+    )
+    lines.append("")
+    lines += ["| Bang | Năm học | Kiểm tra | Chờ xem tay | Published như nguồn |"]
+    lines += ["|---|---|---|---:|---:|"]
+    codes: Counter[tuple[str, str, str, str]] = Counter()
     for p in result.prepared:
         for code in sorted({i.code for i in p.issues}):
-            codes[(p.draft.state, p.draft.school_year, code)] += 1
-    for (st, year, code), n in sorted(codes.items()):
-        lines.append(f"| {st} | {year} | {code} | {n} |")
-    if not codes:
-        lines.append("| – | – | – | 0 |")
+            codes[(p.draft.state, p.draft.school_year, code, p.status)] += 1
+    keys = sorted({(st, year, code) for st, year, code, _ in codes})
+    for st, year, code in keys:
+        held, shown = codes[(st, year, code, "draft")], codes[(st, year, code, "published")]
+        lines.append(f"| {st} | {year} | {code} | {held} | {shown} |")
+    if not keys:
+        lines.append("| – | – | – | 0 | 0 |")
 
     lines += ["", "## Học khu còn thiếu bảng lương ở mỗi bang", ""]
     lines.append(

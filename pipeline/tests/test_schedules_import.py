@@ -17,6 +17,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import re
 import sqlite3
 import zipfile
 from collections.abc import Sequence
@@ -27,7 +28,7 @@ import pytest
 
 from pay_pipeline.catalog.d1sql import render_sql
 from pay_pipeline.schedules import ca_j90, ky_kde
-from pay_pipeline.schedules.d1sql import AUTO_RESOLVED, schedules_sql
+from pay_pipeline.schedules.d1sql import AS_REPORTED, AUTO_RESOLVED, schedules_sql
 from pay_pipeline.schedules.state_import import (
     CatalogDistrict,
     ImportResult,
@@ -221,6 +222,20 @@ def _fix_zip_times(path: Path) -> None:
     """Rewrite a zip with fixed member times, so its bytes do not depend on the clock."""
     with zipfile.ZipFile(path) as zf:
         members = [(i.filename, zf.read(i)) for i in zf.infolist()]
+    # openpyxl stamps the save time into docProps/core.xml whatever the workbook says.
+    members = [
+        (
+            name,
+            re.sub(
+                rb"(<dcterms:modified[^>]*>)[^<]*(</dcterms:modified>)",
+                rb"\g<1>2026-01-01T00:00:00Z\g<2>",
+                data,
+            )
+            if name == "docProps/core.xml"
+            else data,
+        )
+        for name, data in members
+    ]
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in members:
             zf.writestr(zipfile.ZipInfo(name, FIXED_ZIP_TIME), data)
@@ -368,7 +383,9 @@ class TestBuildImport:
         by = {(p.nces_id, p.draft.school_year): p for p in result.prepared}
         assert by[("0600001", "2024-25")].status == "published"
         beta = by[("0600002", "2024-25")]
-        assert beta.status == "draft" and beta.reasons[0].startswith("[monotonic_lane]")
+        # D-028: odd figures in a state file are published as reported, findings kept
+        assert beta.status == "published" and beta.reasons == []
+        assert beta.accepted_reasons[0].startswith("[monotonic_lane]")
         # Supervisory union -> both member districts, with a note
         for member in ("0600004", "0600005"):
             assert "Shared schedule of Test City Elementary/High" in (
@@ -377,15 +394,17 @@ class TestBuildImport:
         assert [(k.state_district_id, "LEA_TYPE 7" in k.reason) for k in result.skipped] == [
             ("0100009", True)
         ]
-        # Kentucky: two latest sheets only; +30 % start pay at Test Independent -> review
+        # Kentucky: two latest sheets only; +30 % start pay at Test Independent: as reported
         assert {y for (_, y) in by if _.startswith("21")} == {"2024-25", "2025-26"}
         assert by[("2100001", "2025-26")].status == "published"
-        assert by[("2100002", "2025-26")].reasons[0].startswith("[start_change]")
+        assert by[("2100002", "2025-26")].status == "published"
+        assert by[("2100002", "2025-26")].accepted_reasons[0].startswith("[start_change]")
 
     def test_report(self, tmp_path: Path) -> None:
         report = render_report(run_import(tmp_path))
-        assert "| CA | 2024-25 | 4 | 3 | 75.0% | 1 | 4 | 3 | 1 |" in report
-        assert "| KY | 2025-26 | 2 | 2 | 100.0% | 0 | 2 | 1 | 1 |" in report
+        assert "| CA | 2024-25 | 4 | 3 | 75.0% | 1 | 4 | 4 | 0 |" in report
+        assert "| KY | 2025-26 | 2 | 2 | 100.0% | 0 | 2 | 2 | 0 |" in report
+        assert "| CA | 2024-25 | monotonic_lane | 0 | 1 |" in report
         assert "1 / 5 học khu còn thiếu" in report and "Test Missing Unified" in report
         assert "start_change" in report
 
@@ -418,9 +437,10 @@ class TestSql:
         status = dict(
             db.execute("SELECT status, count(*) FROM schedules GROUP BY status").fetchall()
         )
-        assert status == {"published": 6, "draft": 2}
-        # every draft has review reasons; every published schedule has a source link and year
-        assert db.execute("SELECT count(DISTINCT schedule_id) FROM review_queue").fetchone()[0] == 2
+        assert status == {"published": 8}
+        # findings of the two schedules published as reported are kept, already resolved (D-028)
+        rows = db.execute("SELECT resolved_at IS NOT NULL, resolution FROM review_queue").fetchall()
+        assert len(rows) == 2 and all(r == (1, AS_REPORTED) for r in rows)
         rows = db.execute(
             "SELECT s.school_year, d.url, d.release_tag, d.asset_name FROM schedules s"
             " JOIN source_documents d ON d.id = s.source_document_id"
@@ -507,6 +527,27 @@ class TestSql:
             "SELECT resolution FROM review_queue WHERE schedule_id = ?", (sid,)
         ).fetchone()[0]
         assert resolution == AUTO_RESOLVED
+
+    def test_open_finding_of_a_state_file_is_closed_as_reported(self, tmp_path: Path) -> None:
+        # A schedule held under the old rule (open monotonic reason) is published on re-import.
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a"))
+        sid = db.execute(
+            "SELECT s.id FROM schedules s JOIN districts x ON x.id = s.district_id"
+            " WHERE x.nces_id = '0600002'"
+        ).fetchone()[0]
+        db.execute("UPDATE review_queue SET resolved_at = NULL, resolution = NULL")
+        db.execute(
+            "UPDATE schedules SET status = 'draft', published_at = NULL WHERE id = ?", (sid,)
+        )
+        load(db, run_import(tmp_path / "b"))
+        assert db.execute("SELECT status FROM schedules WHERE id = ?", (sid,)).fetchone()[0] == (
+            "published"
+        )
+        rows = db.execute(
+            "SELECT resolution FROM review_queue WHERE schedule_id = ?", (sid,)
+        ).fetchall()
+        assert rows == [(AS_REPORTED,)]
 
     def test_rejected_draft_is_not_published_by_a_re_import(self, tmp_path: Path) -> None:
         db = fresh_db()

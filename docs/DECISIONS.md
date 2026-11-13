@@ -623,3 +623,18 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Đo trên preview (37 học khu đang `no_candidates`, Release `docs-preview-20261113-43356207992`):
   8 học khu tìm được tài liệu, 4 đọc được bảng (Dallas, Cherry Creek, Clayton County, Boston:
   2 publish, 2 chờ xem tay); 27 vẫn không thấy link.
+
+## D-028: Bảng từ tệp của bang publish "như nguồn"; không trỏ người xem tới tệp .exe
+
+- Ngày: 2026-11-13. Claude đề xuất, chủ dự án đồng ý (không đủ thời gian duyệt tay ~90 bảng).
+- Bảng lấy từ tệp dữ liệu của bang (CA J-90, KY) là số học khu tự khai với bang, không có bước đọc
+  có thể sai. Khi kiểm tra chỉ thấy số lạ của chính nguồn (`monotonic_step`, `monotonic_lane`,
+  `start_change`), bảng vẫn publish. Kết quả kiểm tra được giữ trong `review_queue` dưới dạng dòng đã
+  đóng với `resolution` bắt đầu bằng `as reported` (`schedules/state_import.py`, `d1sql.py`).
+- Trang học khu ghi ở mục Source: "Shown as the district reported it to the state" và kiểm tra nào đã
+  báo; trang Methodology giải thích. Không sửa số liệu đã khai.
+- Vẫn chờ xem tay: giữ lại từ kiểm tra chéo (`cross_check`, `review-holds.json`), lỗi cấu trúc
+  (`cell_count`, `range`, `school_year`...), và mọi bảng đọc từ PDF.
+- Nguồn J-90 là tệp ZIP tự giải nén `.exe` của CDE (pipeline chỉ mở như ZIP, không chạy). Trang web
+  không link thẳng tới tệp đó mà tới trang dữ liệu chính thức https://www.cde.ca.gov/ds/fd/cs/, ghi
+  tên tệp; CSDL vẫn giữ URL tệp và sha256. Tệp `.exe` khác (nếu có) chỉ ghi tên máy chủ, không link.

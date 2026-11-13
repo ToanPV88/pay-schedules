@@ -40,6 +40,8 @@ export interface DistrictPageData {
   /** Lựa chọn của máy tính lấy từ query; null thì dùng bậc đầu, cột đầu. */
   selection: Selection | null;
   reportsEnabled: boolean;
+  /** Mã kiểm tra đã báo ở bảng publish "như nguồn", theo id bảng (D-028). */
+  asReported: Map<number, string[]>;
   /** Đường dẫn nhận form máy tính (chính trang này). */
   path: string;
   /** Trang mẫu với dữ liệu giả lập (chỉ ở bản xem trước). */
@@ -205,7 +207,8 @@ function detailSections(data: DistrictPageData): Html {
       notes.push(html`${label}${stipendsAndNotes(schedule)}`);
     }
     const report = data.reportsEnabled ? `/report?d=${key}&s=${schedule.id}` : null;
-    sources.push(html`${label}${sourceBlock(schedule, report)}`);
+    const flagged = data.asReported.get(schedule.id) ?? [];
+    sources.push(html`${label}${sourceBlock(schedule, report, flagged)}`);
   }
   let noteSection = html``;
   if (notes.length > 0) {

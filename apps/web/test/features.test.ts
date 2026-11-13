@@ -5,7 +5,7 @@ import { cachePurger, tokensMatch } from "../src/cache";
 import { calculate, positionToIndex } from "../src/calc";
 import { compareCell, parseDistrictKeys } from "../src/compare";
 import { DEMO_SCHEDULE } from "../src/demo";
-import { formatCents, formatDate, safeHttpUrl } from "../src/format";
+import { formatCents, formatDate, safeHttpUrl, sourceLanding } from "../src/format";
 import { SITEVERIFY_URL, verifyTurnstile } from "../src/turnstile";
 import { db, form, page, request, reset, seed } from "./helpers";
 
@@ -162,6 +162,14 @@ describe("hàm thuần", () => {
     expect(formatCents(-15_000)).toBe("-$150");
     expect(formatDate("2026-11-12T07:00:00Z")).toBe("November 12, 2026");
     expect(formatDate("not a date")).toBe("not a date");
+  });
+
+  it("tệp J-90 của California dẫn tới trang dữ liệu của CDE", () => {
+    expect(sourceLanding("https://www3.cde.ca.gov/ds-downloads/fd/cs/j902324.exe")).toEqual({
+      href: "https://www.cde.ca.gov/ds/fd/cs/",
+      label: "California Department of Education, Form J-90 data (j902324.exe)",
+    });
+    expect(sourceLanding("https://example.invalid/salary.pdf")).toBeNull();
   });
 
   it("chỉ nhận link http và https", () => {
