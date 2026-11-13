@@ -121,7 +121,9 @@ class _LinkParser(HTMLParser):
 
 
 SCRIPT_LINKS_BELOW = 60  # pages with fewer <a> links are read for addresses in their scripts
-_SCRIPT_URL = re.compile(r"""["'](https?:\\?/\\?/[^"'\s<>]{4,300}|\\?/[a-z0-9][^"'\s<>]{3,300})["']""", re.I)
+_SCRIPT_URL = re.compile(
+    r"""["'](https?:\\?/\\?/[^"'\s<>]{4,300}|\\?/[a-z0-9][^"'\s<>]{3,300})["']""", re.I
+)
 _ASSET = re.compile(r"\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|json|mp4)(?:[?#]|$)", re.I)
 
 
