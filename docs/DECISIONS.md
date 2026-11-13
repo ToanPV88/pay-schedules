@@ -638,3 +638,23 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Nguồn J-90 là tệp ZIP tự giải nén `.exe` của CDE (pipeline chỉ mở như ZIP, không chạy). Trang web
   không link thẳng tới tệp đó mà tới trang dữ liệu chính thức https://www.cde.ca.gov/ds/fd/cs/, ghi
   tên tệp; CSDL vẫn giữ URL tệp và sha256. Tệp `.exe` khác (nếu có) chỉ ghi tên máy chủ, không link.
+
+## D-029: Oklahoma: nhập sổ "Local Salary Schedules" của Sở Giáo dục bang
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý.
+- Nguồn: OSDE, Office of School Personnel Records, "Oklahoma Public Schools Local Salary Schedules"
+  2025-26 và 2024-25 (PDF, ~380 trang). Học khu phải nộp bảng lương cho bang; mỗi học khu có bảng
+  riêng được in một trang theo cùng mẫu 18 cột (cử nhân, cử nhân + giờ ×3, các cột đó có chứng chỉ
+  National Board, thạc sĩ…, tiến sĩ). Học khu trả theo bảng tối thiểu của bang chỉ được liệt kê tên;
+  học khu đó nhận bảng tối thiểu in trong sổ, kèm ghi chú.
+- Đọc (`pipeline/src/pay_pipeline/schedules/ok_sde.py`, importer `ok_sde@1`): `pdftotext -layout`,
+  cột lấy theo vị trí 18 chữ tiêu đề, số tiền vào cột gần nhất. Trang không đúng 18 cột, hoặc số
+  tiền lệch quá 40% khoảng cách cột, bị bỏ (không đoán). Cột trống ("0 Hrs") không thành lane. Mã
+  học khu `72 - I001` ↔ NCES `ST_LEAID` `OK-72-I001`.
+- Đo tại máy: 2025-26 có 369 trang học khu + 128 học khu theo bảng tối thiểu; ghép được 506/507 học
+  khu thường của Oklahoma. Độ lệch lớn nhất của số tiền so với tâm cột: 0,25 khoảng cách cột.
+- Kiểm tra lane theo trình độ (D-024) đọc thêm cách viết đầy đủ: `Bach.`/`Bachelor's` = BA,
+  `Mast.` = MA, `Doct.`/`Doctor's` = PhD, `+ 15 Hrs` = +15, `NBCT`/`National Board Certification`
+  là một ngạch riêng. Kết quả trên CA/KY và bộ chuẩn PDF không đổi.
+- Số lạ của chính nguồn (vd. Yukon 2024-25: NBCT Bach. bậc 22 là 94,966 giữa 64,320 và 65,611) được
+  publish như nguồn theo D-028, trang web ghi rõ.

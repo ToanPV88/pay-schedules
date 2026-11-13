@@ -62,7 +62,7 @@ def _fmt(cents: int) -> str:
 _EDU_WORD = re.compile(r"^<?(BA|MA|2MA|PHD)(<\d+)?(\+(BA|MA|2MA|PHD|CRED|PRELIM|\d+))*$")
 _DEGREE = {"BA": 1.0, "MA": 2.0, "2MA": 2.5, "PHD": 3.0}
 # Words that do not make a separate track: a credentialed lane is the regular lane.
-_NEUTRAL_WORDS = frozenset({"CRED", "PRELIM"})
+_NEUTRAL_WORDS = frozenset({"CRED", "PRELIM", "DEGREE"})
 _NEUTRAL_PHRASES = ("FULL STEP", "WHOLE YR")
 
 
@@ -98,10 +98,23 @@ class LaneRank:
         return self.units == other.units == 0 and self.degree > other.degree
 
 
+# Spelled-out degrees and hours (Oklahoma's state book: "Bach.+ 15 Hrs", "NBCT Mast. Degree",
+# "Master's + National Board Certification") read as the short forms above.
+_SPELLED = (
+    (re.compile(r"\bBACH(?:ELOR)?(?:'?S)?\.?(?=\W|$)"), "BA"),
+    (re.compile(r"\bMAST(?:ER)?(?:'?S)?\.?(?=\W|$)"), "MA"),
+    (re.compile(r"\bDOCT(?:OR(?:'?S|ATE)?)?\.?(?=\W|$)"), "PHD"),
+    (re.compile(r"\s*\+\s*(\d+)\s*(?:HRS|HOURS)\b"), r"+\1"),
+    (re.compile(r"(?:\+\s*)?NATIONAL BOARD CERTIFI\w*"), " NBCT"),
+)
+
+
 def lane_rank(label: str) -> LaneRank:
     text = " ".join(label.upper().split())
     for phrase in _NEUTRAL_PHRASES:
         text = text.replace(phrase, " ")
+    for pattern, short in _SPELLED:
+        text = pattern.sub(short, text)
     first: str | None = None
     alternative = False
     track: list[str] = []
