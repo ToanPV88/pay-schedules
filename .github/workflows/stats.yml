@@ -60,6 +60,8 @@ jobs:
             "SELECT COUNT(*) AS n, SUM(COALESCE(d.enrollment, 0)) AS students, SUM(COALESCE(d.enrollment, 0) >= 5000) AS big FROM districts d JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND NOT $pub AND p.detail LIKE '%robots%'"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT d.state, d.name, d.enrollment, substr(p.detail, 1, 160) AS detail FROM districts d JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND NOT $pub AND p.detail LIKE '%robots%' ORDER BY d.enrollment DESC LIMIT 15"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT CASE WHEN p.detail LIKE '%robots.txt (lỗi mạng)%' THEN 'robots_network_error' WHEN p.detail LIKE '%drive.google%' THEN 'google_drive' WHEN p.detail LIKE '%parentsquare%' THEN 'parentsquare' WHEN p.detail LIKE '%edlio%' THEN 'edlio' WHEN p.detail LIKE '%robots.txt (HTTP%' THEN 'robots_disallow_site' ELSE 'other' END AS kind, COUNT(*) AS n, SUM(COALESCE(d.enrollment, 0)) AS students FROM districts d JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND NOT $pub AND p.detail LIKE '%robots%' GROUP BY kind ORDER BY students DESC"
           echo "MISSING_BEGIN"; python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=d[0]["results"] if isinstance(d,list) else d["results"]; [print("MISS\t"+"\t".join(str(x.get(k) or "") for k in ("nces_id","state","name","enrollment","website","status","detail"))) for x in r]' "$GITHUB_WORKSPACE/missing.json"
       - name: Report
         run: |
