@@ -605,3 +605,21 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Chưa làm (cần cách đọc riêng, ít học khu): bảng xoay ngang (lane theo hàng, bậc theo cột: Knox),
   mỗi bậc nhiều dòng thành phần (Seattle), nhiều bảng nhỏ đặt cạnh nhau lặp nhãn bậc (Frederick,
   Hawaii có mã ô trước mỗi số), sổ lương Excel theo tháng (Wake).
+
+## D-027: Discover: đọc sitemap trước, trang lương sâu thêm một tầng, mở trang thư mục tài liệu
+
+- Ngày: 2026-11-13. Claude quyết.
+- Bối cảnh: ở lô production đầu, 21/100 học khu không thấy link tài liệu (`no_candidates`) và nhiều học
+  khu chỉ tải được tài liệu không phải bảng giáo viên. Nhiều website để bảng lương ở tầng 3–4
+  (Trang chủ → Phòng ban → Nhân sự → Lương) hoặc trong trang "thư mục tài liệu" của Thrillshare.
+- Nội dung (`pipeline/src/pay_pipeline/discover/crawl.py`, `pdf_pipeline/gather.py`):
+  - Sau trang chủ, đọc `/sitemap.xml` (nếu là sitemap index thì đọc tiếp tối đa 3 tệp con, ưu tiên
+    tệp trang). Tài liệu trong sitemap là ứng viên; tối đa 10 trang có địa chỉ giống trang lương
+    (`salary`, `compensation`, `negotiated agreement`…) được đưa lên đầu hàng crawl.
+  - Link có chữ lương hoặc thỏa ước được theo thêm một tầng (tầng 3); ngân sách trang 20 → 25.
+  - Ứng viên dẫn tới trang thư mục tài liệu (không có tệp, chỉ có link tới các trang tài liệu
+    con): mở tối đa 2 trang con giống bảng lương nhất, ngoài 4 tài liệu mỗi học khu.
+  - Vẫn tôn trọng robots.txt (ParentSquare, Google Drive chặn: không vượt).
+- Đo trên preview (37 học khu đang `no_candidates`, Release `docs-preview-20261113-43356207992`):
+  8 học khu tìm được tài liệu, 4 đọc được bảng (Dallas, Cherry Creek, Clayton County, Boston:
+  2 publish, 2 chờ xem tay); 27 vẫn không thấy link.
