@@ -1,0 +1,8 @@
+{
+  "description": "Tham số lượt chạy hằng tuần của pdf-pipeline.yml (D-032): chỉ học khu đã đến hạn chạy lại (next_run_at), tối đa limit học khu mỗi tuần để giữ phút Actions trong hạn mức miễn phí. Nhánh run/pdf-pipeline-* vẫn dùng pdf-pipeline-run.json.",
+  "limit": 600,
+  "state": "",
+  "rerun": [],
+  "shards": 4,
+  "deadline_minutes": 60
+}

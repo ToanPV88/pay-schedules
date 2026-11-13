@@ -686,3 +686,19 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   Thiếu ô hoặc trùng mã thì bỏ cả bảng.
 - Bậc đầu là bậc 4, nguồn ghi "(ENTRY LEVEL)". Kiểm tra `step_start` bỏ qua hàng đầu có nhãn
   "entry level", vì nguồn đã nói đó là hàng đầu.
+
+## D-032: Pipeline PDF chạy hằng tuần theo hạn của từng học khu
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý.
+- Học khu đổi bảng lương mỗi năm nhưng không cùng lúc (đa số duyệt tháng 4-8, nhiều nơi muộn vì
+  đàm phán công đoàn), nên không chạy một đợt lớn mỗi năm. `pdf-pipeline.yml` có thêm `schedule`
+  (thứ Bảy 19:17 UTC, sáng Chủ nhật giờ Việt Nam), luôn vào production, chỉ lấy học khu đã đến
+  hạn theo `RETRY_DAYS` (published 180 ngày, unchanged 120, no_candidates/no_schedule 90...).
+- Tham số trong `pipeline/pdf-pipeline-weekly.json`: tối đa 600 học khu, 4 lô, hạn 60 phút. Ước
+  khoảng 130 phút mỗi tuần, khoảng 550 phút mỗi tháng: trong 2.000 phút miễn phí của repo private.
+  Học khu đến hạn nhiều hơn 600 thì để tuần sau (hàng đợi xếp theo số học sinh).
+- Tháng 8-10, mùa ra bảng mới, có thể chạy thêm lượt lớn bằng nhánh `run/pdf-pipeline-production`.
+- Hàng đợi đổi: trước đây bỏ mọi học khu đã có bảng, nên bảng năm mới không bao giờ được lấy. Nay
+  học khu đã đến `next_run_at` vào hàng đợi cả khi đã có bảng published. Tài liệu không đổi thì
+  bỏ qua nhờ `known.json` (url + sha256); bảng cùng năm thành bản draft song song (D-012); bảng cũ
+  hơn bản published bị Validate giữ lại. Học khu đang có draft chờ duyệt vẫn không vào.
