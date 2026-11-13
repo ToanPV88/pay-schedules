@@ -106,8 +106,12 @@ _SHARED_HOST = re.compile(
 SCHOOL_HOST_SHARE = 0.6
 
 
-def load_websites(path: Path | None) -> dict[str, str]:
-    """Curated district websites from state directories (D-037): NCES id -> URL."""
+def load_websites(path: Path | None, *, replacing: bool = False) -> dict[str, str]:
+    """Curated district websites (D-037): NCES id -> URL.
+
+    Rows with ``replaces_nces`` = 1 (D-043: the NCES address no longer answers) are returned
+    only with ``replacing=True``; the others only fill an empty NCES website.
+    """
     if path is None or not path.exists():
         return {}
     with path.open(encoding="utf-8", newline="") as fh:
@@ -115,8 +119,10 @@ def load_websites(path: Path | None) -> dict[str, str]:
     out = {}
     for r in rows:
         url = normalize_website(r.get("website") or "")
-        if url and re.fullmatch(r"\d{7}", (r.get("nces_id") or "").strip()):
-            out[r["nces_id"].strip()] = url
+        nces = (r.get("nces_id") or "").strip()
+        replaces = (r.get("replaces_nces") or "").strip() == "1"
+        if url and replaces == replacing and re.fullmatch(r"\d{7}", nces):
+            out[nces] = url
     return out
 
 
@@ -204,12 +210,16 @@ def build_catalog(
 
     school_sites = read_school_sites(schools) if schools else {}
     curated = load_websites(websites)
+    replacements = load_websites(websites, replacing=True)
     derived = 0
     from_directory = 0
     districts = []
     for r in sorted(kept, key=lambda x: x.leaid):
         e = edge.get(r.leaid)
         website = normalize_website(r.website)
+        if r.leaid in replacements:
+            website = replacements[r.leaid]
+            from_directory += 1
         if website is None and (website := curated.get(r.leaid)):
             from_directory += 1
         if website is None and (website := school_website(school_sites.get(r.leaid))):
