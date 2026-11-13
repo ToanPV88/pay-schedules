@@ -2,12 +2,14 @@ import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   alternateCells,
+  autoTriage,
   drainPurgeQueue,
   type Env,
   PURGE_MAX_ATTEMPTS,
   parseMoney,
 } from "../src/index";
 import { sameOriginPost } from "../src/origin";
+import { TRIAGE_PUBLISHED, triage } from "../src/triage";
 
 const BASE = "https://review.example.invalid";
 const AUTH = `Basic ${btoa("review:test-password")}`;
@@ -290,5 +292,85 @@ describe("hàm phụ", () => {
       { id: 3, model: "c", raw_output: JSON.stringify({ cells: [[1.5, null]] }) },
     ];
     expect(alternateCells(runs, 1, 1, 2)).toEqual({ model: "c", cells: [[150, null]] });
+  });
+});
+
+describe("tự phân loại hàng chờ (D-034)", () => {
+  const today = new Date("2026-11-13T00:00:00Z");
+  const kind = (...reasons: string[]) => triage(reasons, today).kind;
+  const oldYear = (year: string) => `[school_year] Bảng năm ${year} đã cũ: có thể có bảng mới hơn`;
+  const status = async (sql: string) => {
+    const row = await db.prepare(sql).first<{ status: string }>();
+    return row?.status;
+  };
+  const setReason = (reason: string) =>
+    db.batch([
+      db.prepare("DELETE FROM review_queue"),
+      db.prepare("INSERT INTO review_queue (schedule_id, reason) VALUES (10, ?)").bind(reason),
+    ]);
+
+  it("quy tắc: bậc đầu cao, bảng cũ gần đây thì publish; quá cũ thì loại; còn lại giữ", () => {
+    expect(kind("[step_start] Bảng bắt đầu ở bậc 4: có thể thiếu hàng đầu")).toBe("publish");
+    expect(kind(oldYear("2023-24"))).toBe("publish");
+    expect(triage([oldYear("2019-20")], today)).toEqual({
+      kind: "reject",
+      reason: "chỉ tìm thấy bảng năm 2019-20, quá cũ",
+    });
+    // Cùng mã school_year nhưng là kiểm tra "cũ hơn bảng đang published": để người xem.
+    expect(kind("[school_year] Năm học 2024-25 cũ hơn bảng đang published (2025-26)")).toBe("keep");
+    expect(kind("[step_start] Bảng bắt đầu ở bậc 3", "[double_extraction] Lệch")).toBe("keep");
+    expect(kind("Không mã")).toBe("keep");
+    expect(kind()).toBe("keep");
+  });
+
+  it("cron: publish như nguồn, resolution 'as reported', xếp xóa cache", async () => {
+    await setReason("[step_start] Bảng bắt đầu ở bậc 4: có thể thiếu hàng đầu");
+    expect(await autoTriage(db, today)).toMatchObject({ published: 1, rejected: 0 });
+    expect(await status("SELECT status FROM schedules WHERE id = 10")).toBe("published");
+    const q = await db
+      .prepare("SELECT resolution FROM review_queue WHERE schedule_id = 10")
+      .first<{ resolution: string }>();
+    expect(q?.resolution).toBe(TRIAGE_PUBLISHED);
+    expect(q?.resolution.startsWith("as reported")).toBe(true);
+    const p = await db
+      .prepare("SELECT status, next_run_at FROM district_pipeline WHERE district_id = 1")
+      .first<{ status: string; next_run_at: string | null }>();
+    expect(p?.status).toBe("published");
+    expect(p?.next_run_at).not.toBeNull();
+    const purge = await db
+      .prepare("SELECT COUNT(*) AS n FROM cache_purge_queue")
+      .first<{ n: number }>();
+    expect(purge?.n).toBe(1);
+  });
+
+  it("cron: bảng quá cũ bị loại, học khu được tìm lại sau", async () => {
+    await setReason(oldYear("2018-19"));
+    expect(await autoTriage(db, today)).toMatchObject({ published: 0, rejected: 1 });
+    expect(await status("SELECT status FROM schedules WHERE id = 10")).toBe("draft");
+    const q = await db
+      .prepare("SELECT resolution FROM review_queue WHERE schedule_id = 10")
+      .first<{ resolution: string }>();
+    expect(q?.resolution).toMatch(/^rejected: auto-triage/);
+    const p = "SELECT status FROM district_pipeline WHERE district_id = 1";
+    expect(await status(p)).toBe("no_schedule");
+    // Lần chạy sau không đụng lại bảng đã loại.
+    expect(await autoTriage(db, today)).toMatchObject({ published: 0, rejected: 0 });
+  });
+
+  it("cron: lý do ngoài nhóm an toàn thì giữ; học khu kẹt 'review' không có draft được thả", async () => {
+    expect(await autoTriage(db, today)).toMatchObject({ published: 0, rejected: 0, released: 0 });
+    expect(await status("SELECT status FROM schedules WHERE id = 10")).toBe("draft");
+    await db.batch([
+      db.prepare(
+        "INSERT INTO districts (id, nces_id, name, slug, state) VALUES (2, '0600002', 'No Year', 'no-year', 'CA')",
+      ),
+      db.prepare(
+        "INSERT INTO district_pipeline (district_id, status, last_run_key, last_run_at) VALUES (2, 'review', 'r1', '2026-11-12T00:00:00Z')",
+      ),
+    ]);
+    expect(await autoTriage(db, today)).toMatchObject({ released: 1 });
+    const pipeline = "SELECT status FROM district_pipeline WHERE district_id = ";
+    expect(await status(`${pipeline}2`)).toBe("no_schedule");
+    expect(await status(`${pipeline}1`)).toBe("review");
   });
 });

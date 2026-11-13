@@ -201,6 +201,8 @@ const AS_REPORTED_TEXT: Record<string, string> = {
   monotonic_step: "pay goes down from one step to the next",
   monotonic_lane: "a lane with more education pays less than a lower one",
   start_change: "starting pay changed by more than 20% from the previous year",
+  step_start: "the table starts above step 1",
+  school_year: "this is the most recent schedule we found; a newer one may exist",
 };
 
 function checkStatus(asReported: string[]): Html {
@@ -208,7 +210,7 @@ function checkStatus(asReported: string[]): Html {
     return html`Passed automated checks; not reviewed by a person. <a href="/methodology#checks">How we check</a>`;
   }
   const found = asReported.map((code) => AS_REPORTED_TEXT[code] ?? code).join("; ");
-  return html`Shown as the district reported it to the state. Our automated checks flagged values that look unusual (${found}); they have not been changed. <a href="/methodology#checks">How we check</a>`;
+  return html`Shown as the source published it. Our automated checks flagged values that look unusual (${found}); they have not been changed. <a href="/methodology#checks">How we check</a>`;
 }
 
 export function sourceBlock(

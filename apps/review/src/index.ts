@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { sameOriginPost } from "./origin";
+import { TRIAGE_PUBLISHED, TRIAGE_REJECTED, triage } from "./triage";
 
 export type Env = {
   DB: D1Database;
@@ -440,6 +441,141 @@ export function summaryStatements(
   ];
 }
 
+type DraftKey = {
+  id: number;
+  district_id: number;
+  school_year: string;
+  schedule_type: string;
+  title: string;
+};
+
+/** Publish một bảng draft: dùng chung cho nút "Duyệt" và tự phân loại (D-034). */
+function publishStatements(
+  db: D1Database,
+  s: DraftKey,
+  stamp: string,
+  resolution: string,
+  detail: string,
+): D1PreparedStatement[] {
+  return [
+    db
+      .prepare(
+        `UPDATE schedules SET status = 'superseded', superseded_by = ?1
+          WHERE district_id = ?2 AND school_year = ?3 AND schedule_type = ?4 AND title = ?5
+            AND status = 'published' AND id <> ?1`,
+      )
+      .bind(s.id, s.district_id, s.school_year, s.schedule_type, s.title),
+    db
+      .prepare(
+        "UPDATE schedules SET status = 'published', published_at = ? WHERE id = ? AND status = 'draft'",
+      )
+      .bind(stamp, s.id),
+    db
+      .prepare(
+        "UPDATE review_queue SET resolved_at = ?, resolution = ? WHERE schedule_id = ? AND resolved_at IS NULL",
+      )
+      .bind(stamp, resolution, s.id),
+    db
+      .prepare(
+        "UPDATE district_pipeline SET status = 'published', detail = ?, next_run_at = ? WHERE district_id = ?",
+      )
+      .bind(detail, plusDays(PUBLISHED_RETRY_DAYS), s.district_id),
+    ...summaryStatements(db, s.district_id, stamp),
+    db
+      .prepare(
+        `INSERT INTO cache_purge_queue (district_id, queued_at) VALUES (?, ?)
+         ON CONFLICT (district_id) DO UPDATE SET queued_at = excluded.queued_at`,
+      )
+      .bind(s.district_id, stamp),
+  ];
+}
+
+function rejectStatements(
+  db: D1Database,
+  scheduleId: number,
+  districtId: number,
+  stamp: string,
+  resolution: string,
+  detail: string,
+): D1PreparedStatement[] {
+  return [
+    db
+      .prepare(
+        "UPDATE review_queue SET resolved_at = ?, resolution = ? WHERE schedule_id = ? AND resolved_at IS NULL",
+      )
+      .bind(stamp, resolution, scheduleId),
+    db
+      .prepare(
+        "UPDATE district_pipeline SET status = 'no_schedule', detail = ?, next_run_at = ? WHERE district_id = ?",
+      )
+      .bind(detail, plusDays(REJECTED_RETRY_DAYS), districtId),
+  ];
+}
+
+/** Bảng draft xử lý mỗi lần cron chạy: giữ mỗi lần chạy nhỏ. */
+const TRIAGE_PER_RUN = 50;
+
+export type TriageResult = { published: number; rejected: number; kept: number; released: number };
+
+/**
+ * Tự phân loại hàng chờ (D-034): publish như nguồn hoặc loại các bảng chỉ vướng lý do an toàn;
+ * còn lại để người xem. Cũng trả về hàng chờ của pipeline các học khu kẹt ở trạng thái review mà
+ * không có bảng draft nào (không đọc được năm học): tìm lại sau 90 ngày.
+ */
+export async function autoTriage(db: D1Database, today = new Date()): Promise<TriageResult> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.id, s.district_id, s.school_year, s.schedule_type, s.title,
+              json_group_array(r.reason) AS reasons
+         FROM schedules s
+         JOIN review_queue r ON r.schedule_id = s.id AND r.resolved_at IS NULL
+        WHERE s.status = 'draft'
+          AND NOT EXISTS (SELECT 1 FROM review_queue x WHERE x.schedule_id = s.id
+                           AND x.resolution LIKE 'rejected%')
+          -- Chỉ lấy bảng mà mọi lý do còn mở đều thuộc nhóm tự xử lý được; triage() kiểm lại.
+          AND NOT EXISTS (SELECT 1 FROM review_queue o WHERE o.schedule_id = s.id
+                           AND o.resolved_at IS NULL
+                           AND o.reason NOT LIKE '[step_start]%'
+                           AND o.reason NOT LIKE '[school_year] Bảng năm %đã cũ%')
+        GROUP BY s.id
+        ORDER BY s.id
+        LIMIT ?1`,
+    )
+    .bind(TRIAGE_PER_RUN)
+    .all<DraftKey & { reasons: string }>();
+  const stamp = nowIso();
+  const statements: D1PreparedStatement[] = [];
+  const out: TriageResult = { published: 0, rejected: 0, kept: 0, released: 0 };
+  for (const row of results) {
+    const decision = triage(JSON.parse(row.reasons) as string[], today);
+    if (decision.kind === "publish") {
+      const detail = `Tự publish như nguồn ${row.school_year}`;
+      statements.push(...publishStatements(db, row, stamp, TRIAGE_PUBLISHED, detail));
+      out.published++;
+    } else if (decision.kind === "reject") {
+      const resolution = `${TRIAGE_REJECTED}: ${decision.reason}`;
+      const detail = `Tự loại: ${decision.reason}`;
+      statements.push(...rejectStatements(db, row.id, row.district_id, stamp, resolution, detail));
+      out.rejected++;
+    } else {
+      out.kept++;
+    }
+  }
+  statements.push(
+    db
+      .prepare(
+        `UPDATE district_pipeline SET status = 'no_schedule', next_run_at = ?
+          WHERE status = 'review' AND next_run_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = district_pipeline.district_id
+                             AND s.status = 'draft')`,
+      )
+      .bind(plusDays(REJECTED_RETRY_DAYS)),
+  );
+  const done = await db.batch(statements);
+  out.released = done[done.length - 1]?.meta.changes ?? 0;
+  return out;
+}
+
 app.post("/s/:id{[0-9]+}/approve", async (c) => {
   const id = Number(c.req.param("id"));
   const data = await loadSchedule(c.env.DB, id);
@@ -452,38 +588,15 @@ app.post("/s/:id{[0-9]+}/approve", async (c) => {
   )
     .bind(id)
     .first<{ n: number }>();
-  const db = c.env.DB;
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE schedules SET status = 'superseded', superseded_by = ?1
-          WHERE district_id = ?2 AND school_year = ?3 AND schedule_type = ?4 AND title = ?5
-            AND status = 'published' AND id <> ?1`,
-      )
-      .bind(id, s.district_id, s.school_year, s.schedule_type, s.title),
-    db
-      .prepare(
-        "UPDATE schedules SET status = 'published', published_at = ? WHERE id = ? AND status = 'draft'",
-      )
-      .bind(stamp, id),
-    db
-      .prepare(
-        "UPDATE review_queue SET resolved_at = ?, resolution = ? WHERE schedule_id = ? AND resolved_at IS NULL",
-      )
-      .bind(stamp, `approved (${edits?.n ?? 0} cell edits)`, id),
-    db
-      .prepare(
-        "UPDATE district_pipeline SET status = 'published', detail = ?, next_run_at = ? WHERE district_id = ?",
-      )
-      .bind(`Duyệt tay ${s.school_year}`, plusDays(PUBLISHED_RETRY_DAYS), s.district_id),
-    ...summaryStatements(db, s.district_id, stamp),
-    db
-      .prepare(
-        `INSERT INTO cache_purge_queue (district_id, queued_at) VALUES (?, ?)
-         ON CONFLICT (district_id) DO UPDATE SET queued_at = excluded.queued_at`,
-      )
-      .bind(s.district_id, stamp),
-  ]);
+  await c.env.DB.batch(
+    publishStatements(
+      c.env.DB,
+      { ...s, id },
+      stamp,
+      `approved (${edits?.n ?? 0} cell edits)`,
+      `Duyệt tay ${s.school_year}`,
+    ),
+  );
   c.executionCtx.waitUntil(drainPurgeQueue(c.env, 1));
   return c.redirect(`/s/${id}`, 303);
 });
@@ -497,14 +610,16 @@ app.post("/s/:id{[0-9]+}/reject", async (c) => {
   const reason = typeof form.reason === "string" ? form.reason.trim().slice(0, 500) : "";
   if (!reason) return c.text("Cần lý do.", 400);
   const stamp = nowIso();
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      "UPDATE review_queue SET resolved_at = ?, resolution = ? WHERE schedule_id = ? AND resolved_at IS NULL",
-    ).bind(stamp, `rejected: ${reason}`, id),
-    c.env.DB.prepare(
-      "UPDATE district_pipeline SET status = 'no_schedule', detail = ?, next_run_at = ? WHERE district_id = ?",
-    ).bind(`Loại khi xem tay: ${reason}`, plusDays(REJECTED_RETRY_DAYS), data.s.district_id),
-  ]);
+  await c.env.DB.batch(
+    rejectStatements(
+      c.env.DB,
+      id,
+      data.s.district_id,
+      stamp,
+      `rejected: ${reason}`,
+      `Loại khi xem tay: ${reason}`,
+    ),
+  );
   return c.redirect("/", 303);
 });
 
@@ -512,9 +627,17 @@ export default {
   fetch: app.fetch,
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(
-      drainPurgeQueue(env).then((r) => {
-        if (r.skipped || r.failed) console.warn("cache purge", JSON.stringify(r));
-      }),
+      autoTriage(env.DB)
+        .then((t) => {
+          if (t.published || t.rejected || t.released) {
+            console.log("auto-triage", JSON.stringify(t));
+          }
+        })
+        .catch((e) => console.error("auto-triage", e))
+        .then(() => drainPurgeQueue(env))
+        .then((r) => {
+          if (r.skipped || r.failed) console.warn("cache purge", JSON.stringify(r));
+        }),
     );
   },
 } satisfies ExportedHandler<Env>;
