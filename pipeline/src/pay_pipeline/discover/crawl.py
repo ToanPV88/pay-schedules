@@ -1,9 +1,10 @@
 """Discover (PLAN Công đoạn 5, bước 1): find salary-schedule documents on a district website.
 
-For one district: fetch the home page, follow links whose text or URL points to human
-resources, employment, salary or bargaining pages (same site only, depth ≤ 2, page budget), and
-read ``/sitemap.xml``. Every link to a document (PDF, Excel, Word, or a known document host) is a
-candidate with a score from its anchor text and URL. Nothing here calls a model; classification
+For one district: fetch the home page, read ``/sitemap.xml`` (and an index's first children),
+then follow links whose text or URL points to human resources, employment, salary or bargaining
+pages (same site only, depth ≤ 2, one level more for salary pages, page budget). Every link to a
+document (PDF, Excel, Word, or a known document host) is a candidate with a score from its
+anchor text and URL. Nothing here calls a model; classification
 of the downloaded file comes later (``documents.classify``).
 
 All requests go through a polite fetcher: robots.txt, per-host delay, size limit.
@@ -188,13 +189,52 @@ def sitemap_links(xml: str, limit: int = 20000) -> list[Link]:
     return [Link(u.replace("&amp;", "&"), "") for u in locs]
 
 
+SITEMAP_FILES = 4
+"""Sitemap files read per district: ``/sitemap.xml`` and, for an index, its first children."""
+SITEMAP_SEEDS = 10
+"""Pages named like salary pages taken from the sitemap into the crawl (D-027)."""
+DEEP_PRIORITY = 3.0
+"""A link this promising (salary or bargaining words) is followed one level deeper."""
+
+
+def sitemap_urls(fetcher: PoliteFetcher, home: str, errors: list[str]) -> list[str]:
+    """URLs listed in the site's sitemap; an index is followed (page sitemaps first)."""
+    queue = [urljoin(home, "/sitemap.xml")]
+    out: list[str] = []
+    read = 0
+    while queue and read < SITEMAP_FILES:
+        url = queue.pop(0)
+        try:
+            response = fetcher.get(url)
+        except FetchError as exc:
+            errors.append(f"{url}: {exc}"[:300])
+            continue
+        read += 1
+        ctype = response.headers.get("content-type", "")
+        if "xml" not in ctype and response.content[:5] != b"<?xml":
+            continue
+        text = response.content.decode("utf-8", errors="replace")
+        locs = [ln.url for ln in sitemap_links(text)]
+        if "<sitemapindex" in text[:3000].lower():
+            queue += sorted(locs, key=lambda u: (not re.search(r"page|post|content", u, re.I), u))
+        else:
+            out += locs
+    return out
+
+
 def discover(
     fetcher: PoliteFetcher,
     nces_id: str,
     website: str | None,
-    max_pages: int = 20,
+    max_pages: int = 25,
     max_depth: int = 2,
 ) -> Discovery:
+    """Best-first crawl of the district site for salary-schedule documents (D-027).
+
+    After the home page, the sitemap is read: documents in it are candidates, and pages whose
+    address looks like a salary page are crawled first. Links with salary or bargaining words
+    are followed one level deeper than ``max_depth``.
+    """
     if not website:
         return Discovery(nces_id, website, "no_website")
     result = Discovery(nces_id, website, "unreachable")
@@ -224,6 +264,18 @@ def discover(
         if depth == 0:
             result.status = "ok"
             home = response.final_url  # the site may redirect to another host
+            sitemap = urljoin(home, "/sitemap.xml")
+            pages: list[tuple[float, str]] = []
+            for u in sitemap_urls(fetcher, home, result.errors):
+                if is_document_url(u):
+                    add(Link(u, ""), sitemap, "sitemap")
+                elif same_site(u, home) and u not in seen:
+                    priority = score_page(Link(u, ""))
+                    if priority >= DEEP_PRIORITY:
+                        pages.append((priority, u))
+            for priority, u in sorted(pages, key=lambda x: (-x[0], x[1]))[:SITEMAP_SEEDS]:
+                seen.add(u)
+                frontier.append((priority + 2, 1, u))
         if not _is_html(response.headers.get("content-type", "")):
             if response.final_url.lower().endswith(DOC_EXTENSIONS):
                 add(Link(response.final_url, ""), url, "crawl")
@@ -232,21 +284,11 @@ def discover(
         for link in extract_links(html, response.final_url):
             if is_document_url(link.url):
                 add(link, response.final_url, "crawl")
-            elif depth < max_depth and link.url not in seen and same_site(link.url, home):
+            elif link.url not in seen and same_site(link.url, home):
                 priority = score_page(link)
-                if priority > 0:
+                deeper = depth < max_depth or (depth == max_depth and priority >= DEEP_PRIORITY)
+                if priority > 0 and deeper:
                     seen.add(link.url)
                     frontier.append((priority, depth + 1, link.url))
-    if result.status == "ok":
-        sitemap = urljoin(home, "/sitemap.xml")
-        try:
-            response = fetcher.get(sitemap)
-            ctype = response.headers.get("content-type", "")
-            if "xml" in ctype or response.content[:5] == b"<?xml":
-                for link in sitemap_links(response.content.decode("utf-8", errors="replace")):
-                    if is_document_url(link.url):
-                        add(Link(link.url, ""), sitemap, "sitemap")
-        except FetchError as exc:
-            result.errors.append(f"{sitemap}: {exc}"[:300])
     result.candidates = sorted(candidates.values(), key=lambda c: (-c.score, c.url))
     return result
