@@ -204,6 +204,37 @@ def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
     return known
 
 
+MAX_SHARDS = 20  # GitHub Free runs at most 20 jobs at once
+
+
+def website_host(website: str | None) -> str | None:
+    """Host of a district website without ``www.``; None when there is no usable URL."""
+    if not website:
+        return None
+    url = website if "://" in website else f"https://{website}"
+    host = (urlsplit(url).hostname or "").lower()
+    return host.removeprefix("www.") or None
+
+
+def shard_queue(rows: list[dict[str, Any]], shards: int) -> list[list[dict[str, Any]]]:
+    """Split the queue into ``shards`` parts that can run in parallel jobs.
+
+    Every district on one website host goes to the same part, so the per-host throttle inside
+    one job still covers every request to that host (no two jobs hit one site at once). Parts
+    are filled greedily, smallest first, in queue order (largest districts first).
+    """
+    if not 1 <= shards <= MAX_SHARDS:
+        raise ValueError(f"shards must be 1-{MAX_SHARDS}")
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        host = website_host(str(row["website"]) if row.get("website") else None)
+        groups.setdefault(host or f"nces:{row['nces_id']}", []).append(row)
+    parts: list[list[dict[str, Any]]] = [[] for _ in range(shards)]
+    for group in groups.values():
+        min(parts, key=len).extend(group)
+    return parts
+
+
 def gather_one(
     item: QueueItem,
     fetcher: PoliteFetcher,

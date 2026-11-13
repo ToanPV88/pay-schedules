@@ -704,3 +704,60 @@ class TestReader:
         assert len(tables) == 1
         assert [r.label for r in tables[0].rows] == ["1", "2", "3", "6", "7"]
         assert tables[0].grid[-2] == [None, 57500]
+
+
+class TestShards:
+    def _rows(self) -> list[dict[str, Any]]:
+        return [
+            {"nces_id": "1", "website": "https://www.big.k12.ca.us/"},
+            {"nces_id": "2", "website": "http://big.k12.ca.us/hr"},
+            {"nces_id": "3", "website": "small.org"},
+            {"nces_id": "4", "website": None},
+            {"nces_id": "5", "website": "https://other.net"},
+        ]
+
+    def test_host(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import website_host
+
+        assert website_host("https://WWW.Big.k12.ca.us/x") == "big.k12.ca.us"
+        assert website_host("small.org") == "small.org"
+        assert website_host(None) is None
+        assert website_host("") is None
+
+    def test_same_host_same_shard_and_nothing_lost(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import shard_queue
+
+        parts = shard_queue(self._rows(), 3)
+        assert len(parts) == 3
+        ids = [r["nces_id"] for p in parts for r in p]
+        assert sorted(ids) == ["1", "2", "3", "4", "5"]
+        holder = [i for i, p in enumerate(parts) if any(r["nces_id"] == "1" for r in p)]
+        assert any(r["nces_id"] == "2" for r in parts[holder[0]])
+        assert max(len(p) for p in parts) - min(len(p) for p in parts) <= 2
+
+    def test_one_shard_keeps_order(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import shard_queue
+
+        assert [r["nces_id"] for r in shard_queue(self._rows(), 1)[0]] == ["1", "2", "3", "4", "5"]
+
+    def test_bounds(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import MAX_SHARDS, shard_queue
+
+        with pytest.raises(ValueError):
+            shard_queue([], 0)
+        with pytest.raises(ValueError):
+            shard_queue([], MAX_SHARDS + 1)
+
+    def test_cli_writes_parts(self, tmp_path: Path) -> None:
+        from pay_pipeline.cli import main
+
+        q = tmp_path / "queue.json"
+        q.write_text(json.dumps([{"results": self._rows()}]), encoding="utf-8")
+        assert (
+            main(
+                ["pdf-shard", "--queue", str(q), "--shards", "2", "--out-dir", str(tmp_path / "s")]
+            )
+            == 0
+        )
+        parts = [json.loads((tmp_path / "s" / f"queue-{i}.json").read_text()) for i in range(2)]
+        assert sum(len(p) for p in parts) == 5

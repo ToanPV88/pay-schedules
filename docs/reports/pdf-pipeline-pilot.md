@@ -96,7 +96,7 @@ Học khu đã có bảng từ file của bang (CA, KY) không vào hàng đợi
 
 - Lô: `pdf-pipeline.yml`, chạy bằng cách đẩy lên `run/pdf-pipeline-preview` hoặc
   `run/pdf-pipeline-production` (tham số trong `pipeline/pdf-pipeline-run.json`: `limit`, `state`,
-  `rerun`). Production chỉ chạy từ commit đã có trên `main`.
+  `rerun`, `shards`, `deadline_minutes`; chạy song song theo D-030). Production chỉ chạy từ commit đã có trên `main`.
 - Điểm lưu: bảng `district_pipeline`; lô sau bỏ qua học khu chưa đến hạn chạy lại (ví dụ `no_schedule`
   90 ngày, `published` 180 ngày, `review` chờ người).
 - Trang xem tay: Worker `pay-schedules-review` (HTTP Basic, secret `REVIEW_PASSWORD`, D-021). Duyệt một

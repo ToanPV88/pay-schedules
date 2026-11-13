@@ -7,6 +7,9 @@
 # - Tài liệu tải về và báo cáo lưu vào Release `docs-<target>-<ngày>-<run>`; job `archive` chỉ có
 #   quyền ghi Release, không ra Internet, không dùng secret.
 # - Điểm lưu: bảng `district_pipeline` trong D1; lô sau bỏ qua học khu đã xử lý đến hạn chạy lại.
+# - Chạy song song (D-030): job `plan` đọc hàng đợi một lần rồi chia `shards` lô theo host website
+#   (một website chỉ ở một lô, nên không có hai job cùng gõ một site). Mỗi lô một job `run`, một
+#   Release `<tag>-s<i>`; job `load` nạp SQL từng lô lần lượt vào D1.
 name: PDF pipeline
 
 on:
@@ -26,6 +29,12 @@ on:
       state:
         description: "Chỉ một bang (mã 2 chữ), để trống = mọi bang"
         default: ""
+      shards:
+        description: "Số lô chạy song song (1-20)"
+        default: "1"
+      deadline:
+        description: "Phút tối đa để bắt đầu học khu mới trong mỗi lô"
+        default: "45"
   push:
     branches: ["run/pdf-pipeline-preview", "run/pdf-pipeline-production"]
 
@@ -42,13 +51,17 @@ env:
   LIMIT: ${{ inputs.limit }}
   RERUN: ${{ inputs.rerun }}
   ONLY_STATE: ${{ inputs.state }}
+  SHARDS: ${{ inputs.shards }}
+  DEADLINE: ${{ inputs.deadline }}
 
 jobs:
-  run:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 20
     outputs:
       tag: ${{ steps.key.outputs.tag }}
+      shards: ${{ steps.split.outputs.shards }}
+      deadline: ${{ steps.key.outputs.deadline }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,22 +73,23 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             cfg=pipeline/pdf-pipeline-run.json
-            LIMIT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["limit"])' "$cfg")
-            RERUN=$(python3 -c 'import json,sys; print(",".join(json.load(open(sys.argv[1])).get("rerun", [])))' "$cfg")
-            ONLY_STATE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$cfg")
-            { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; } >> "$GITHUB_ENV"
+            get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]); print(",".join(v) if isinstance(v, list) else v)' "$cfg" "$1" "$2"; }
+            LIMIT=$(get limit 100); RERUN=$(get rerun ""); ONLY_STATE=$(get state "")
+            SHARDS=$(get shards 1); DEADLINE=$(get deadline_minutes 45)
           fi
           [[ "$TARGET" =~ ^(preview|production)$ ]] || { echo "::error::target sai"; exit 1; }
-          [[ "$LIMIT" =~ ^[0-9]{1,4}$ ]] || { echo "::error::limit phải là số"; exit 1; }
+          [[ "$LIMIT" =~ ^[0-9]{1,5}$ ]] || { echo "::error::limit phải là số"; exit 1; }
           [[ -z "$RERUN" || "$RERUN" =~ ^[a-z_]+(,[a-z_]+)*$ ]] || { echo "::error::rerun sai"; exit 1; }
           [[ -z "$ONLY_STATE" || "$ONLY_STATE" =~ ^[A-Z]{2}$ ]] || { echo "::error::state sai"; exit 1; }
+          [[ "$SHARDS" =~ ^[0-9]{1,2}$ ]] && (( SHARDS >= 1 && SHARDS <= 20 )) || { echo "::error::shards 1-20"; exit 1; }
+          [[ "$DEADLINE" =~ ^[0-9]{1,3}$ ]] && (( DEADLINE >= 1 && DEADLINE <= 270 )) || { echo "::error::deadline 1-270"; exit 1; }
           if [ "$TARGET" = production ]; then
             git fetch --quiet origin main
             git merge-base --is-ancestor HEAD origin/main || { echo "::error::production chỉ từ main"; exit 1; }
           fi
           tag="docs-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "TAG=$tag" >> "$GITHUB_ENV"
+          { echo "tag=$tag"; echo "deadline=$DEADLINE"; } >> "$GITHUB_OUTPUT"
+          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; } >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -85,8 +99,6 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils
           npm ci --no-audit --no-fund
           (cd pipeline && uv sync --locked --no-dev)
       - name: Read queue from D1
@@ -95,6 +107,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          mkdir -p "$GITHUB_WORKSPACE/inputs"
           filter=""
           if [ -n "$ONLY_STATE" ]; then filter="AND d.state = '$ONLY_STATE'"; fi
           rerun="'-'"
@@ -102,31 +115,69 @@ jobs:
           now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND (p.district_id IS NULL OR p.status IN ($rerun) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status IN ('published', 'draft')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
-            > "$GITHUB_WORKSPACE/queue.json"
+            > "$GITHUB_WORKSPACE/inputs/queue.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT DISTINCT d.url, d.sha256, e.model FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \
-            > "$GITHUB_WORKSPACE/known.json"
+            > "$GITHUB_WORKSPACE/inputs/known.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT nces_id, state, name, active FROM districts WHERE nces_id IS NOT NULL" \
-            > "$GITHUB_WORKSPACE/catalog.json"
+            > "$GITHUB_WORKSPACE/inputs/catalog.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT d.nces_id, s.school_year, s.schedule_type, s.title, (SELECT c.amount_cents FROM cells c JOIN steps t ON t.id = c.step_id LEFT JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = s.id AND t.position = 1 AND c.amount_cents IS NOT NULL ORDER BY l.position LIMIT 1) AS start_cents FROM schedules s JOIN districts d ON d.id = s.district_id WHERE s.status = 'published' AND s.schedule_type = 'teacher'" \
-            > "$GITHUB_WORKSPACE/published.json"
+            > "$GITHUB_WORKSPACE/inputs/published.json"
+      - name: Split queue
+        id: split
+        working-directory: pipeline
+        run: |
+          uv run pay-pipeline pdf-shard --queue "$GITHUB_WORKSPACE/inputs/queue.json" \
+            --shards "$SHARDS" --out-dir "$GITHUB_WORKSPACE/inputs" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "shards=$(python3 -c 'import json,sys; print(json.dumps([str(i) for i in range(int(sys.argv[1]))]))' "$SHARDS")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: inputs
+          path: inputs/
+          retention-days: 7
+          if-no-files-found: error
+
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}-s${{ matrix.shard }}
+      SHARD: ${{ matrix.shard }}
+      DEADLINE: ${{ needs.plan.outputs.deadline }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+          (cd pipeline && uv sync --locked --no-dev)
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: inputs
+          path: inputs
       - name: Discover, fetch, classify
         working-directory: pipeline
         run: |
-          uv run pay-pipeline pdf-gather --queue "$GITHUB_WORKSPACE/queue.json" \
-            --known "$GITHUB_WORKSPACE/known.json" --out "$GITHUB_WORKSPACE/work" --deadline-minutes 45
+          uv run pay-pipeline pdf-gather --queue "$GITHUB_WORKSPACE/inputs/queue-$SHARD.json" \
+            --known "$GITHUB_WORKSPACE/inputs/known.json" --out "$GITHUB_WORKSPACE/work" --deadline-minutes "$DEADLINE"
       - name: Read schedules
         working-directory: pipeline
         run: uv run pay-pipeline pdf-extract --work "$GITHUB_WORKSPACE/work"
       - name: Validate and build SQL
         working-directory: pipeline
-        env:
-          RUN_ID: ${{ github.run_id }}
         run: |
           uv run pay-pipeline pdf-build --work "$GITHUB_WORKSPACE/work" \
-            --catalog "$GITHUB_WORKSPACE/catalog.json" --published "$GITHUB_WORKSPACE/published.json" \
+            --catalog "$GITHUB_WORKSPACE/inputs/catalog.json" --published "$GITHUB_WORKSPACE/inputs/published.json" \
             --release-tag "$TAG" --run-key "$TAG" \
             --sql "$GITHUB_WORKSPACE/work/pipeline.sql" --report "$GITHUB_WORKSPACE/work/report.md"
           cat "$GITHUB_WORKSPACE/work/report.md" >> "$GITHUB_STEP_SUMMARY"
@@ -134,7 +185,7 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/work/extractions.json" ]; then cp "$GITHUB_WORKSPACE/work/extractions.json" "$GITHUB_WORKSPACE/work/docs/"; fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: work
+          name: work-${{ matrix.shard }}
           path: |
             work/docs/
             work/pipeline.sql
@@ -142,30 +193,36 @@ jobs:
           if-no-files-found: error
 
   archive:
-    needs: run
+    needs: [plan, run]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: work
+          pattern: work-*
           path: work
-      - name: Create release
+      - name: Create releases
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          TAG: ${{ needs.run.outputs.tag }}
+          TAG: ${{ needs.plan.outputs.tag }}
         run: |
-          gh release create "$TAG" work/docs/* --repo "$REPO" --title "$TAG" \
-            --notes "Tài liệu học khu và báo cáo của pipeline PDF (${TARGET})." --prerelease
-          echo "Release: $TAG" >> "$GITHUB_STEP_SUMMARY"
+          for dir in work/work-*; do
+            [ -f "$dir/pipeline.sql" ] || continue
+            shard="${dir##*-}"
+            gh release create "$TAG-s$shard" "$dir"/docs/* --repo "$REPO" --title "$TAG-s$shard" \
+              --notes "Tài liệu học khu và báo cáo của pipeline PDF (${TARGET}), lô $shard." --prerelease
+            echo "Release: $TAG-s$shard" >> "$GITHUB_STEP_SUMMARY"
+          done
 
   load:
-    needs: [run, archive]
+    needs: [plan, archive]
+    if: ${{ !cancelled() && needs.archive.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -175,7 +232,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: work
+          pattern: work-*
           path: work
       - name: Load into D1
         working-directory: apps/web
@@ -183,7 +240,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
-          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/work/pipeline.sql"
+          for sql in "$GITHUB_WORKSPACE"/work/work-*/pipeline.sql; do
+            [ -f "$sql" ] || continue
+            echo "Nạp $sql"
+            npx wrangler d1 execute "$db" $flag --remote --file "$sql"
+          done
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT status, COUNT(*) AS districts FROM district_pipeline GROUP BY status ORDER BY 2 DESC" \
             > "$GITHUB_WORKSPACE/after.json"
