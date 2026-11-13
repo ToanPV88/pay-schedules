@@ -14,10 +14,7 @@ export const TRIAGE_REJECTED = "rejected: auto-triage (D-034)";
 const CODE = /^\[([a-z_]+)\]/;
 const OLD_YEAR = /^\[school_year\] Bảng năm (\d{4})-\d{2} đã cũ/;
 
-export type Decision =
-  | { kind: "publish" }
-  | { kind: "reject"; reason: string }
-  | { kind: "keep" };
+export type Decision = { kind: "publish" } | { kind: "reject"; reason: string } | { kind: "keep" };
 
 /** Năm bắt đầu của năm học hiện tại: từ tháng 7 là năm học mới (như pipeline). */
 export function currentSchoolYearStart(today: Date): number {
