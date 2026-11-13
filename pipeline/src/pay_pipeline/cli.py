@@ -138,6 +138,16 @@ def _cmd_pdf_gather(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_pdf_shard(args: argparse.Namespace) -> int:
+    parts = pdf_gather.shard_queue(_wrangler_rows(Path(args.queue)), args.shards)
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for i, part in enumerate(parts):
+        (out / f"queue-{i}.json").write_text(json.dumps(part, ensure_ascii=False), encoding="utf-8")
+    print("học khu mỗi lô: " + ", ".join(str(len(p)) for p in parts))
+    return 0
+
+
 def _cmd_pdf_extract(args: argparse.Namespace) -> int:
     work_dir = Path(args.work)
     results = pdf_run.read_all(pdf_gather.load_work(work_dir), work_dir)
@@ -227,6 +237,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--deadline-minutes", type=float, default=40)
     p.set_defaults(func=_cmd_pdf_gather)
+
+    p = sub.add_parser("pdf-shard", help="Pipeline PDF: chia hàng đợi thành lô chạy song song")
+    p.add_argument("--queue", required=True, help="JSON hàng đợi từ D1 (wrangler --json)")
+    p.add_argument("--shards", type=int, required=True)
+    p.add_argument("--out-dir", required=True, help="Thư mục ghi queue-<i>.json")
+    p.set_defaults(func=_cmd_pdf_shard)
 
     p = sub.add_parser("pdf-extract", help="Pipeline PDF: đọc bảng lương (tất định, không API)")
     p.add_argument("--work", required=True)

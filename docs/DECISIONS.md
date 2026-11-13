@@ -658,3 +658,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   là một ngạch riêng. Kết quả trên CA/KY và bộ chuẩn PDF không đổi.
 - Số lạ của chính nguồn (vd. Yukon 2024-25: NBCT Bach. bậc 22 là 94,966 giữa 64,320 và 65,611) được
   publish như nguồn theo D-028, trang web ghi rõ.
+
+## D-030: Pipeline PDF chạy song song theo lô
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý (chạy toàn quốc trong lúc repo để public, Actions miễn phí).
+- `pdf-pipeline.yml` tách thành `plan` → `run` (matrix, tối đa 20 lô, giới hạn đồng thời của gói
+  Free) → `archive` → `load`. `plan` đọc hàng đợi D1 một lần; `pdf-shard` chia theo host website
+  (bỏ `www.`): mọi học khu cùng một host ở cùng một lô, nên throttle theo host trong một job vẫn
+  phủ mọi request tới host đó, không có hai job cùng gõ một site.
+- Mỗi lô một Release `<tag>-s<i>` và `run_key` riêng. `load` nạp SQL từng lô lần lượt; lô lỗi
+  không chặn lô khác. Học khu chưa kịp bắt đầu trước hạn (`deadline_minutes`, tối đa 270) giữ
+  nguyên trạng thái hàng đợi cho lần sau, như trước.
+- Tham số trong `pipeline/pdf-pipeline-run.json`: thêm `shards` (mặc định 1) và
+  `deadline_minutes` (mặc định 45). `limit` cho phép tới 5 chữ số.
