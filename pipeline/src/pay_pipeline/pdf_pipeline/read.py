@@ -63,6 +63,9 @@ _LETTER = re.compile(r"^([A-Z])\1?(?:&[A-Z]{1,2})?$")
 _PLACEMENT = re.compile(r"^[\d,\-–+]+$")
 _CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
 _NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,4}\)?\**$")
+# Figures that sit beside the annual amounts without being one: a daily rate ("336.90"), a stipend
+# below MIN_AMOUNT ("2,500", Garland ISD's retention allotment) or an empty cell ("-").
+_SIDE = re.compile(r"^(?:\(?\$?\d[\d,]*\.\d{1,4}\)?\**|\$?\d,\d{3}|-|–|—|--)$")
 _TITLE = re.compile(
     r"salary|salaries|schedule|district|schools?\b|board|approved|adopted|effective|revised|"
     r"unified|county|fiscal|\b20\d\d\b",
@@ -233,7 +236,7 @@ def parse_row(line: Line, index: int) -> Row | None:
     amounts: list[tuple[float, float, float]] = []
     for w in words[first:]:
         value = money(w.text)
-        if amounts and not _NUMBER.match(w.text) and value is None:
+        if amounts and not _SIDE.match(w.text) and value is None:
             # Text far to the right of the amounts (a side box or footnote on the same line)
             # ends the row; text close to them means the line is not a plain table row.
             width = statistics.median(x1 - x0 for x0, x1, _ in amounts)
@@ -241,8 +244,8 @@ def parse_row(line: Line, index: int) -> Row | None:
                 break
         if value is not None:
             amounts.append((w.x0, w.x1, value))
-        elif _NUMBER.match(w.text):
-            continue  # a daily, hourly or monthly figure printed beside the annual one
+        elif _SIDE.match(w.text):
+            continue  # a daily, hourly or monthly figure, or a stipend, beside the annual one
         elif w.text[:1] in "*†‡":
             continue  # a footnote marker such as "*2024-25" after the row
         elif w.text.strip("*") != label.strip("*") and not re.fullmatch(r"[*†‡]+|\d{1,2}", w.text):
