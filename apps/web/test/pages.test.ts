@@ -179,7 +179,7 @@ describe("bảng của tệp nguồn của bang (D-028)", () => {
       .bind(a.scheduleId)
       .run();
     const html = await page("/test-state/test-valley-unified");
-    expect(html).toContain("Shown as the district reported it to the state");
+    expect(html).toContain("Shown as the source published it");
     expect(html).toContain("pay goes down from one step to the next");
     expect(html).not.toContain("Passed automated checks");
   });

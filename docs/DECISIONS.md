@@ -715,3 +715,23 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   thiếu (một Release đã có đủ từng tệp thì không thêm docs.tar).
 - `pdf-pipeline-resume.yml` lưu Release và nạp D1 lại cho một lượt đã xong bước `run`, từ artifact
   của lượt đó (giữ 7 ngày); tham số trong `pipeline/pdf-pipeline-resume.json`.
+
+## D-034: Tự phân loại hàng chờ xem tay
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý. Sau lượt toàn quốc, hàng chờ có 232 bảng; chủ dự án không
+  duyệt tay hết được.
+- Worker xem tay (`apps/review`) chạy `autoTriage` mỗi lần cron (10 phút), tối đa 50 bảng mỗi lần.
+  Chỉ xét bảng draft mà mọi lý do còn mở đều thuộc nhóm an toàn:
+  - `[step_start]` (bảng bắt đầu ở bậc cao), khi không kèm `[double_extraction]`: hai bộ đọc cùng
+    thấy bảng bắt đầu ở đó, nên đó là cách nguồn in. Publish như nguồn.
+  - `[school_year] Bảng năm ... đã cũ` của pipeline PDF: năm học bắt đầu trong 3 năm trước năm học
+    hiện tại thì publish như nguồn (trang web ghi năm và nói có thể có bảng mới hơn); cũ hơn thì
+    loại, học khu được tìm lại sau 90 ngày. Kiểm tra cùng mã "cũ hơn bảng đang published" không
+    thuộc nhóm này.
+- Publish dùng chung câu lệnh với nút "Duyệt"; resolution `as reported: auto-triage (D-034)`, nên
+  trang web hiện mã kiểm tra như bảng publish như nguồn của D-028. Loại thì resolution bắt đầu bằng
+  `rejected: auto-triage (D-034)`; lần nhập sau không mở lại (như loại tay).
+- Học khu kẹt trạng thái `review` mà không có bảng draft (không đọc được năm học) được chuyển sang
+  `no_schedule`, tìm lại sau 90 ngày, thay vì nằm im mãi.
+- Câu trên trang web đổi thành "Shown as the source published it" vì giờ áp dụng cả cho bảng đọc từ
+  website học khu, không chỉ tệp của bang.
