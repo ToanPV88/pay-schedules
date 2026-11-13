@@ -957,6 +957,17 @@ class TestSeeds:
         assert works[0].status == "found"
         assert works[0].website == f"{SITE}/"
 
+    def test_seed_page_without_files_is_crawled(self, tmp_path: Path) -> None:
+        from dataclasses import replace
+
+        # The hand-found page links only to the HR page, which holds the schedule.
+        item = replace(QUEUE[1], seeds=(f"{SITE}/",))
+        works = gather(
+            [item], tmp_path, {}, UA, workers=1, transport=site_transport(),
+            sleep=lambda _: None,
+        )  # fmt: skip
+        assert works[0].status == "found"
+
     def test_seed_page_tries_its_files(self, tmp_path: Path) -> None:
         from dataclasses import replace
 

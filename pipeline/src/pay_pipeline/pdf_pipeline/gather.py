@@ -217,6 +217,7 @@ MAX_SHARDS = 20  # GitHub Free runs at most 20 jobs at once
 SEED_SCORE = 100.0
 SEED_SOURCE = "schedule-urls.csv"
 MAX_SEED_PAGE_DOCS = 6  # files tried from one hand-found page
+SEED_CRAWL_PAGES = 8  # pages crawled from a hand-found page that links to no file
 
 
 def load_seeds(path: Path | None) -> dict[str, tuple[str, ...]]:
@@ -341,6 +342,17 @@ def gather_one(
                         Candidate(u, response.final_url, "", "manual", SEED_SCORE) for u in files
                     ]
                     if files:
+                        continue
+                    # No file on the page itself (Fairfax, Loudoun: the schedules sit on pages it
+                    # links to): crawl a few pages from it, like a district website.
+                    seed_budget = 0
+                    found = discover(
+                        fetcher, item.nces_id, response.final_url, max_pages=SEED_CRAWL_PAGES
+                    )
+                    work.pages_fetched += found.pages_fetched
+                    deeper = [c for c in found.candidates if c.score >= MIN_CANDIDATE_SCORE]
+                    pending[0:0] = deeper[:MAX_SEED_PAGE_DOCS]
+                    if deeper:
                         continue
                 # A document landing page (Finalsite "/documents/.../123456", viewers): follow the
                 # best file link on it, one hop only.

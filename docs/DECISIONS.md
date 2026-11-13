@@ -788,7 +788,8 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - `pipeline/sources/schedule-urls.csv` (`nces_id,url,note`): link tìm bằng tay tới tệp bảng lương
   hoặc trang "salary schedules" chính thức của học khu (không dùng bản chép của bên thứ ba).
   Học khu có link thì pipeline bỏ bước crawl, tải thẳng link (trang HTML thì thử lần lượt tối đa 6
-  tệp trên trang, xếp theo độ giống bảng lương của chữ trên link: lô 1 cho thấy chỉ lấy tệp đầu thì
+  tệp trên trang, xếp theo độ giống bảng lương của chữ trên link; trang không có tệp nào thì crawl
+  tối đa 8 trang từ đó như một website học khu. Lô 1 cho thấy chỉ lấy tệp đầu thì
   hay trúng bảng hiệu trưởng hoặc bảng nhân viên); robots.txt của host tài liệu vẫn được tuân thủ.
   Thư hiệp hội giáo viên (bên ký hợp đồng lương với học khu) được dùng khi học khu không đăng.
 - `pdf-pipeline-run.json` có `seeded_only: true` để chạy riêng các học khu trong tệp, mọi trạng thái.
