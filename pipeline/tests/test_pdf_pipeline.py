@@ -32,7 +32,7 @@ from pay_pipeline.discover.crawl import (
 from pay_pipeline.documents.classify import classify, school_years
 from pay_pipeline.pdf_pipeline import extract as ex
 from pay_pipeline.pdf_pipeline import read as rd
-from pay_pipeline.pdf_pipeline.gather import QueueItem, gather, load_work
+from pay_pipeline.pdf_pipeline.gather import QueueItem, gather, load_work, website_variants
 from pay_pipeline.pdf_pipeline.run import pipeline_sql, prepare, read_all, render_report
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.schedules.state_import import CatalogDistrict
@@ -931,6 +931,31 @@ class TestSeeds:
         assert works[0].status == "found"
         assert works[0].candidates[0]["method"] == "manual"
         assert not any(u.startswith("https://empty.example.invalid/") for u in seen)
+
+    def test_old_http_address_falls_back_to_https(self, tmp_path: Path) -> None:
+        from dataclasses import replace
+
+        assert website_variants("http://www.old.example.invalid/") == [
+            "http://www.old.example.invalid/",
+            "https://www.old.example.invalid/",
+            "https://old.example.invalid/",
+            "http://old.example.invalid/",
+        ]
+
+        # NCES lists http://; that server does not answer, the https one does.
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if url.startswith("http://"):
+                raise httpx.ConnectError("refused", request=request)
+            return ROUTES.get(url, httpx.Response(404))
+
+        item = replace(QUEUE[0], website=SITE.replace("https://", "http://") + "/")
+        works = gather(
+            [item], tmp_path, {}, UA, workers=1, transport=httpx.MockTransport(handler),
+            sleep=lambda _: None,
+        )  # fmt: skip
+        assert works[0].status == "found"
+        assert works[0].website == f"{SITE}/"
 
     def test_seed_page_tries_its_files(self, tmp_path: Path) -> None:
         from dataclasses import replace

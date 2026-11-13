@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -260,6 +260,34 @@ def shard_queue(rows: list[dict[str, Any]], shards: int) -> list[list[dict[str, 
     return parts
 
 
+def website_variants(website: str) -> list[str]:
+    """The listed address, then https and with/without "www." (NCES still lists many old
+    ``http://www.`` addresses whose server no longer answers)."""
+    parts = urlsplit(website if "://" in website else f"https://{website}")
+    host = parts.netloc
+    other = host[4:] if host.startswith("www.") else f"www.{host}"
+    out = [website]
+    for scheme, netloc in (("https", host), ("https", other), (parts.scheme, other)):
+        url = urlunsplit((scheme, netloc, parts.path or "/", parts.query, ""))
+        if url not in out:
+            out.append(url)
+    return out
+
+
+def reachable_website(fetcher: PoliteFetcher, website: str | None) -> str | None:
+    """First variant of ``website`` whose robots.txt can be retrieved.
+
+    A robots.txt that cannot be fetched (network error, 5xx) means "disallowed" (RFC 9309), so
+    the listed address is kept when no variant answers; the check is still the fetcher's.
+    """
+    if not website:
+        return website
+    for url in website_variants(website):
+        if fetcher.robots.check(url).reachable:
+            return url
+    return website
+
+
 def gather_one(
     item: QueueItem,
     fetcher: PoliteFetcher,
@@ -275,7 +303,10 @@ def gather_one(
         picked = [Candidate(u, SEED_SOURCE, "", "manual", SEED_SCORE) for u in item.seeds]
         work.candidates = [asdict(c) for c in picked]
     else:
-        found = discover(fetcher, item.nces_id, item.website, max_pages=max_pages)
+        website = reachable_website(fetcher, item.website)
+        if website != item.website:
+            work.website = website
+        found = discover(fetcher, item.nces_id, website, max_pages=max_pages)
         work.pages_fetched = found.pages_fetched
         work.candidates = [asdict(c) for c in found.candidates[:KEEP_CANDIDATES]]
         if found.status != "ok":
