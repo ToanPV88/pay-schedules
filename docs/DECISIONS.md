@@ -578,3 +578,30 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Migration nằm trong `packages/db/**` nên vẫn được áp lên preview và production như trước.
 - Quy ước làm việc: trước mỗi việc tốn phút Actions (đẩy commit lên PR, chạy pipeline, nhập dữ liệu,
   chạy lại workflow), Claude báo ước tính số phút và chờ chủ dự án đồng ý.
+
+## D-026: Bộ đọc PDF @5: gom dòng theo chiều cao chữ, bậc đặt tên bằng chữ cái, chọn bảng năm học chuẩn
+
+- Ngày: 2026-11-13. Claude quyết, sau khi đo trên 38 tài liệu của lô production đầu
+  (`docs-production-20261112-43271718628`) và bộ chuẩn 30 bảng, tại máy (không tốn phút Actions).
+- Bộ đọc lên phiên bản 5 (`pdfplumber-words@5`, `layout-text@5`, `xlsx-cells@5`, `docx-cells@5`):
+  tài liệu đã đọc bằng @4 sẽ được đọc lại ở lô sau.
+  - pdfplumber: chữ của một hàng có thể lệch vài điểm theo chiều dọc (nhãn bậc đặt thấp hơn số tiền,
+    Mobile County). Chữ bắt đầu trong khoảng 40% chiều cao của chữ đầu dòng thì thuộc cùng dòng
+    (trước: cố định 2,5 điểm).
+  - Bậc đặt tên bằng chữ cái (`C`…`Z`, `AA`, `T&U`; Florida, Maryland) là nhãn bậc; thứ tự chữ cái
+    dùng như thứ tự số. Bậc chữ cái không có số năm kinh nghiệm.
+  - Khi bảng đầu tiên ghi lịch làm việc ngoài năm học chuẩn của giáo viên (175–200 ngày, ví dụ
+    240/260 ngày) và một bảng sau ghi năm học chuẩn, chọn bảng sau.
+  - Chỉ bộ đọc thứ hai thấy bảng: dùng lần đọc đó và chuyển xem tay (`double_extraction`) thay vì bỏ
+    học khu là "không có bảng".
+- Kiểm tra mới:
+  - `flat_schedule` (chỉ cho bảng đọc từ website): mọi ô cùng một số tiền từ 3 bậc trở lên, chờ xem
+    tay (đúng với một số nguồn như bảng thưởng hiệu suất của Volusia, nhưng cũng giống cột đọc sai).
+  - `lane_label`: nhãn lane chỉ còn một chữ chung (`RANK`, `CLASS`, `LANE`, `COLUMN`…), tức tên lane
+    đã mất khi đọc.
+- Kết quả: bộ chuẩn không đổi (24 publish, 6 xem tay, 2560/2560 ô đúng, 0 bảng sai lọt Validate). Trên
+  38 tài liệu của lô production: 3 học khu chuyển từ "không có bảng" sang chờ xem tay (Mobile County,
+  Collier, Volusia); không học khu nào đổi kết quả khác.
+- Chưa làm (cần cách đọc riêng, ít học khu): bảng xoay ngang (lane theo hàng, bậc theo cột: Knox),
+  mỗi bậc nhiều dòng thành phần (Seattle), nhiều bảng nhỏ đặt cạnh nhau lặp nhãn bậc (Frederick,
+  Hawaii có mã ô trước mỗi số), sổ lương Excel theo tháng (Wake).

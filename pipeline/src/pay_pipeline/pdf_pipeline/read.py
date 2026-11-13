@@ -9,8 +9,9 @@ Two independent readers turn a page into lines of positioned words:
 Both feed the same table finder:
 
 1. A **data row** is a line that starts with a step label (``1``, ``31+``, ``0-3 Years``,
-   ``Step 4``) followed by amounts in the range of annual pay. A line of amounts without a label
-   right under a data row continues it (schedules printed on two lines per step).
+   ``Step 4``, or a letter: ``C``, ``AA``, ``T&U``) followed by amounts in the range of annual
+   pay. A line of amounts without a label right under a data row continues it (schedules
+   printed on two lines per step).
 2. Consecutive data rows form a table; a step label that does not grow, or two non-data lines in
    a row, end it.
 3. **Columns** are found by clustering the right edges of the amounts (numbers are right
@@ -19,10 +20,11 @@ Both feed the same table finder:
 4. **Lane labels** are the header words above the first row, placed in the nearest column.
 
 The teacher table is the largest table with teacher words near it (and no classified or
-administrator words), preferring the first one in the document. The result uses the same JSON
-shape as the extraction schema (``extract.to_draft``), so validation and storage are shared with
-every other source. Comparing the two readers cell by cell is the deterministic version of
-"extract twice independently" (as travienphi's trace-check).
+administrator words), preferring the first one in the document, unless that one states a
+calendar outside a standard teacher year and a later one states a standard year (D-026). The
+result uses the same JSON shape as the extraction schema (``extract.to_draft``), so validation
+and storage are shared with every other source. Comparing the two readers cell by cell is the
+deterministic version of "extract twice independently" (as travienphi's trace-check).
 """
 
 from __future__ import annotations
@@ -39,15 +41,16 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@4"
-WORDS = "pdfplumber-words@4"
-XLSX = "xlsx-cells@4"
-DOCX = "docx-cells@4"
+LAYOUT = "layout-text@5"
+WORDS = "pdfplumber-words@5"
+XLSX = "xlsx-cells@5"
+DOCX = "docx-cells@5"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
 MIN_AMOUNT, MAX_AMOUNT = 10_000.0, 400_000.0
 MIN_ROWS, MIN_CELLS = 3, 8
+STANDARD_DAYS = (175, 200)
 
 _MONEY = re.compile(r"^\(?\$?\(?(\d{1,3}(?:,\d{3})+|\d{5,6})(\.\d{1,2})?\)?\**$")
 _LABEL = re.compile(
@@ -55,6 +58,8 @@ _LABEL = re.compile(
     r"(?:\s*(?:years?|yrs?\.?)(?:\s+and\s+(?:over|above|up))?)?\s*(\+)?$",
     re.I,
 )
+# Steps named by letters (Florida, Maryland): "C", "N", "AA", "T&U" (two steps paid the same).
+_LETTER = re.compile(r"^([A-Z])\1?(?:&[A-Z]{1,2})?$")
 _PLACEMENT = re.compile(r"^[\d,\-–+]+$")
 _CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
 _NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,4}\)?\**$")
@@ -67,6 +72,10 @@ _NOISE = re.compile(
     r"^(?:20\d\d(?:[-–/]\d{2,4})?|\(?[+-]?\d+(?:\.\d+)?%\)?|_{3,}|annual|\(?1[6-9]\d|\(?2[0-4]\d|"
     r"days?\)?)$",
     re.I,
+)
+# Any calendar length, to tell a 240/260-day schedule from a 187-day one.
+_ANY_DAYS = re.compile(
+    r"\b(\d{3})\s*-?\s*(?:duty\s+|work\s+|working\s+|contract\s+|service\s+)?days?\b", re.I
 )
 _DAYS = re.compile(
     r"\b(1[6-9]\d|2[0-3]\d)\s*(?:-?\s*)(?:duty\s+|work\s+|working\s+|contract\s+|service\s+)?days?\b",
@@ -154,11 +163,16 @@ def plumber_lines(path: Path) -> list[list[Line]]:
             words.sort(key=lambda w: float(w["top"]))
             lines: list[Line] = []
             line_top: float | None = None
+            reach = 2.5
             for w in words:
                 top = float(w["top"])
-                if line_top is None or top - line_top > 2.5:
+                # Words of one printed row may sit a few points apart (step labels set lower
+                # than the amounts, Mobile County): a word starting within 40 % of the first
+                # word's height belongs to its line.
+                if line_top is None or top - line_top > reach:
                     lines.append(Line([]))
                     line_top = top
+                    reach = max(2.5, 0.4 * (float(w["bottom"]) - top))
                 lines[-1].words.append(Word(str(w["text"]), float(w["x0"]), float(w["x1"])))
             for line in lines:
                 line.words = _join_touching(sorted(line.words, key=lambda w: w.x0))
@@ -210,7 +224,7 @@ def parse_row(line: Line, index: int) -> Row | None:
         and all(_PLACEMENT.match(w.text) for w in head[:-1])
     ):
         label = head[-1].text
-    if not _LABEL.match(label):
+    if not _LABEL.match(label) and not _LETTER.match(label):
         # "1  A  $57,471 ...": a step number followed by one short code (letter or roman numeral)
         if len(head) == 2 and _LABEL.match(head[0].text) and _CODE.match(head[1].text):
             label = words[0].text
@@ -247,6 +261,18 @@ def _amount_only(line: Line) -> list[tuple[float, float, float]] | None:
 
 
 def _label_number(label: str) -> int | None:
+    """Order of a step label: its number, or its letter (A = 1 … Z = 26, AA = 27 …)."""
+    m = _LABEL.match(label)
+    if m:
+        return int(m.group(1))
+    m = _LETTER.match(label)
+    if m:
+        return ord(m.group(1)) - ord("A") + 1 + (26 if m.group(0)[1:2] == m.group(1) else 0)
+    return None
+
+
+def _years_number(label: str) -> int | None:
+    """Years of experience in a numeric step label; letters carry none."""
     m = _LABEL.match(label)
     return int(m.group(1)) if m else None
 
@@ -423,8 +449,26 @@ def pick_table(tables: list[Table]) -> Table | None:
     if any(not scope_note(t) for t in usable):
         usable = [t for t in usable if not scope_note(t)]
     best = max(_score(t) for t in usable)
-    # First table in document order that is nearly as good as the best one.
-    return next(t for t in usable if _score(t) >= best * 0.6)
+    # First table in document order that is nearly as good as the best one. When that table
+    # states a calendar outside a standard teacher year (175-200 days), a later one that states
+    # a standard year is taken instead (Mobile County prints 202- and 187-day schedules after
+    # one for 240/260 days).
+    good = [t for t in usable if _score(t) >= best * 0.6]
+    first_days = _table_days(good[0])
+    if first_days is None or _standard(first_days):
+        return good[0]
+    return next((t for t in good if _standard(_table_days(t))), good[0])
+
+
+def _table_days(t: Table) -> int | None:
+    """Contract days stated in the lines just above a table ("187 DAYS", "196-Day")."""
+    text = "\n".join(t.context.splitlines()[-8:]) + "\n" + " ".join(t.lanes)
+    found = [int(d) for d in _ANY_DAYS.findall(text) if 100 <= int(d) <= 366]
+    return found[-1] if found else None
+
+
+def _standard(days: int | None) -> bool:
+    return days is not None and STANDARD_DAYS[0] <= days <= STANDARD_DAYS[1]
 
 
 def _years(table: Table, page_text: str) -> str | None:
@@ -472,7 +516,7 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
         "pay_basis": "annual",
         "lanes": [lane_label(x, title) for x in table.lanes],
         "steps": [
-            {"label": r.label, "years_experience": _label_number(r.label) if years else None}
+            {"label": r.label, "years_experience": _years_number(r.label) if years else None}
             for r in table.rows
         ],
         "cells": table.grid,

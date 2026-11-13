@@ -259,7 +259,14 @@ def check_labels(s: ScheduleDraft) -> list[Issue]:
     dupes = sorted({x for x in labels if labels.count(x) > 1})
     if dupes:
         issues.append(Issue("lane_label", f"Nhiều lane cùng nhãn {dupes[0]!r}: thiếu tiêu đề cột"))
+    bare = [x for x in labels if x in _BARE_LABELS]
+    if bare:
+        # "RANK" alone: the lane's own name (DR, II, MA...) was lost from the heading.
+        issues.append(Issue("lane_label", f"Nhãn lane thiếu tên: {bare[0]!r}"))
     return issues
+
+
+_BARE_LABELS = frozenset({"rank", "class", "lane", "column", "step", "schedule", "salary"})
 
 
 _STEP_NUMBER = re.compile(r"^\D{0,6}(\d{1,2})")
