@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
+import { sameOriginPost } from "./origin";
 
 export type Env = {
   DB: D1Database;
@@ -127,7 +128,9 @@ app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
   c.header("Cache-Control", "no-store");
   c.header("X-Frame-Options", "DENY");
-  c.header("Referrer-Policy", "no-referrer");
+  // "same-origin": browsers then send the real Origin on the page's own form posts ("no-referrer"
+  // made them send "Origin: null", which the check below refused).
+  c.header("Referrer-Policy", "same-origin");
   const expected = c.env.REVIEW_PASSWORD;
   if (!expected) return c.text("Review is not configured.", 503);
   const header = c.req.header("authorization") ?? "";
@@ -143,9 +146,11 @@ app.use("*", async (c, next) => {
     c.header("WWW-Authenticate", 'Basic realm="pay-schedules review", charset="UTF-8"');
     return c.text("Authentication required.", 401);
   }
-  if (c.req.method === "POST") {
-    const origin = c.req.header("origin");
-    if (origin !== new URL(c.req.url).origin) return c.text("Bad origin.", 403);
+  if (
+    c.req.method === "POST" &&
+    !sameOriginPost(c.req.header("origin"), c.req.header("sec-fetch-site"), c.req.url)
+  ) {
+    return c.text("Bad origin.", 403);
   }
   await next();
 });

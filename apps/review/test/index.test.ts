@@ -7,6 +7,7 @@ import {
   PURGE_MAX_ATTEMPTS,
   parseMoney,
 } from "../src/index";
+import { sameOriginPost } from "../src/origin";
 
 const BASE = "https://review.example.invalid";
 const AUTH = `Basic ${btoa("review:test-password")}`;
@@ -100,6 +101,25 @@ describe("bảo vệ", () => {
       expect(res.headers.get("www-authenticate")).toContain("Basic");
       expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     }
+  });
+
+  it("POST cùng site không có Origin dùng được nhờ Sec-Fetch-Site", async () => {
+    const blocked = await req("/s/10/approve", { method: "POST", origin: "null" });
+    expect(blocked.status).toBe(403);
+    const crossSite = await req("/s/10/approve", {
+      method: "POST",
+      origin: null,
+      headers: { "sec-fetch-site": "cross-site" },
+    });
+    expect(crossSite.status).toBe(403);
+    const res = await req("/", { auth: undefined });
+    expect(res.headers.get("referrer-policy")).toBe("same-origin");
+    const url = `${BASE}/s/10/approve`;
+    expect(sameOriginPost(undefined, "same-origin", url)).toBe(true);
+    expect(sameOriginPost("null", "same-origin", url)).toBe(true);
+    expect(sameOriginPost(BASE, undefined, url)).toBe(true);
+    expect(sameOriginPost("null", undefined, url)).toBe(false);
+    expect(sameOriginPost("https://evil.example.invalid", "same-origin", url)).toBe(false);
   });
 
   it("POST từ origin khác bị chặn", async () => {
