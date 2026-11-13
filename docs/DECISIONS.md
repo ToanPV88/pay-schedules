@@ -829,3 +829,12 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   1–8 trang vì trang chủ không có link nào mang chữ việc làm/lương để đi tiếp.
 - Khi không thấy tài liệu, chi tiết ghi địa chỉ cuối của trang chủ, cỡ trang, số link, số link
   cùng site và số link được đi tiếp; `work.json` giữ 40 link đầu của trang chủ để xem vì sao.
+
+## D-043: Website học khu thay cho địa chỉ NCES đã chết
+
+- Ngày: 2026-11-14. 1.127 học khu chưa có bảng mà site NCES không truy cập được (không tải được
+  robots.txt hoặc trang chủ). Với 128 học khu (0,72 triệu học sinh, gồm Chicago, Fort Bend,
+  Chesterfield), website các trường của học khu (D-035) trỏ về một tên miền khác, nên dùng tên
+  miền đó: `district-websites.csv` có thêm cột `replaces_nces`; dòng có `1` thay địa chỉ NCES.
+- Nhiều học khu còn lại (Baltimore County, Lee, Albuquerque) có tên miền vẫn sống nhưng chặn bot
+  ở tầng mạng; đó là ý của họ, không lách.

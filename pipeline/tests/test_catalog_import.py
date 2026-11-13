@@ -349,3 +349,18 @@ def test_curated_websites_fill_gaps_before_schools(tmp_path: Path) -> None:
     assert site["0600001"] == "http://www.alpha.example.invalid"
     assert site["0600002"] == "http://www.beta-directory.example.invalid"
     assert cat.websites_from_directories == 1
+
+
+def test_curated_website_replaces_dead_nces_address(tmp_path: Path) -> None:
+    """D-043: a row with replaces_nces=1 wins over the LEA file's website."""
+    curated = tmp_path / "websites.csv"
+    curated.write_text(
+        "nces_id,website,source,replaces_nces\n"
+        "0600001,http://alpha-new.example.invalid/,schools,1\n"
+        "0600002,www.beta-directory.example.invalid,test,\n",
+        encoding="utf-8",
+    )
+    cat = build_catalog(write_sources(tmp_path / "src"), {}, websites=curated)
+    site = {d.nces_id: d.website for d in cat.districts}
+    assert site["0600001"] == "http://alpha-new.example.invalid/"
+    assert site["0600002"] == "http://www.beta-directory.example.invalid"
