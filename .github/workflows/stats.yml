@@ -49,6 +49,10 @@ jobs:
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT (SELECT COUNT(DISTINCT schedule_id) FROM review_queue WHERE resolved_at IS NULL) AS open_review, (SELECT COUNT(*) FROM schedules WHERE status = 'published') AS published_schedules" \
             > "$GITHUB_WORKSPACE/totals.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.nces_id, d.state, d.name, d.enrollment, d.website, p.status, substr(p.detail, 1, 120) AS detail FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' AND NOT $pub ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT 400" \
+            > "$GITHUB_WORKSPACE/missing.json"
+          echo "MISSING_BEGIN"; python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=d[0]["results"] if isinstance(d,list) else d["results"]; [print("MISS\t"+"\t".join(str(x.get(k) or "") for k in ("nces_id","state","name","enrollment","website","status","detail"))) for x in r]' "$GITHUB_WORKSPACE/missing.json"
       - name: Report
         run: |
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
