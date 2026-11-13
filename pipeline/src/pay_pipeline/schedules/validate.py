@@ -5,8 +5,11 @@ schedule may be published. Any issue sends it to ``review_queue`` with the issue
 reasons. The checks:
 
 1. ``monotonic_step``: within a lane, pay never falls as the step rises;
-   ``monotonic_lane``: at a step, pay never falls from one lane to the next (lanes are in
-   source order, lowest qualification first). A cell carrying a note is an accepted exception.
+   ``monotonic_lane``: at a step, pay never falls from a lane to one with a higher
+   qualification (D-024: when most lane labels read as degree and units, e.g. ``BA+30`` or
+   ``BA+45 OR MA``, only lanes of the same track whose qualification clearly dominates are
+   compared; otherwise lanes are compared in source order). A cell carrying a note is an
+   accepted exception, and a fall of at most ``TOLERANCE_CENTS`` is rounding in the source.
 2. ``cell_count``: every step × lane has a cell; a blank cell must carry a note.
 3. ``range``: every amount is plausible for the pay basis (annual pay is not hourly or daily).
 4. ``school_year``: readable, not after next school year, and (unless the source is an
@@ -36,6 +39,11 @@ RANGES: dict[str, tuple[int, int]] = {
     "hourly": (10_00, 250_00),
 }
 START_CHANGE_LIMIT = 0.20
+TOLERANCE_CENTS = 10_00
+"""A fall of at most $10 is rounding in the source (Kentucky pays to the cent: $91,493.01 then
+$91,493.00), not a reading error (D-024)."""
+LANE_RANK_SHARE = 0.75
+"""Share of lane labels that must read as degree and units before lanes are compared by rank."""
 
 
 @dataclass(frozen=True)
@@ -48,16 +56,151 @@ def _fmt(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
+# One word of a lane label that states degree and units: "BA", "BA+30", "BA<45", "<BA",
+# "BA+75+MA+PHD", "MA+60+17", "BA+CRED". CRED/PRELIM after "+" only say the credential is held.
+# A bare number ("195 DAYS", "Column 3") is not units: it stays in the track.
+_EDU_WORD = re.compile(r"^<?(BA|MA|2MA|PHD)(<\d+)?(\+(BA|MA|2MA|PHD|CRED|PRELIM|\d+))*$")
+_DEGREE = {"BA": 1.0, "MA": 2.0, "2MA": 2.5, "PHD": 3.0}
+# Words that do not make a separate track: a credentialed lane is the regular lane.
+_NEUTRAL_WORDS = frozenset({"CRED", "PRELIM"})
+_NEUTRAL_PHRASES = ("FULL STEP", "WHOLE YR")
+
+
+@dataclass(frozen=True)
+class LaneRank:
+    """Qualification read from a lane label, and the track the lane belongs to.
+
+    ``degree`` is None when the label has no degree to read ("Rank II", "Column 3", "NON-CRED").
+    ``units`` counts from ``base``, the degree the label starts with: "MA+30" is 30 units past
+    the MA, "BA+75+MA" 75 units past the BA, so units are only compared between labels with the
+    same base. ``units`` is None for "BA<45" (fewer than 45 units: not a number to compare).
+    The track is what is left of the label once degree and units are removed: "NON-CRED",
+    "SPED", "195 DAYS", "INTERN/ EMERG"... Lanes of different tracks are separate schedules
+    printed side by side (a non-credentialed lane may pay more than the first credentialed one),
+    so they are never compared with each other.
+    """
+
+    degree: float | None
+    units: int | None
+    base: str
+    track: str
+
+    def dominates(self, other: LaneRank) -> bool:
+        """Clearly a higher qualification than the other lane, in the same track."""
+        if self.degree is None or other.degree is None or self.track != other.track:
+            return False
+        if self.units is None or other.units is None:
+            return False
+        if self.base == other.base:
+            at_least = self.degree >= other.degree and self.units >= other.units
+            return at_least and (self.degree, self.units) != (other.degree, other.units)
+        # Different bases ("MA+30" and "BA+45"): only bare degrees compare (PHD > MA > BA).
+        return self.units == other.units == 0 and self.degree > other.degree
+
+
+def lane_rank(label: str) -> LaneRank:
+    text = " ".join(label.upper().split())
+    for phrase in _NEUTRAL_PHRASES:
+        text = text.replace(phrase, " ")
+    first: str | None = None
+    alternative = False
+    track: list[str] = []
+    for word in text.split():
+        if word == "OR":
+            alternative = True
+        elif _EDU_WORD.match(word):
+            # "BA+45 OR MA": the alternatives are equivalent; the first one is read.
+            if first is None and not alternative:
+                first = word
+        elif word not in _NEUTRAL_WORDS:
+            track.append(word)
+    key = re.sub(r"[^A-Z0-9]", "", "".join(track))
+    if first is None:
+        return LaneRank(None, 0, "", key)
+    below = first.startswith("<")  # "<BA": less than a bachelor's degree
+    parts = first.lstrip("<").split("+")
+    base = parts[0].split("<")[0]
+    degree = 0.0 if below else _DEGREE[base]
+    units: int | None = None if "<" in parts[0] else 0
+    for part in parts[1:]:
+        if part in _DEGREE:
+            degree = max(degree, _DEGREE[part])
+        elif part.isdigit() and units is not None:
+            units += int(part)
+    return LaneRank(degree, units, ("<" if below else "") + base, key)
+
+
+def _falls(before: int, after: int) -> bool:
+    return after < before - TOLERANCE_CENTS
+
+
+def _lanes_by_rank(s: ScheduleDraft, ranks: list[LaneRank]) -> list[Issue]:
+    issues: list[Issue] = []
+    for step in range(len(s.steps)):
+        for low in range(len(s.lanes)):
+            for high in range(len(s.lanes)):
+                if not ranks[high].dominates(ranks[low]):
+                    continue
+                a, b = s.cells.get((step, low)), s.cells.get((step, high))
+                if a is None or b is None or a.amount_cents is None or b.amount_cents is None:
+                    continue
+                if a.note or b.note or not _falls(a.amount_cents, b.amount_cents):
+                    continue
+                issues.append(
+                    Issue(
+                        "monotonic_lane",
+                        f"Lương giảm khi lên lane trình độ cao hơn: bậc {s.steps[step].label_raw},"
+                        f" {s.lanes[low].label_raw!r} {_fmt(a.amount_cents)}"
+                        f" → {s.lanes[high].label_raw!r} {_fmt(b.amount_cents)}",
+                    )
+                )
+    return issues
+
+
+def _lanes_in_order(s: ScheduleDraft) -> list[Issue]:
+    # Lanes are usually printed lowest qualification first; some schedules (Kentucky ranks,
+    # "Doctorate" first) print them highest first. Highest-first is accepted only when it is
+    # clearly the pattern (at least 3 falling pairs and 3x more falling than rising pairs);
+    # every pair must then follow that direction.
+    issues: list[Issue] = []
+    rising = falling = 0
+    for step in range(len(s.steps)):
+        row = [a for ln in range(len(s.lanes)) if (a := s.amount(step, ln)) is not None]
+        rising += sum(y > x for x, y in pairwise(row))
+        falling += sum(y < x for x, y in pairwise(row))
+    sign = -1 if falling >= 3 and falling >= 3 * rising else 1
+    for step in range(len(s.steps)):
+        prev: tuple[int, int] | None = None
+        for lane in range(len(s.lanes)):
+            cell = s.cells.get((step, lane))
+            if cell is None or cell.amount_cents is None:
+                continue
+            if prev is not None and not cell.note:
+                before, after = (prev[1], cell.amount_cents)
+                if sign < 0:
+                    before, after = after, before
+                if _falls(before, after):
+                    issues.append(
+                        Issue(
+                            "monotonic_lane",
+                            f"Lương đổi chiều giữa hai lane: bậc {s.steps[step].label_raw},"
+                            f" {s.lanes[prev[0]].label_raw!r} {_fmt(prev[1])}"
+                            f" → {s.lanes[lane].label_raw!r} {_fmt(cell.amount_cents)}",
+                        )
+                    )
+            prev = (lane, cell.amount_cents)
+    return issues
+
+
 def check_monotonic(s: ScheduleDraft) -> list[Issue]:
     issues: list[Issue] = []
-    lanes = s.lane_indexes()
-    for lane in lanes:
+    for lane in s.lane_indexes():
         prev: tuple[int, int] | None = None
         for step in range(len(s.steps)):
             cell = s.cells.get((step, lane))
             if cell is None or cell.amount_cents is None:
                 continue
-            if prev is not None and cell.amount_cents < prev[1] and not cell.note:
+            if prev is not None and _falls(prev[1], cell.amount_cents) and not cell.note:
                 where = s.lanes[lane].label_raw if lane is not None else "(no lane)"
                 issues.append(
                     Issue(
@@ -69,32 +212,12 @@ def check_monotonic(s: ScheduleDraft) -> list[Issue]:
                 )
             prev = (step, cell.amount_cents)
     if s.lanes:
-        # Lanes are usually printed lowest qualification first; some schedules (Kentucky ranks,
-        # "Doctorate" first) print them highest first. Highest-first is accepted only when it is
-        # clearly the pattern (at least 3 falling pairs and 3x more falling than rising pairs);
-        # every pair must then follow that direction.
-        rising = falling = 0
-        for step in range(len(s.steps)):
-            row = [a for ln in range(len(s.lanes)) if (a := s.amount(step, ln)) is not None]
-            rising += sum(y > x for x, y in pairwise(row))
-            falling += sum(y < x for x, y in pairwise(row))
-        sign = -1 if falling >= 3 and falling >= 3 * rising else 1
-        for step in range(len(s.steps)):
-            prev = None
-            for lane in range(len(s.lanes)):
-                cell = s.cells.get((step, lane))
-                if cell is None or cell.amount_cents is None:
-                    continue
-                if prev is not None and sign * (cell.amount_cents - prev[1]) < 0 and not cell.note:
-                    issues.append(
-                        Issue(
-                            "monotonic_lane",
-                            f"Lương đổi chiều giữa hai lane: bậc {s.steps[step].label_raw},"
-                            f" {s.lanes[prev[0]].label_raw!r} {_fmt(prev[1])}"
-                            f" → {s.lanes[lane].label_raw!r} {_fmt(cell.amount_cents)}",
-                        )
-                    )
-                prev = (lane, cell.amount_cents)
+        ranks = [lane_rank(ln.label_raw) for ln in s.lanes]
+        readable = sum(r.degree is not None for r in ranks)
+        if readable >= LANE_RANK_SHARE * len(ranks):
+            issues += _lanes_by_rank(s, ranks)
+        else:
+            issues += _lanes_in_order(s)
     return issues
 
 

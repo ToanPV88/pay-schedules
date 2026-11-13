@@ -22,6 +22,7 @@ from pay_pipeline.schedules.validate import (
     check_school_year,
     check_start_change,
     compare_extractions,
+    lane_rank,
     start_salary,
     summarize,
     validate,
@@ -150,7 +151,93 @@ class TestChecks:
         assert [i.code for i in check_monotonic(grid([[70000, 65000]]))] == ["monotonic_lane"]
 
     def test_summarize_groups_by_check(self) -> None:
-        issues = check_monotonic(grid([[5, 6, 4], [4, 5, 3], [3, 4, 2], [2, 3, 1], [1, 2, 0.5]]))
+        rows: list[list[float]] = [[5, 6, 4], [4, 5, 3], [3, 4, 2], [2, 3, 1], [1, 2, 0.5]]
+        scaled: list[list[float | None]] = [[x * 10_000 for x in row] for row in rows]
+        issues = check_monotonic(grid(scaled))
         reasons = summarize(issues)
         assert len(reasons) == 2
         assert reasons[0].startswith("[monotonic_step]") and "chỗ khác" in reasons[0]
+
+
+def labelled(labels: list[str], rows: list[list[float]]) -> ScheduleDraft:
+    s = grid([list(r) for r in rows])
+    s.lanes = [Lane(x) for x in labels]
+    return s
+
+
+class TestLaneRank:
+    """D-024: compare lanes by the qualification their labels state, track by track."""
+
+    @pytest.mark.parametrize(
+        ("label", "degree", "units", "track"),
+        [
+            ("BA", 1.0, 0, ""),
+            ("BA+30", 1.0, 30, ""),
+            ("BA+45 OR MA", 1.0, 45, ""),
+            ("BA+75+MA OR MA+30", 2.0, 75, ""),
+            ("MA+60+17", 2.0, 77, ""),
+            ("BA<45 EMERG", 1.0, None, "EMERG"),
+            ("<BA", 0.0, 0, ""),
+            ("BA+CRED", 1.0, 0, ""),
+            ("BA CRED", 1.0, 0, ""),
+            ("BA+98 NON-CRED", 1.0, 98, "NONCRED"),
+            ("BA+60 INTERN/ EMERG", 1.0, 60, "INTERNEMERG"),
+            ("BA+45 SPED 220 DAYS", 1.0, 45, "SPED220DAYS"),
+            ("BA FULL STEP", 1.0, 0, ""),
+            ("BA HALF STEP", 1.0, 0, "HALFSTEP"),
+            ("BA+75+MA+PHD", 3.0, 75, ""),
+            ("Rank II", None, 0, "RANKII"),
+            ("NON-CRED", None, 0, "NONCRED"),
+            ("Column 3", None, 0, "COLUMN3"),
+        ],
+    )
+    def test_reads_degree_units_and_track(
+        self, label: str, degree: float | None, units: int | None, track: str
+    ) -> None:
+        rank = lane_rank(label)
+        assert (rank.degree, rank.units, rank.track) == (degree, units, track)
+
+    def test_dominance(self) -> None:
+        assert lane_rank("BA+45").dominates(lane_rank("BA+30"))
+        assert lane_rank("PHD").dominates(lane_rank("MA"))
+        assert not lane_rank("BA+45").dominates(lane_rank("BA+30+MA"))  # not comparable
+        assert not lane_rank("BA+30").dominates(lane_rank("BA+30"))
+        assert not lane_rank("BA+CRED").dominates(lane_rank("BA NON-CRED"))  # other track
+        # Units counted from different degrees do not compare (Central Union High, J-90).
+        assert not lane_rank("BA+75+MA OR MA+30").dominates(lane_rank("MA+60 OR PHD"))
+        # "Fewer than 90 units" is not a number of units (Laytonville, J-90).
+        assert not lane_rank("BA+60").dominates(lane_rank("BA<90"))
+        assert lane_rank("BA").dominates(lane_rank("<BA"))
+
+    def test_tracks_side_by_side_are_not_compared(self) -> None:
+        # Los Angeles Unified, J-90 2024-25: the non-credentialed lanes come first and their top
+        # lane pays more than the first credentialed lane.
+        s = labelled(
+            ["BA NON-CRED", "BA+98 NON-CRED", "BA+CRED", "BA+14+CRED"],
+            [[60000, 70190, 69304, 70000], [61000, 71190, 70304, 71000]],
+        )
+        assert check_monotonic(s) == []
+
+    def test_interleaved_ma_lanes_are_not_compared(self) -> None:
+        s = labelled(["BA+30", "BA+30+MA", "BA+45", "BA+45+MA"], [[60000, 63188, 62031, 65000]])
+        assert check_monotonic(s) == []
+
+    def test_fall_to_a_higher_qualification_is_flagged(self) -> None:
+        s = labelled(["BA", "BA+15", "BA+30 OR MA"], [[60000, 62928, 62490]])
+        issues = check_monotonic(s)
+        assert [i.code for i in issues] == ["monotonic_lane"]
+        assert "'BA+15' $62,928.00 → 'BA+30 OR MA' $62,490.00" in issues[0].message
+        # Order in the source does not matter once lanes are compared by rank.
+        s = labelled(["BA+30 OR MA", "BA", "BA+15"], [[62490, 60000, 62928]])
+        assert [i.code for i in check_monotonic(s)] == ["monotonic_lane"]
+
+    def test_unreadable_labels_keep_source_order(self) -> None:
+        # Kentucky ranks: no degree to read, so the old rule (source order) applies.
+        s = labelled(["Rank V", "Rank IV", "Rank III"], [[31875, 30016, 40000]])
+        assert [i.code for i in check_monotonic(s)] == ["monotonic_lane"]
+
+    def test_rounding_in_the_source_is_not_a_fall(self) -> None:
+        # Kentucky, Fayette County 2024-25: Rank II step 38 $91,493.01, step 39 $91,493.00.
+        assert check_monotonic(grid([[91493.01], [91493.00]])) == []
+        assert check_monotonic(grid([[42153, 42152]])) == []
+        assert [i.code for i in check_monotonic(grid([[45963], [45846]]))] == ["monotonic_step"]

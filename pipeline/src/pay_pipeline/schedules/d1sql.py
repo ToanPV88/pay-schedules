@@ -71,6 +71,18 @@ def state_runs(result: ImportResult) -> list[RunRecord]:
     ]
 
 
+AUTO_RESOLVED = "auto: the checks no longer report this on re-import"
+"""Resolution of an open review reason that a re-import with changed checks no longer gives."""
+
+
+def _decided(schedule_id: str, decision: str) -> str:
+    """Rows of a decision taken on the review page (apps/review: "approved (…)", "rejected: …")."""
+    return (
+        f"SELECT 1 FROM review_queue d WHERE d.schedule_id = {schedule_id}"
+        f" AND d.resolution LIKE '{decision}%'"
+    )
+
+
 def _stamp(now: dt.datetime) -> str:
     return now.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -257,11 +269,21 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " AND p.amount_raw IS x.amount_raw)"
     )
     # A schedule that now fails a check (new rule, or a hold from a manual cross-check) goes
-    # back to draft even if an earlier run published it.
+    # back to draft even if an earlier run published it, unless a person approved it on the
+    # review page (D-024): a person's decision is not undone by a re-run.
     sql.append(
         "UPDATE schedules SET status = 'draft', published_at = NULL"
         " WHERE status = 'published' AND id IN (SELECT m.schedule_id FROM _imp_map m"
         " JOIN _imp_schedules i ON i.k = m.k WHERE i.status = 'draft')"
+        f" AND NOT EXISTS ({_decided('schedules.id', 'approved')})"
+    )
+    # Open reasons the checks no longer give (a rule changed) are closed, so the review page
+    # only lists what is still wrong.
+    sql.append(
+        f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution = {quote(AUTO_RESOLVED)}"
+        " WHERE resolved_at IS NULL AND schedule_id IN (SELECT schedule_id FROM _imp_map)"
+        " AND NOT EXISTS (SELECT 1 FROM _imp_reviews x JOIN _imp_map m ON m.k = x.k"
+        " WHERE m.schedule_id = review_queue.schedule_id AND x.reason = review_queue.reason)"
     )
     sql.append(
         "INSERT INTO review_queue (schedule_id, reason, created_at)"
@@ -270,13 +292,16 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " JOIN schedules s ON s.id = m.schedule_id AND s.status = 'draft'"
         " WHERE NOT EXISTS (SELECT 1 FROM review_queue r"
         " WHERE r.schedule_id = m.schedule_id AND r.reason = x.reason)"
+        f" AND NOT EXISTS ({_decided('m.schedule_id', 'rejected')})"
     )
 
     # Publish: first retire the published schedule each new one replaces, then publish.
+    # A draft a person rejected stays a draft even when the checks now pass.
     to_publish = (
         "SELECT m.schedule_id FROM _imp_map m JOIN _imp_schedules i ON i.k = m.k"
         " JOIN schedules n ON n.id = m.schedule_id"
         " WHERE i.status = 'published' AND n.status = 'draft'"
+        f" AND NOT EXISTS ({_decided('n.id', 'rejected')})"
     )
     sql.append(
         "UPDATE schedules SET status = 'superseded', superseded_by = ("
