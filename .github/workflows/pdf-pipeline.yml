@@ -85,7 +85,9 @@ jobs:
             get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]); print(",".join(v) if isinstance(v, list) else v)' "$cfg" "$1" "$2"; }
             LIMIT=$(get limit 100); RERUN=$(get rerun ""); ONLY_STATE=$(get state "")
             SHARDS=$(get shards 1); DEADLINE=$(get deadline_minutes 45); SEEDED_ONLY=$(get seeded_only False)
+            IDS_FILE=$(get ids_file "")
           fi
+          [[ -z "${IDS_FILE:-}" || "$IDS_FILE" =~ ^pipeline/sources/[a-z0-9-]+\.csv$ ]] || { echo "::error::ids_file sai"; exit 1; }
           [[ "$TARGET" =~ ^(preview|production)$ ]] || { echo "::error::target sai"; exit 1; }
           [[ "$LIMIT" =~ ^[0-9]{1,5}$ ]] || { echo "::error::limit phải là số"; exit 1; }
           [[ -z "$RERUN" || "$RERUN" =~ ^[a-z_]+(,[a-z_]+)*$ ]] || { echo "::error::rerun sai"; exit 1; }
@@ -99,7 +101,7 @@ jobs:
           tag="docs-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
           { echo "tag=$tag"; echo "deadline=$DEADLINE"; } >> "$GITHUB_OUTPUT"
           [[ "${SEEDED_ONLY:-False}" =~ ^(True|False)$ ]] || { echo "::error::seeded_only sai"; exit 1; }
-          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; } >> "$GITHUB_ENV"
+          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; echo "IDS_FILE=${IDS_FILE:-}"; } >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -126,6 +128,12 @@ jobs:
           if [ "$SEEDED_ONLY" = True ]; then
             # Lượt chỉ cho học khu có link bảng lương tìm tay (D-038), mọi trạng thái.
             ids=$(python3 -c 'import csv,re; print(",".join(sorted({"\x27"+r["nces_id"]+"\x27" for r in csv.DictReader(open("../../pipeline/sources/schedule-urls.csv")) if re.fullmatch(r"\d{7}", r["nces_id"])})))')
+            filter="$filter AND d.nces_id IN ($ids)"
+            rerun="SELECT status FROM district_pipeline"
+          fi
+          if [ -n "$IDS_FILE" ]; then
+            # Lượt chỉ cho các học khu trong một tệp nguồn (D-043: website vừa thay), mọi trạng thái.
+            ids=$(python3 -c 'import csv,re,sys; print(",".join(sorted({"\x27"+r["nces_id"]+"\x27" for r in csv.DictReader(open(sys.argv[1])) if re.fullmatch(r"\d{7}", r["nces_id"])})))' "../../$IDS_FILE")
             filter="$filter AND d.nces_id IN ($ids)"
             rerun="SELECT status FROM district_pipeline"
           fi
