@@ -66,7 +66,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        run: scripts/archive-releases.sh work "$TAG" "$TARGET"
+        run: |
+          # Một lô duy nhất: download-artifact giải nén thẳng vào work/, không có work/work-0/.
+          if [ -f work/pipeline.sql ]; then mkdir -p work/work-0 && mv work/docs work/pipeline.sql work/work-0/; fi
+          scripts/archive-releases.sh work "$TAG" "$TARGET"
 
   load:
     needs: archive
@@ -94,6 +97,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          if [ -f "$GITHUB_WORKSPACE/work/pipeline.sql" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/work/work-0"
+            mv "$GITHUB_WORKSPACE/work/docs" "$GITHUB_WORKSPACE/work/pipeline.sql" "$GITHUB_WORKSPACE/work/work-0/"
+          fi
           for sql in "$GITHUB_WORKSPACE"/work/work-*/pipeline.sql; do
             [ -f "$sql" ] || continue
             echo "Nạp $sql"

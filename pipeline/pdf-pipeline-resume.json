@@ -1,5 +1,5 @@
 {
   "description": "Tham số của pdf-pipeline-resume.yml (D-033): lưu Release và nạp D1 lại cho một lượt pdf-pipeline.yml đã chạy xong bước run nhưng lỗi ở archive hoặc load. run_id: id lượt chạy; tag: tiền tố Release của lượt đó (docs-<target>-<ngày>-<run_id>). Kết quả các lô chỉ còn 7 ngày.",
-  "run_id": "43379595661",
-  "tag": "docs-production-20261113-43379595661"
+  "run_id": "43419837473",
+  "tag": "docs-production-20261113-43419837473"
 }
