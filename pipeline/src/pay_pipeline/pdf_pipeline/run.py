@@ -70,6 +70,19 @@ def read_document(path: Path, kind: str, classification: dict[str, Any]) -> list
     return [rd.to_answer(None, "", rd.LAYOUT, f"Không đọc được tệp {kind}")]
 
 
+def reading_order(data: list[dict[str, Any]]) -> list[int]:
+    """Index order of the readings: the first one that found a table leads.
+
+    When only the second reader found the table (pdfplumber groups a row's words into two lines,
+    say), its reading is used and the missing second reading sends the schedule to review
+    (``double_extraction``) instead of dropping a table that is there.
+    """
+    found = [i for i, d in enumerate(data) if d.get("is_teacher_salary_schedule")]
+    if not found or found[0] == 0:
+        return list(range(len(data)))
+    return [found[0]] + [i for i in range(len(data)) if i != found[0]]
+
+
 def read_all(works: list[DistrictWork], work_dir: Path) -> dict[str, dict[str, Any]]:
     path = work_dir / "extractions.json"
     results: dict[str, dict[str, Any]] = (
@@ -145,6 +158,7 @@ _PROSE_IN_LABEL = re.compile(
 # A document on a district website that is more than two school years old is probably not the
 # schedule in force; a person checks before it goes on the site.
 MAX_AGE_YEARS = 2
+MIN_FLAT_STEPS = 3
 
 
 def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft, today: dt.date) -> list[Issue]:
@@ -165,6 +179,11 @@ def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft, today: dt.date) -> 
     bad = [ln.label_raw for ln in draft.lanes if _PROSE_IN_LABEL.search(ln.label_raw)]
     if bad:
         issues.append(Issue("lane_label", f"Nhãn lane lẫn chữ của đoạn văn: {bad[0][:80]!r}"))
+    amounts = {c.amount_cents for c in draft.cells.values() if c.amount_cents is not None}
+    if len(draft.steps) >= MIN_FLAT_STEPS and len(amounts) == 1:
+        # Every step paid the same (Volusia's performance-pay tiers): true to some sources, but
+        # also what a misread column looks like; a person confirms (D-026).
+        issues.append(Issue("flat_schedule", f"Mọi ô cùng một số tiền: {len(draft.steps)} bậc"))
     return issues
 
 
@@ -205,6 +224,8 @@ def prepare(
             outcomes.append(Outcome(work.nces_id, "error", detail, cost))
             continue
         data = [r.data() or {} for r in exruns]
+        order = reading_order(data)
+        data, exruns = [data[i] for i in order], [exruns[i] for i in order]
         if not data[0].get("is_teacher_salary_schedule"):
             reason = str(data[0].get("reason") or "")[:300]
             outcomes.append(Outcome(work.nces_id, "no_schedule", f"Đọc tài liệu: {reason}", cost))

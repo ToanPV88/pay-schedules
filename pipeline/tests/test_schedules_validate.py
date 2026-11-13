@@ -17,6 +17,7 @@ from pay_pipeline.schedules.model import (
 )
 from pay_pipeline.schedules.validate import (
     check_cell_count,
+    check_labels,
     check_monotonic,
     check_range,
     check_school_year,
@@ -235,6 +236,13 @@ class TestLaneRank:
         # Kentucky ranks: no degree to read, so the old rule (source order) applies.
         s = labelled(["Rank V", "Rank IV", "Rank III"], [[31875, 30016, 40000]])
         assert [i.code for i in check_monotonic(s)] == ["monotonic_lane"]
+
+    def test_bare_generic_label_is_flagged(self) -> None:
+        # Mobile County: the heading "RANK DR" lost its "DR" when read.
+        s = labelled(["RANK B", "RANK A", "RANK AA", "RANK"], [[48552, 52913, 57055, 61195]])
+        assert [i.code for i in check_labels(s)] == ["lane_label"]
+        s.lanes[3] = Lane("RANK DR")
+        assert check_labels(s) == []
 
     def test_rounding_in_the_source_is_not_a_fall(self) -> None:
         # Kentucky, Fayette County 2024-25: Rank II step 38 $91,493.01, step 39 $91,493.00.

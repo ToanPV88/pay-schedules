@@ -125,7 +125,7 @@ def compare(gold: Gold, draft: ScheduleDraft) -> tuple[int, int, list[str]]:
 
 
 def evaluate(golds: list[Gold], docs_dir: Path, *, today: dt.date) -> list[GoldResult]:
-    from pay_pipeline.pdf_pipeline.run import pdf_checks, read_document
+    from pay_pipeline.pdf_pipeline.run import pdf_checks, read_document, reading_order
 
     results = []
     for gold in golds:
@@ -135,6 +135,7 @@ def evaluate(golds: list[Gold], docs_dir: Path, *, today: dt.date) -> list[GoldR
             results.append(GoldResult(gold.id, "no_schedule", issues=[c.reason]))
             continue
         data = read_document(path, c.kind, asdict(c))
+        data = [data[i] for i in reading_order(data)]
         if not data[0].get("is_teacher_salary_schedule"):
             results.append(GoldResult(gold.id, "no_schedule", issues=[str(data[0].get("reason"))]))
             continue

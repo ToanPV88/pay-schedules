@@ -371,6 +371,16 @@ class TestPipeline:
         )
         assert next(o for o in outcomes if o.nces_id == "0600001").status == "no_schedule"
 
+    def test_table_found_only_by_the_second_reader_goes_to_review(self, tmp_path: Path) -> None:
+        works = self.run_gather(tmp_path)
+        nothing = tool_answer(teacher=False)
+        result, outcomes = prepare(
+            works, fake_extractions(nothing, tool_answer()), CATALOG, [], "t", NOW.date()
+        )
+        o = next(o for o in outcomes if o.nces_id == "0600001")
+        assert o.status == "review" and o.issue_codes == ["double_extraction"]
+        assert result.prepared[0].status == "draft"
+
 
 class TestExtractUnits:
     def test_to_draft_rejects_ragged_rows(self) -> None:
@@ -540,6 +550,37 @@ class TestReader:
         assert only_old is not None and "hired prior to" in (rd.scope_note(only_old) or "")
         assert rd.to_answer(only_old, "", rd.WORDS)["scope_note"]
 
+    def test_letter_steps(self) -> None:
+        # Broward, Collier, Volusia: steps named by letters, two steps paid the same ("T&U")
+        lines = [L("Level", "Annual")] + [
+            L(step, f"{54000 + i * 700:,}") for i, step in enumerate("CDEFGHIJ")
+        ]
+        lines += [L("Z", "75,000"), L("AA", "76,000"), L("T&U", "77,000")]
+        tables = rd.find_tables(lines, 1)
+        assert [r.label for r in tables[0].rows] == [*"CDEFGHIJ", "Z", "AA"]
+        answer = rd.to_answer(tables[0], "", rd.LAYOUT)
+        assert answer["steps"][0] == {"label": "C", "years_experience": None}
+        for label in ("C", "AA", "T&U"):
+            assert rd.parse_row(L(label, "50,000"), 0) is not None, label
+        for label in ("CERT1", "Ab", "ABC"):
+            assert rd.parse_row(L(label, "50,000"), 0) is None, label
+
+    def test_standard_teacher_year_is_preferred_over_a_longer_calendar(self) -> None:
+        # Mobile County: 240/260-day, then 187-day schedules for the same ranks
+        def block(days: str, base: int) -> list[rd.Line]:
+            return [L("", "Teachers"), L("", days), rd.Line([]), L("Step", "B", "A")] + [
+                L(str(s), f"{base + s * 900:,}", f"{base + 5000 + s * 900:,}") for s in range(1, 7)
+            ]
+
+        long = block("240/260 DAYS", 67000)
+        standard = block("187 DAYS", 48000)
+        picked = rd.pick_table(rd.find_tables(long + [rd.Line([])] * 3 + standard, 1))
+        assert picked is not None and picked.grid[0] == [48900, 53900]
+        # No calendar stated: the first table is kept.
+        plain = block("", 67000)
+        picked = rd.pick_table(rd.find_tables(plain + [rd.Line([])] * 3 + standard, 1))
+        assert picked is not None and picked.grid[0] == [67900, 72900]
+
     def test_lane_label_drops_unit_words(self) -> None:
         assert rd.lane_label("Bachelor’s Degree  Hourly Rate Rate") == "Bachelor’s Degree"
         assert rd.lane_label("MA (Annual)") == "MA"
@@ -554,7 +595,7 @@ class TestReader:
 
     def test_pdf_checks_flag_prose_labels_and_partial_schedules(self) -> None:
         from pay_pipeline.pdf_pipeline.run import pdf_checks
-        from pay_pipeline.schedules.model import Lane, ScheduleDraft, Step
+        from pay_pipeline.schedules.model import Cell, Lane, ScheduleDraft, Step
 
         draft = ScheduleDraft(
             state="NV", state_district_id="x", district_name="x", school_year="2026-27",
@@ -572,6 +613,15 @@ class TestReader:
         draft.school_year = "2024-25"
         assert pdf_checks({}, draft, NOW.date()) == []
         assert rd.lane_label("Annual Rate") == "Annual Rate"  # nothing else left: keep it
+        # Every step paid the same (Volusia performance-pay tiers): a person confirms.
+        flat = ScheduleDraft(
+            state="FL", state_district_id="x", district_name="x", school_year="2025-26",
+            lanes=[Lane("Pay")], steps=[Step(x) for x in "ABC"],
+            cells={(i, 0): Cell(5_000_000) for i in range(3)},
+        )  # fmt: skip
+        assert [i.code for i in pdf_checks({}, flat, NOW.date())] == ["flat_schedule"]
+        flat.cells[(2, 0)] = Cell(5_100_000)
+        assert pdf_checks({}, flat, NOW.date()) == []
 
     def test_side_box_and_empty_staircase_rows_do_not_split_the_table(self) -> None:
         lines = [L("Step", "BA", "MA")] + [
