@@ -7,6 +7,10 @@
 # - Tài liệu tải về và báo cáo lưu vào Release `docs-<target>-<ngày>-<run>`; job `archive` chỉ có
 #   quyền ghi Release, không ra Internet, không dùng secret.
 # - Điểm lưu: bảng `district_pipeline` trong D1; lô sau bỏ qua học khu đã xử lý đến hạn chạy lại.
+# - Hàng đợi: học khu chưa có bảng nào (lần đầu, hoặc trạng thái trong `rerun`), cộng học khu đã đến
+#   `next_run_at`, kể cả học khu đã có bảng published (để lấy bảng năm mới, D-032). Học khu đang
+#   có bản draft chờ xem tay thì không vào. Học khu có bảng từ tệp bang mà pipeline chưa từng xử lý
+#   (không có dòng district_pipeline) thì không vào.
 # - Chạy song song (D-030): job `plan` đọc hàng đợi một lần rồi chia `shards` lô theo host website
 #   (một website chỉ ở một lô, nên không có hai job cùng gõ một site). Mỗi lô một job `run`, một
 #   Release `<tag>-s<i>`; job `load` nạp SQL từng lô lần lượt vào D1.
@@ -37,6 +41,9 @@ on:
         default: "45"
   push:
     branches: ["run/pdf-pipeline-preview", "run/pdf-pipeline-production"]
+  schedule:
+    # Hằng tuần (D-032): chỉ học khu đã đến hạn chạy lại, tham số trong pdf-pipeline-weekly.json.
+    - cron: "17 19 * * 6"
 
 permissions:
   contents: read
@@ -47,7 +54,7 @@ concurrency:
 
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-  TARGET: ${{ inputs.target || (github.ref_name == 'run/pdf-pipeline-production' && 'production' || 'preview') }}
+  TARGET: ${{ inputs.target || ((github.event_name == 'schedule' || github.ref_name == 'run/pdf-pipeline-production') && 'production' || 'preview') }}
   LIMIT: ${{ inputs.limit }}
   RERUN: ${{ inputs.rerun }}
   ONLY_STATE: ${{ inputs.state }}
@@ -71,8 +78,9 @@ jobs:
         env:
           RUN_ID: ${{ github.run_id }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = push ]; then
+          if [ "$GITHUB_EVENT_NAME" = push ] || [ "$GITHUB_EVENT_NAME" = schedule ]; then
             cfg=pipeline/pdf-pipeline-run.json
+            if [ "$GITHUB_EVENT_NAME" = schedule ]; then cfg=pipeline/pdf-pipeline-weekly.json; fi
             get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]); print(",".join(v) if isinstance(v, list) else v)' "$cfg" "$1" "$2"; }
             LIMIT=$(get limit 100); RERUN=$(get rerun ""); ONLY_STATE=$(get state "")
             SHARDS=$(get shards 1); DEADLINE=$(get deadline_minutes 45)
@@ -114,7 +122,7 @@ jobs:
           if [ -n "$RERUN" ]; then rerun="'${RERUN//,/\',\'}'"; fi
           now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND (p.district_id IS NULL OR p.status IN ($rerun) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status IN ('published', 'draft')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
+            "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft') AND ((NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published') AND (p.district_id IS NULL OR p.status IN ($rerun))) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
             > "$GITHUB_WORKSPACE/inputs/queue.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT DISTINCT d.url, d.sha256, e.model FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \
