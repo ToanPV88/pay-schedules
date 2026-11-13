@@ -912,3 +912,18 @@ class TestSeeds:
         assert works[0].status == "found"
         assert works[0].candidates[0]["method"] == "manual"
         assert not any(u.startswith("https://empty.example.invalid/") for u in seen)
+
+    def test_seed_page_tries_its_files(self, tmp_path: Path) -> None:
+        from dataclasses import replace
+
+        # A hand-found HR page: its files are fetched in order of how salary-like their links are.
+        item = replace(QUEUE[1], seeds=(f"{SITE}/departments/human-resources",))
+        seen: list[str] = []
+        works = gather(
+            [item], tmp_path, {}, UA, workers=1, transport=site_transport(seen),
+            sleep=lambda _: None,
+        )  # fmt: skip
+        assert works[0].status == "found"
+        assert seen.index(
+            f"{SITE}/files/2025-26%20Certificated%20Salary%20Schedule.pdf"
+        ) < seen.index(f"{SITE}/files/classified.pdf")

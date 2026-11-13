@@ -164,6 +164,12 @@ def _urls_in_scripts(html: str) -> list[Link]:
 
 def landing_target(data: bytes, page_url: str, anchor: str) -> str | None:
     """The file a document landing page points to, or None."""
+    ranked = landing_targets(data, page_url, anchor)
+    return ranked[0] if ranked else None
+
+
+def landing_targets(data: bytes, page_url: str, anchor: str) -> list[str]:
+    """Files a page links to, most salary-like first."""
     html = data.decode("utf-8", errors="replace")
     links = extract_links(html, page_url) + _urls_in_scripts(html)
     files = [
@@ -173,10 +179,8 @@ def landing_target(data: bytes, page_url: str, anchor: str) -> str | None:
         or any(h in ln.url.lower() for h in _LANDING_HINTS)
         or (is_document_url(ln.url) and not same_site(ln.url, page_url))
     ]
-    if not files:
-        return None
-    best = max(files, key=lambda ln: score_document(Link(ln.url, ln.text or anchor)))
-    return best.url
+    ranked = sorted(files, key=lambda ln: -score_document(Link(ln.url, ln.text or anchor)))
+    return list(dict.fromkeys(ln.url for ln in ranked))
 
 
 def folder_documents(data: bytes, page_url: str) -> list[Link]:
@@ -211,6 +215,8 @@ def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
 
 MAX_SHARDS = 20  # GitHub Free runs at most 20 jobs at once
 SEED_SCORE = 100.0
+SEED_SOURCE = "schedule-urls.csv"
+MAX_SEED_PAGE_DOCS = 6  # files tried from one hand-found page
 
 
 def load_seeds(path: Path | None) -> dict[str, tuple[str, ...]]:
@@ -266,7 +272,7 @@ def gather_one(
     if item.seeds:
         # A schedule URL found by hand: no crawl, so a home page that blocks bots or a website
         # that moved does not matter; the fetcher still obeys the document host's robots.txt.
-        picked = [Candidate(u, "schedule-urls.csv", "", "manual", SEED_SCORE) for u in item.seeds]
+        picked = [Candidate(u, SEED_SOURCE, "", "manual", SEED_SCORE) for u in item.seeds]
         work.candidates = [asdict(c) for c in picked]
     else:
         found = discover(fetcher, item.nces_id, item.website, max_pages=max_pages)
@@ -284,6 +290,7 @@ def gather_one(
     errors = []
     pending = list(picked[:MAX_DOCS_PER_DISTRICT])
     folder_budget = MAX_FOLDER_DOCS
+    seed_budget = MAX_SEED_PAGE_DOCS
     while pending:
         cand = pending.pop(0)
         url = export_url(cand.url)
@@ -294,6 +301,16 @@ def gather_one(
             if kind not in EXTENSIONS and _looks_html(
                 response.headers.get("content-type", ""), data
             ):
+                if cand.found_on == SEED_SOURCE and seed_budget > 0:
+                    # A page found by hand (an HR "Salary Schedules" page): its links carry the
+                    # labels, so its most salary-like files are tried in turn, not only the first.
+                    files = landing_targets(data, response.final_url, "")[:seed_budget]
+                    seed_budget -= len(files)
+                    pending[0:0] = [
+                        Candidate(u, response.final_url, "", "manual", SEED_SCORE) for u in files
+                    ]
+                    if files:
+                        continue
                 # A document landing page (Finalsite "/documents/.../123456", viewers): follow the
                 # best file link on it, one hop only.
                 inner = landing_target(data, response.final_url, cand.anchor_text)
