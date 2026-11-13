@@ -1,0 +1,105 @@
+# Chạy lại bước lưu Release và nạp D1 của một lượt pipeline PDF (D-033).
+#
+# Dùng khi job `run` của pdf-pipeline.yml đã xong mà `archive` hoặc `load` lỗi (ví dụ GitHub giới
+# hạn số lần tải lên mỗi giờ). Lấy kết quả các lô từ artifact của lượt cũ (giữ 7 ngày), tải phần
+# Release còn thiếu, rồi nạp SQL từng lô. Nạp lại SQL đã nạp không sinh trùng: SQL của pdf-build
+# dùng khóa tự nhiên (url + sha256, khóa nghiệp vụ của bảng).
+#
+# Chạy: đẩy commit có pipeline/pdf-pipeline-resume.json lên nhánh run/pdf-pipeline-resume-production
+# (commit phải có trên main) hoặc run/pdf-pipeline-resume-preview.
+name: PDF pipeline resume
+
+on:
+  push:
+    branches: ["run/pdf-pipeline-resume-preview", "run/pdf-pipeline-resume-production"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdf-pipeline
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  TARGET: ${{ github.ref_name == 'run/pdf-pipeline-resume-production' && 'production' || 'preview' }}
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      run_id: ${{ steps.cfg.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check inputs
+        id: cfg
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cfg=pipeline/pdf-pipeline-resume.json
+          RUN_ID=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_id"])' "$cfg")
+          TAG=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["tag"])' "$cfg")
+          [[ "$RUN_ID" =~ ^[0-9]{5,15}$ ]] || { echo "::error::run_id sai"; exit 1; }
+          [[ "$TAG" =~ ^docs-${TARGET}-[0-9]{8}-${RUN_ID}$ ]] || { echo "::error::tag phải là docs-${TARGET}-<ngày>-${RUN_ID}"; exit 1; }
+          name=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq .name)
+          [ "$name" = "PDF pipeline" ] || { echo "::error::run_id không phải lượt PDF pipeline"; exit 1; }
+          if [ "$TARGET" = production ]; then
+            git fetch --quiet origin main
+            git merge-base --is-ancestor HEAD origin/main || { echo "::error::production chỉ từ main"; exit 1; }
+          fi
+          { echo "run_id=$RUN_ID"; } >> "$GITHUB_OUTPUT"
+          { echo "RUN_ID=$RUN_ID"; echo "TAG=$TAG"; } >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: work-*
+          path: work
+          run-id: ${{ steps.cfg.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Create or complete releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: scripts/archive-releases.sh work "$TAG" "$TARGET"
+
+  load:
+    needs: archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: work-*
+          path: work
+          run-id: ${{ needs.archive.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Load into D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          for sql in "$GITHUB_WORKSPACE"/work/work-*/pipeline.sql; do
+            [ -f "$sql" ] || continue
+            echo "Nạp $sql"
+            npx wrangler d1 execute "$db" $flag --remote --file "$sql"
+          done
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT status, COUNT(*) AS districts FROM district_pipeline GROUP BY status ORDER BY 2 DESC" \
+            > "$GITHUB_WORKSPACE/after.json"
+          { echo '## Sau khi nạp'; echo '```json'; cat "$GITHUB_WORKSPACE/after.json"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

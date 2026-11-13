@@ -13,7 +13,8 @@
 #   (không có dòng district_pipeline) thì không vào.
 # - Chạy song song (D-030): job `plan` đọc hàng đợi một lần rồi chia `shards` lô theo host website
 #   (một website chỉ ở một lô, nên không có hai job cùng gõ một site). Mỗi lô một job `run`, một
-#   Release `<tag>-s<i>`; job `load` nạp SQL từng lô lần lượt vào D1.
+#   Release `<tag>-s<i>` (tài liệu gói trong docs.tar, D-033); job `load` nạp SQL từng lô lần lượt.
+# - Lưu Release hoặc nạp D1 lỗi giữa chừng: chạy lại hai bước đó bằng pdf-pipeline-resume.yml.
 name: PDF pipeline
 
 on:
@@ -204,10 +205,11 @@ jobs:
     needs: [plan, run]
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: work-*
@@ -217,14 +219,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           TAG: ${{ needs.plan.outputs.tag }}
-        run: |
-          for dir in work/work-*; do
-            [ -f "$dir/pipeline.sql" ] || continue
-            shard="${dir##*-}"
-            gh release create "$TAG-s$shard" "$dir"/docs/* --repo "$REPO" --title "$TAG-s$shard" \
-              --notes "Tài liệu học khu và báo cáo của pipeline PDF (${TARGET}), lô $shard." --prerelease
-            echo "Release: $TAG-s$shard" >> "$GITHUB_STEP_SUMMARY"
-          done
+        run: scripts/archive-releases.sh work "$TAG" "$TARGET"
 
   load:
     needs: [plan, archive]

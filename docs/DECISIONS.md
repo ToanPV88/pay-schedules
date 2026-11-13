@@ -702,3 +702,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   học khu đã đến `next_run_at` vào hàng đợi cả khi đã có bảng published. Tài liệu không đổi thì
   bỏ qua nhờ `known.json` (url + sha256); bảng cùng năm thành bản draft song song (D-012); bảng cũ
   hơn bản published bị Validate giữ lại. Học khu đang có draft chờ duyệt vẫn không vào.
+
+## D-033: Release của pipeline PDF gói tài liệu thành docs.tar
+
+- Ngày: 2026-11-13. Lượt toàn quốc đầu tiên (run 43379595661) có khoảng 6.000 tài liệu; job
+  `archive` tải từng tệp lên Release và bị GitHub chặn ("API rate limit exceeded for installation")
+  sau khoảng 2.300 tệp, nên `load` không chạy.
+- Từ nay mỗi lô có một `docs.tar` chứa mọi tài liệu học khu, cộng các tệp báo cáo tải riêng
+  (`manifest.json`, `report.md`, `work.json`, `extractions.json`). `asset_name` trong D1 là tên tệp
+  bên trong `docs.tar`; Release cũ (trước D-033) vẫn có từng tệp riêng.
+- Logic nằm trong `scripts/archive-releases.sh`, chạy lại được: Release đã có thì chỉ tải phần còn
+  thiếu (một Release đã có đủ từng tệp thì không thêm docs.tar).
+- `pdf-pipeline-resume.yml` lưu Release và nạp D1 lại cho một lượt đã xong bước `run`, từ artifact
+  của lượt đó (giữ 7 ngày); tham số trong `pipeline/pdf-pipeline-resume.json`.
