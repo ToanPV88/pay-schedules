@@ -19,6 +19,7 @@ from typing import Any
 
 from pay_pipeline.catalog.d1sql import batched_insert, quote
 from pay_pipeline.pdf_pipeline import extract as ex
+from pay_pipeline.pdf_pipeline import ocr
 from pay_pipeline.pdf_pipeline import read as rd
 from pay_pipeline.pdf_pipeline.gather import DistrictWork, DocWork
 from pay_pipeline.schedules.model import (
@@ -60,7 +61,9 @@ class Outcome:
 def read_document(path: Path, kind: str, classification: dict[str, Any]) -> list[dict[str, Any]]:
     """Deterministic readings of one document, in the shared answer shape."""
     if classification.get("scanned"):
-        return [rd.to_answer(None, "", rd.LAYOUT, "PDF dạng ảnh quét: cần OCR hoặc nhập tay")]
+        if kind == "pdf":
+            return ocr.read_scanned(path)
+        return [rd.to_answer(None, "", rd.LAYOUT, "Tệp dạng ảnh quét")]
     if kind == "pdf":
         return rd.read_pdf(path, [int(p) for p in classification.get("schedule_pages") or []])
     if kind == "xlsx":
@@ -179,6 +182,16 @@ def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft, today: dt.date) -> 
     bad = [ln.label_raw for ln in draft.lanes if _PROSE_IN_LABEL.search(ln.label_raw)]
     if bad:
         issues.append(Issue("lane_label", f"Nhãn lane lẫn chữ của đoạn văn: {bad[0][:80]!r}"))
+    if str(answer.get("reader", "")).startswith("tesseract"):
+        agree = int(answer.get("ocr_agree") or 0)
+        if agree < ocr.AGREE_TO_PUBLISH:
+            issues.append(
+                Issue("ocr", f"Bản scan: {agree}/{ocr.AGREE_TO_PUBLISH} lượt OCR khớp nhau")
+            )
+        first = re.match(r"\D{0,6}(\d{1,2})", draft.steps[0].label_raw) if draft.steps else None
+        if first and int(first.group(1)) > 1:
+            # OCR often drops the first row; a table read from a scan must start at step 0 or 1.
+            issues.append(Issue("ocr", f"Bản scan bắt đầu ở bậc {draft.steps[0].label_raw}"))
     amounts = {c.amount_cents for c in draft.cells.values() if c.amount_cents is not None}
     if len(draft.steps) >= MIN_FLAT_STEPS and len(amounts) == 1:
         # Every step paid the same (Volusia's performance-pay tiers): true to some sources, but
