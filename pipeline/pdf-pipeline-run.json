@@ -6,6 +6,6 @@
     "no_candidates"
   ],
   "shards": 1,
-  "deadline_minutes": 12,
+  "deadline_minutes": 13,
   "seeded_only": false
 }
