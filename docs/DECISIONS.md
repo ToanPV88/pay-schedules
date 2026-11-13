@@ -735,3 +735,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   `no_schedule`, tìm lại sau 90 ngày, thay vì nằm im mãi.
 - Câu trên trang web đổi thành "Shown as the source published it" vì giờ áp dụng cả cho bảng đọc từ
   website học khu, không chỉ tệp của bang.
+
+## D-035: Suy website học khu từ website các trường
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý. Danh mục học khu NCES 2024-25 bỏ trống WEBSITE của 1.218 học
+  khu thường; pipeline PDF không có chỗ bắt đầu nên các học khu này nằm ở `no_website`.
+- Nguồn thêm: danh mục trường NCES CCD 2024-25 (`ccd_sch_029`), Release
+  `src-nces-ccd-schools-2425-*` (manifest `pipeline/sources/nces-ccd-schools-2425.json`).
+- Chỉ dùng khi tệp học khu bỏ trống. Host phổ biến nhất trong website các trường của học khu phải
+  được ít nhất 2 trường và 60% số trường có ghi website cùng báo; học khu chỉ có một trường thì lấy
+  website của trường đó. Không dùng host dùng chung (Facebook, Google, Blogspot, Wix, Weebly,
+  Squarespace, WordPress.com, mạng xã hội) và host `.gov`.
+- Trên tệp thật: suy được 301 website (NH 92, GA 49, IL 47, VT 33, WA 30, MI 27...), ví dụ
+  Tacoma (70 trường cùng `tacoma.k12.wa.us`). Nebraska, Idaho, Louisiana, Rhode Island bỏ trống
+  website ở cả tệp trường; cần danh bạ riêng của bang (chưa làm).

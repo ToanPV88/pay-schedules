@@ -18,9 +18,11 @@ import html
 import io
 import re
 import zipfile
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # The 50 states and DC: PLAN covers public school districts in the United States. Territories
 # and the Bureau of Indian Education are outside the scope (DECISIONS.md D-015).
@@ -125,6 +127,40 @@ def read_directory(path: Path) -> list[DirectoryRow]:
             )
             for r in reader
         ]
+
+
+@dataclass(frozen=True)
+class SchoolSites:
+    """Website hosts of the schools of one LEA (school directory, ``ccd_sch_029_*.zip``)."""
+
+    schools: int
+    hosts: Counter[str]
+
+
+def _host(raw: str) -> str | None:
+    url = raw.strip()
+    if not url or " " in url or "." not in url:
+        return None
+    if "://" not in url:
+        url = "http://" + url
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    return host.removeprefix("www.") or None
+
+
+def read_school_sites(path: Path) -> dict[str, SchoolSites]:
+    """LEAID -> number of schools and the website hosts they report (D-035)."""
+    counts: dict[str, int] = Counter()
+    hosts: dict[str, Counter[str]] = {}
+    with zipfile.ZipFile(path) as zf, zf.open(_member(zf, ".csv")) as raw:
+        reader = csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8-sig", newline=""))
+        _require(list(reader.fieldnames or []), ("LEAID", "WEBSITE"), path.name)
+        for r in reader:
+            leaid = r["LEAID"].strip()
+            counts[leaid] += 1
+            host = _host(r["WEBSITE"])
+            if host:
+                hosts.setdefault(leaid, Counter())[host] += 1
+    return {k: SchoolSites(n, hosts.get(k, Counter())) for k, n in counts.items()}
 
 
 def read_membership(path: Path, leaids: set[str] | None = None) -> dict[str, int | None]:

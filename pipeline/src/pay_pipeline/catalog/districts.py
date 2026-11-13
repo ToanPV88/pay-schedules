@@ -6,6 +6,7 @@ Pure transformation: files in, :class:`Catalog` out. Writing to D1 is in ``d1sql
 from __future__ import annotations
 
 import random
+import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -19,12 +20,14 @@ from pay_pipeline.catalog.ccd import (
     STATES,
     DirectoryRow,
     EdgeRow,
+    SchoolSites,
     SummaryRow,
     find_file,
     iter_operating,
     read_directory,
     read_edge,
     read_membership,
+    read_school_sites,
     read_summary,
 )
 from pay_pipeline.catalog.neighbors import Neighbor, Point, compute_neighbors
@@ -80,6 +83,7 @@ class Catalog:
     summary_title: str
     summary: dict[str, SummaryRow]
     nyc_components: int
+    websites_from_schools: int = 0
 
 
 def normalize_website(raw: str) -> str | None:
@@ -89,6 +93,32 @@ def normalize_website(raw: str) -> str | None:
     if not url.lower().startswith(("http://", "https://")):
         url = "http://" + url
     return url
+
+
+# Hosts that are not a district's own site: social pages, generic page builders, state portals.
+_SHARED_HOST = re.compile(
+    r"(^|\.)(facebook\.com|google\.com|blogspot\.com|wixsite\.com|weebly\.com|"
+    r"squarespace\.com|wordpress\.com|instagram\.com|twitter\.com|x\.com)$|\.gov$"
+)
+#: Share of the schools that report a website that must agree on one host.
+SCHOOL_HOST_SHARE = 0.6
+
+
+def school_website(sites: SchoolSites | None) -> str | None:
+    """District website derived from its schools' websites (D-035), or None.
+
+    Used only when the LEA directory leaves WEBSITE empty. The most common host among the schools
+    must be reported by at least two schools and by SCHOOL_HOST_SHARE of those reporting one; a
+    district with a single school takes that school's site. Shared hosts are never used.
+    """
+    if sites is None or not sites.hosts:
+        return None
+    host, n = sites.hosts.most_common(1)[0]
+    if _SHARED_HOST.search(host):
+        return None
+    if sites.schools == 1 or (n >= 2 and n / sum(sites.hosts.values()) >= SCHOOL_HOST_SHARE):
+        return f"http://{host}"
+    return None
 
 
 def _exclusion(row: DirectoryRow) -> str | None:
@@ -105,6 +135,7 @@ def build_catalog(
     sources: Path,
     existing_slugs: Mapping[str, tuple[str, str]],
     summary_file: str = "ccd_*_summary_2.html",
+    schools: Path | None = None,
 ) -> Catalog:
     directory = read_directory(find_file(sources, "ccd_lea_029_*.zip"))
     years = {r.school_year for r in directory}
@@ -154,9 +185,14 @@ def build_catalog(
         existing_slugs,
     )
 
+    school_sites = read_school_sites(schools) if schools else {}
+    derived = 0
     districts = []
     for r in sorted(kept, key=lambda x: x.leaid):
         e = edge.get(r.leaid)
+        website = normalize_website(r.website)
+        if website is None and (website := school_website(school_sites.get(r.leaid))):
+            derived += 1
         districts.append(
             District(
                 nces_id=r.leaid,
@@ -166,7 +202,7 @@ def build_catalog(
                 city=r.city or None,
                 county=e.county_name if e and e.county_name else None,
                 county_code=e.county_code if e and e.county_code else None,
-                website=normalize_website(r.website),
+                website=website,
                 enrollment=membership.get(r.leaid),
                 lat=e.lat if e else None,
                 lng=e.lng if e else None,
@@ -190,6 +226,7 @@ def build_catalog(
         summary_title=title,
         summary=summary,
         nyc_components=len(nyc_component_ids),
+        websites_from_schools=derived,
     )
 
 
@@ -290,7 +327,8 @@ def render_report(catalog: Catalog, provenance: list[dict[str, str]] | None = No
     lines += [
         "## Độ đầy đủ",
         "",
-        f"- Thiếu website: {sum(1 for x in d if not x.website):,}",
+        f"- Thiếu website: {sum(1 for x in d if not x.website):,}"
+        f" (đã suy {catalog.websites_from_schools:,} website từ website các trường, D-035)",
         f"- Thiếu sĩ số: {sum(1 for x in d if x.enrollment is None):,}",
         f"- Thiếu tọa độ: {sum(1 for x in d if x.lat is None):,}",
         f"- Thiếu quận: {sum(1 for x in d if not x.county):,}",
