@@ -876,3 +876,39 @@ def test_pdf_checks_hold_uncertain_scans() -> None:
     draft.lanes = [Lane("Level 3 Theta Hanlon Instructors ATC at"), Lane("MA")]
     assert [i.code for i in pdf_checks(ocr_answer, draft, NOW.date())] == ["ocr"]
     assert pdf_checks({"reader": rd.WORDS}, draft, NOW.date()) == []  # text PDFs unaffected
+
+
+class TestSeeds:
+    """D-038: schedule URLs found by hand go straight to download, without a crawl."""
+
+    def test_load_seeds(self, tmp_path: Path) -> None:
+        from pay_pipeline.pdf_pipeline.gather import load_seeds
+
+        f = tmp_path / "seeds.csv"
+        f.write_text(
+            "nces_id,url,note\n"
+            "0600002,https://a.example.invalid/s.pdf,first\n"
+            "0600002,https://a.example.invalid/t.pdf,second\n"
+            "bad,https://x.example.invalid/x.pdf,\n"
+            "0600003,ftp://x.example.invalid/x.pdf,\n",
+            encoding="utf-8",
+        )
+        assert load_seeds(f) == {
+            "0600002": ("https://a.example.invalid/s.pdf", "https://a.example.invalid/t.pdf")
+        }
+        assert load_seeds(None) == {}
+
+    def test_seed_skips_the_crawl(self, tmp_path: Path) -> None:
+        from dataclasses import replace
+
+        url = f"{SITE}/files/2025-26%20Certificated%20Salary%20Schedule.pdf"
+        # The district's own website is empty; the hand-found link is what gets the schedule.
+        item = replace(QUEUE[1], seeds=(url,))
+        seen: list[str] = []
+        works = gather(
+            [item], tmp_path, {}, UA, workers=1, transport=site_transport(seen),
+            sleep=lambda _: None,
+        )  # fmt: skip
+        assert works[0].status == "found"
+        assert works[0].candidates[0]["method"] == "seed"
+        assert not any(u.startswith("https://empty.example.invalid/") for u in seen)

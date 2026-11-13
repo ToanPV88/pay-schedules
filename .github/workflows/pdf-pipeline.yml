@@ -84,7 +84,7 @@ jobs:
             if [ "$GITHUB_EVENT_NAME" = schedule ]; then cfg=pipeline/pdf-pipeline-weekly.json; fi
             get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])).get(sys.argv[2], sys.argv[3]); print(",".join(v) if isinstance(v, list) else v)' "$cfg" "$1" "$2"; }
             LIMIT=$(get limit 100); RERUN=$(get rerun ""); ONLY_STATE=$(get state "")
-            SHARDS=$(get shards 1); DEADLINE=$(get deadline_minutes 45)
+            SHARDS=$(get shards 1); DEADLINE=$(get deadline_minutes 45); SEEDED_ONLY=$(get seeded_only False)
           fi
           [[ "$TARGET" =~ ^(preview|production)$ ]] || { echo "::error::target sai"; exit 1; }
           [[ "$LIMIT" =~ ^[0-9]{1,5}$ ]] || { echo "::error::limit phải là số"; exit 1; }
@@ -98,7 +98,8 @@ jobs:
           fi
           tag="docs-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
           { echo "tag=$tag"; echo "deadline=$DEADLINE"; } >> "$GITHUB_OUTPUT"
-          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; } >> "$GITHUB_ENV"
+          [[ "${SEEDED_ONLY:-False}" =~ ^(True|False)$ ]] || { echo "::error::seeded_only sai"; exit 1; }
+          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; } >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -122,6 +123,12 @@ jobs:
           rerun="'-'"
           if [ -n "$RERUN" ]; then rerun="'${RERUN//,/\',\'}'"; fi
           now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$SEEDED_ONLY" = True ]; then
+            # Lượt chỉ cho học khu có link bảng lương tìm tay (D-038), mọi trạng thái.
+            ids=$(python3 -c 'import csv,re; print(",".join(sorted({"\x27"+r["nces_id"]+"\x27" for r in csv.DictReader(open("../../pipeline/sources/schedule-urls.csv")) if re.fullmatch(r"\d{7}", r["nces_id"])})))')
+            filter="$filter AND d.nces_id IN ($ids)"
+            rerun="SELECT status FROM district_pipeline"
+          fi
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft') AND ((NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published') AND (p.district_id IS NULL OR p.status IN ($rerun))) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
             > "$GITHUB_WORKSPACE/inputs/queue.json"
@@ -178,7 +185,8 @@ jobs:
         working-directory: pipeline
         run: |
           uv run pay-pipeline pdf-gather --queue "$GITHUB_WORKSPACE/inputs/queue-$SHARD.json" \
-            --known "$GITHUB_WORKSPACE/inputs/known.json" --out "$GITHUB_WORKSPACE/work" --deadline-minutes "$DEADLINE"
+            --known "$GITHUB_WORKSPACE/inputs/known.json" --out "$GITHUB_WORKSPACE/work" --deadline-minutes "$DEADLINE" \
+            --seeds sources/schedule-urls.csv
       - name: Read schedules
         working-directory: pipeline
         run: uv run pay-pipeline pdf-extract --work "$GITHUB_WORKSPACE/work"
