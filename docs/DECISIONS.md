@@ -671,3 +671,18 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   nguyên trạng thái hàng đợi cho lần sau, như trước.
 - Tham số trong `pipeline/pdf-pipeline-run.json`: thêm `shards` (mặc định 1) và
   `deadline_minutes` (mặc định 45). `limit` cho phép tới 5 chữ số.
+
+## D-031: Hawaii: bảng lương giáo viên toàn bang của HIDOE
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý.
+- Hawaii chỉ có một học khu (Hawaii Department of Education, NCES 1500030, `ST_LEAID` `HI-001`),
+  nên bảng của bang chính là bảng của học khu, không phải mức tối thiểu được cộng thêm phụ cấp địa
+  phương. Bang có bảng chung nhưng học khu trả thêm (North Carolina, Georgia...) thì không làm theo
+  cách này: số trên site sẽ thấp hơn lương thật.
+- Nguồn: "Teacher's Annual Rate Salary Schedule (10-Month)" (Exhibit E, hợp đồng HSTA), PDF một
+  trang trên hawaiipublicschools.org. Bảng 12 tháng không nhập.
+- Đọc (`hi_doe.py`, importer `hi_doe@1`): theo mã lương in cạnh mỗi số (`T03-14A` = Class III, bậc
+  14A), không theo vị trí cột; số bậc ở lề có dấu chú thích dính liền (`95` = bậc 9, chú thích 5).
+  Thiếu ô hoặc trùng mã thì bỏ cả bảng.
+- Bậc đầu là bậc 4, nguồn ghi "(ENTRY LEVEL)". Kiểm tra `step_start` bỏ qua hàng đầu có nhãn
+  "entry level", vì nguồn đã nói đó là hàng đầu.

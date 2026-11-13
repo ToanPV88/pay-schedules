@@ -286,8 +286,12 @@ _STEP_NUMBER = re.compile(r"^\D{0,6}(\d{1,2})")
 
 
 def check_steps(s: ScheduleDraft) -> list[Issue]:
-    """A table that starts at a high step may have lost its first rows."""
-    if not s.steps:
+    """A table that starts at a high step may have lost its first rows.
+
+    A first row the source itself marks as the entry level (Hawaii: "(ENTRY LEVEL) 4") is the
+    start of the table, whatever its number.
+    """
+    if not s.steps or "ENTRY" in s.steps[0].label_raw.upper():
         return []
     m = _STEP_NUMBER.match(s.steps[0].label_raw)
     if m and int(m.group(1)) > 2:

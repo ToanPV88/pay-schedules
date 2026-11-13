@@ -22,7 +22,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from pay_pipeline.catalog.ccd import StateLea, find_file, read_state_ids
-from pay_pipeline.schedules import ca_j90, ky_kde, ok_sde
+from pay_pipeline.schedules import ca_j90, hi_doe, ky_kde, ok_sde
 from pay_pipeline.schedules.model import ScheduleDraft, school_year_from_start, school_year_start
 from pay_pipeline.schedules.validate import Issue, start_salary, summarize, validate
 
@@ -30,7 +30,7 @@ KY_YEARS = 2
 """Kentucky: import the latest N fiscal years of the workbook (California: every J-90 file)."""
 CROSS_CHECK_SAMPLE = 10
 
-IMPORTERS = {"CA": "ca_j90@1", "KY": "ky_kde@1", "OK": "ok_sde@1"}
+IMPORTERS = {"CA": "ca_j90@1", "HI": "hi_doe@1", "KY": "ky_kde@1", "OK": "ok_sde@1"}
 # A state file is what each district reported to the state: odd figures (pay falling between two
 # steps or lanes, a big change from last year) are published as reported, not held for a person
 # (D-028). Holds from a manual cross-check and structural problems still wait for review.
@@ -43,6 +43,8 @@ STATE_KEY: dict[str, Callable[[str], str | None]] = {
     "KY": lambda st: st[6:9] if re.fullmatch(r"KY-\d{9}", st) else None,
     # 'OK-72-I001' -> county-district code '72I001'
     "OK": lambda st: st[3:5] + st[6:] if re.fullmatch(r"OK-\d{2}-[A-Z]\d{3}", st) else None,
+    # 'HI-001' -> '001' (Hawaii is one statewide district)
+    "HI": lambda st: st[3:] if re.fullmatch(r"HI-\d{3}", st) else None,
 }
 
 
@@ -240,6 +242,9 @@ def read_drafts(
                 out.append((draft, docs[xlsx.name]))
     for pdf in sorted(sources.glob("ok_local_salary_schedules_*.pdf")):
         for draft in ok_sde.read_book(pdf):
+            out.append((draft, docs[pdf.name]))
+    for pdf in sorted(sources.glob("hi_teacher_10_month_*.pdf")):
+        for draft in hi_doe.read_pdf(pdf):
             out.append((draft, docs[pdf.name]))
     return out
 
