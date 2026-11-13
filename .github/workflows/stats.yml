@@ -1,0 +1,75 @@
+# Thống kê độ phủ dữ liệu: số học khu theo bang, đã có bảng lương published, chờ xem tay, đã chạy
+# pipeline. Chỉ đọc D1 (SELECT). Chạy: đẩy commit lên nhánh `run/stats` hoặc chạy tay.
+name: Stats
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "CSDL"
+        type: choice
+        options: [production, preview]
+        default: production
+  push:
+    branches: ["run/stats"]
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  TARGET: ${{ inputs.target || 'production' }}
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Query D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          pub="EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published' AND s.schedule_type = 'teacher')"
+          drf="EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft')"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.state, COUNT(*) AS districts, SUM(COALESCE(d.website, '') <> '') AS with_website, SUM(COALESCE(d.enrollment, 0)) AS students, SUM($pub) AS published, SUM(CASE WHEN $pub THEN COALESCE(d.enrollment, 0) ELSE 0 END) AS published_students, SUM(NOT $pub AND $drf) AS review_only, SUM(EXISTS (SELECT 1 FROM district_pipeline p WHERE p.district_id = d.id)) AS pipeline_tried FROM districts d WHERE d.active = 1 AND d.employer_type = 'school_district' GROUP BY d.state ORDER BY districts DESC" \
+            > "$GITHUB_WORKSPACE/by_state.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT status, COUNT(*) AS n FROM district_pipeline GROUP BY status ORDER BY n DESC" \
+            > "$GITHUB_WORKSPACE/pipeline.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT (SELECT COUNT(DISTINCT schedule_id) FROM review_queue WHERE resolved_at IS NULL) AS open_review, (SELECT COUNT(*) FROM schedules WHERE status = 'published') AS published_schedules" \
+            > "$GITHUB_WORKSPACE/totals.json"
+      - name: Report
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          def rows(name):
+              data = json.load(open(name))
+              return data[0]["results"] if isinstance(data, list) else data["results"]
+          states = rows("by_state.json")
+          keys = ["districts", "with_website", "students", "published", "published_students", "review_only", "pipeline_tried"]
+          total = {k: sum(int(r[k] or 0) for r in states) for k in keys}
+          print("### Toàn quốc\n")
+          for k in keys:
+              print(f"- {k}: {total[k]:,}")
+          for r in rows("totals.json"):
+              print(f"- open_review (bảng): {r['open_review']:,}\n- published_schedules: {r['published_schedules']:,}")
+          print("\n### district_pipeline\n")
+          for r in rows("pipeline.json"):
+              print(f"- {r['status']}: {r['n']:,}")
+          print("\n### Theo bang\n")
+          print("| Bang | Học khu | Có website | Học sinh | Có bảng | HS có bảng | Chờ xem tay | Đã chạy pipeline |")
+          print("|---|---:|---:|---:|---:|---:|---:|---:|")
+          for r in states:
+              print("| " + " | ".join([r["state"]] + [f"{int(r[k] or 0):,}" for k in keys]) + " |")
+          PY
