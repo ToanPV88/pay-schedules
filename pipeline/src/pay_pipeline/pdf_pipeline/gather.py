@@ -96,6 +96,8 @@ class DistrictWork:
     docs: list[DocWork] = field(default_factory=list)
     chosen: str | None = None
     """asset_name of the document picked for extraction."""
+    home_sample: list[str] = field(default_factory=list)
+    """Links on the home page, kept when nothing was found, to see why (D-042)."""
 
 
 def _now() -> str:
@@ -317,7 +319,11 @@ def gather_one(
         picked = [c for c in found.candidates if c.score >= MIN_CANDIDATE_SCORE]
     if not picked:
         work.status = "no_candidates"
-        work.detail = f"Đã đọc {found.pages_fetched} trang, không thấy tài liệu bảng lương"
+        work.home_sample = found.home_sample
+        work.detail = (
+            f"Đã đọc {found.pages_fetched} trang, không thấy tài liệu bảng lương"
+            f" ({found.home_summary()})"
+        )
         return work
     errors = []
     pending = list(picked[:MAX_DOCS_PER_DISTRICT])
