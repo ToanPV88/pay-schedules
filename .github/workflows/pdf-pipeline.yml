@@ -126,7 +126,7 @@ jobs:
             "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft') AND ((NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published') AND (p.district_id IS NULL OR p.status IN ($rerun))) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
             > "$GITHUB_WORKSPACE/inputs/queue.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT DISTINCT d.url, d.sha256, e.model FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \
+            "SELECT DISTINCT d.url, d.sha256, e.model, EXISTS (SELECT 1 FROM document_classifications c WHERE c.source_document_id = d.id AND c.scanned = 1) AS scanned FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \
             > "$GITHUB_WORKSPACE/inputs/known.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT nces_id, state, name, active FROM districts WHERE nces_id IS NOT NULL" \
@@ -168,7 +168,7 @@ jobs:
       - name: Install
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr
           (cd pipeline && uv sync --locked --no-dev)
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

@@ -44,7 +44,8 @@ from pay_pipeline.discover.crawl import (
     score_document,
 )
 from pay_pipeline.documents.classify import Classification, classify, detect_kind
-from pay_pipeline.pdf_pipeline.read import READERS
+from pay_pipeline.pdf_pipeline.ocr import READERS as OCR_READERS
+from pay_pipeline.pdf_pipeline.read import READERS as TEXT_READERS
 
 MAX_DOCS_PER_DISTRICT = 4
 MAX_FOLDER_DOCS = 2
@@ -198,8 +199,10 @@ def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
     """
     known: dict[str, set[str]] = {}
     for r in rows:
-        if r.get("model") is not None and r["model"] not in READERS:
+        if r.get("model") is not None and r["model"] not in TEXT_READERS | OCR_READERS:
             continue
+        if r.get("scanned") and r.get("model") not in OCR_READERS:
+            continue  # a scan set aside before OCR existed (D-036): read it again
         known.setdefault(str(r["url"]), set()).add(str(r["sha256"]))
     return known
 

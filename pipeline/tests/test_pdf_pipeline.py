@@ -761,3 +761,118 @@ class TestShards:
         )
         parts = [json.loads((tmp_path / "s" / f"queue-{i}.json").read_text()) for i in range(2)]
         assert sum(len(p) for p in parts) == 5
+
+
+class TestOcr:
+    """D-036: scanned schedules read with Tesseract."""
+
+    def test_fix_token(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import fix_token
+
+        assert fix_token("S45,123") == "$45,123"
+        assert fix_token("4O,l23") == "40,123"
+        assert fix_token("45.123") == "45,123"
+        assert fix_token("45.12") == "45.12"  # cents stay
+        assert fix_token("71,449]") == "71,449"
+        assert fix_token("Step") == "Step"
+        assert fix_token("L3") == "13"
+        assert fix_token("“10") == "10"
+
+    def test_known_documents_reread_old_scans(self) -> None:
+        from pay_pipeline.pdf_pipeline.gather import known_documents
+        from pay_pipeline.pdf_pipeline.ocr import CONFIGS
+
+        rows = [
+            {"url": "u1", "sha256": "a", "model": rd.LAYOUT, "scanned": 1},  # before OCR
+            {"url": "u2", "sha256": "b", "model": CONFIGS[0][0], "scanned": 1},
+            {"url": "u3", "sha256": "c", "model": rd.LAYOUT, "scanned": 0},
+        ]
+        assert known_documents(rows) == {"u2": {"b"}, "u3": {"c"}}
+
+    def test_fill_step_labels(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import fill_step_labels
+
+        def line(*texts: str) -> rd.Line:
+            return rd.Line([rd.Word(t, 100.0 * i, 100.0 * i + 60) for i, t in enumerate(texts)])
+
+        amounts = ("50,000", "52,000", "54,000")
+        lines = [
+            line("STEP", "BA", "MA", "PhD"),
+            line(*amounts),  # step 1 dropped
+            line(*amounts),  # step 2 dropped
+            line("3", *amounts),
+            line("4", *amounts),
+            line(*amounts),  # step 5 dropped
+            line("6", *amounts),
+            line("10", *amounts),
+            line(*amounts),  # between 10 and 15: two rows for four numbers, left alone
+            line("15", *amounts),
+        ]
+        labels = [ln.words[0].text for ln in fill_step_labels(lines)]
+        assert labels == ["STEP", "1", "2", "3", "4", "5", "6", "10", "50,000", "15"]
+
+    def test_same_grid(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import same_grid
+
+        a = {"is_teacher_salary_schedule": True, "cells": [[1.0, None], [2.0, 3.0]]}
+        assert same_grid(a, {**a, "cells": [[1.0, None], [2.0, 3.0]]})
+        assert not same_grid(a, {**a, "cells": [[1.0, None], [2.0, 8.0]]})
+        assert not same_grid(a, {**a, "cells": [[1.0, 5.0], [2.0, 3.0]]})
+        assert not same_grid(a, {"is_teacher_salary_schedule": False, "cells": []})
+
+    @pytest.mark.skipif(shutil.which("tesseract") is None, reason="cần tesseract")
+    def test_reads_a_scanned_table(self, tmp_path: Path) -> None:
+        from PIL import Image, ImageDraw, ImageFont
+
+        from pay_pipeline.pdf_pipeline.ocr import read_scanned
+
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", 34)
+        except OSError:
+            font = ImageFont.load_default(size=34)
+        page = Image.new("L", (1700, 2200), 255)
+        draw = ImageDraw.Draw(page)
+        draw.text((300, 150), "Teacher Salary Schedule 2025-2026", font=font, fill=0)
+        lanes = ["Step", "BA", "BA+15", "MA", "MA+30"]
+        for j, lane in enumerate(lanes):
+            draw.text((200 + 300 * j, 300), lane, font=font, fill=0)
+        want = []
+        for i in range(15):
+            row = [48000 + 1100 * i + 2500 * j for j in range(4)]
+            want.append([float(v) for v in row])
+            y = 370 + 60 * i
+            draw.text((200, y), str(i + 1), font=font, fill=0)
+            for j, v in enumerate(row):
+                draw.text((500 + 300 * j, y), f"{v:,}", font=font, fill=0)
+            draw.line((180, y + 50, 1500, y + 50), fill=0, width=3)  # table rule
+        pdf = tmp_path / "scan.pdf"
+        page.save(pdf, "PDF", resolution=200)
+        answers = read_scanned(pdf)
+        assert len(answers) == 2
+        assert answers[0]["is_teacher_salary_schedule"]
+        assert answers[0]["cells"] == want
+        assert answers[1]["cells"] == want
+        assert answers[0]["school_year"] == "2025-26"
+
+
+def test_pdf_checks_hold_uncertain_scans() -> None:
+    """D-036: a scan needs three matching OCR readings, step 0 or 1 first and short lane labels."""
+    from pay_pipeline.pdf_pipeline.ocr import CONFIGS
+    from pay_pipeline.pdf_pipeline.run import pdf_checks
+    from pay_pipeline.schedules.model import Lane, ScheduleDraft, Step
+
+    draft = ScheduleDraft(
+        state="KY", state_district_id="x", district_name="x", school_year="2026-27",
+        lanes=[Lane("BA"), Lane("MA")], steps=[Step("1"), Step("2")], cells={},
+    )  # fmt: skip
+    ocr_answer = {"reader": CONFIGS[0][0], "ocr_agree": 3}
+    assert pdf_checks(ocr_answer, draft, NOW.date()) == []
+    assert [i.code for i in pdf_checks({**ocr_answer, "ocr_agree": 2}, draft, NOW.date())] == [
+        "ocr"
+    ]
+    draft.steps = [Step("2"), Step("3")]
+    assert [i.code for i in pdf_checks(ocr_answer, draft, NOW.date())] == ["ocr"]
+    draft.steps = [Step("1")]
+    draft.lanes = [Lane("Level 3 Theta Hanlon Instructors ATC at"), Lane("MA")]
+    assert [i.code for i in pdf_checks(ocr_answer, draft, NOW.date())] == ["ocr"]
+    assert pdf_checks({"reader": rd.WORDS}, draft, NOW.date()) == []  # text PDFs unaffected

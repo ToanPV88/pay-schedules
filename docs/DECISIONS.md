@@ -762,3 +762,21 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   thể đã đổi; pipeline sẽ ghi `unreachable` cho những chỗ đó.
 - Rhode Island, Idaho, Nebraska: danh bạ của bang chỉ có dạng trang tìm kiếm hoặc trang dựng bằng
   JavaScript; chưa làm.
+## D-036: OCR cho bảng lương dạng ảnh quét
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý. 489 học khu chỉ có bảng lương dạng ảnh quét.
+- Miễn phí và tất định (D-022): Poppler `pdftoppm` vẽ trang, Tesseract 5 đọc chữ kèm vị trí từng
+  từ; các từ được ghép dòng rồi đưa vào chính bộ tìm bảng của PDF chữ (`read.find_tables`). Trước
+  khi đọc, ảnh được đổi sang trắng đen, xóa đường kẻ bảng và nền tô (chỉ dùng Pillow, phụ thuộc có
+  sẵn của pdfplumber). Sửa các lỗi OCR thường gặp ở số (S→$, O→0, l→1, dấu chấm hàng nghìn) và
+  điền lại số bậc OCR làm rơi khi hai bậc kề nhau không để chỗ nghi ngờ.
+- Tìm trang bằng một lượt nhanh ở 200 dpi, rồi đọc kỹ tối đa 2 trang với 6 cấu hình (300/400 dpi,
+  psm 6/4, có/không làm sạch) cho đến khi 3 cấu hình đọc ra cùng một lưới.
+- Chỉ publish khi: 3 lượt OCR khớp từng ô, bảng bắt đầu ở bậc 0 hoặc 1, nhãn lane không dài quá
+  30 ký tự, và qua mọi kiểm tra chung. Không đạt thì học khu về `no_schedule` (tìm lại sau 90 ngày),
+  không vào hàng chờ xem tay, vì chủ dự án không duyệt tay được hàng trăm bảng (D-034).
+- Đo trên bộ chuẩn đổi thành ảnh (30 tài liệu, 200 dpi): 2 bảng publish, 153/153 ô đúng, 0 bảng sai
+  lọt. Hai lượt khớp nhau vẫn có thể cùng sai (Douglas: một chữ số; Bullitt: mất hai cột), nên cần
+  ba lượt và các luật trên. Tỉ lệ ra bảng thấp là chấp nhận được: thà ít bảng còn hơn bảng sai.
+- Tài liệu scan đã xử lý trước khi có OCR được đọc lại: `known.json` kèm cờ `scanned`, và
+  `known_documents` coi bản scan chưa qua OCR là chưa đọc.
