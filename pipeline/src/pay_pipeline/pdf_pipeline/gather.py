@@ -47,6 +47,8 @@ from pay_pipeline.documents.classify import Classification, classify, detect_kin
 from pay_pipeline.pdf_pipeline.read import READERS
 
 MAX_DOCS_PER_DISTRICT = 4
+MAX_FOLDER_DOCS = 2
+"""Document pages taken from folder pages per district, on top of ``MAX_DOCS_PER_DISTRICT``."""
 MIN_CANDIDATE_SCORE = 2.0
 MAX_DOC_BYTES = 40 * 1024 * 1024
 KEEP_CANDIDATES = 15
@@ -174,6 +176,20 @@ def landing_target(data: bytes, page_url: str, anchor: str) -> str | None:
     return best.url
 
 
+def folder_documents(data: bytes, page_url: str) -> list[Link]:
+    """Same-site document pages listed on a folder page, most salary-like first."""
+    html = data.decode("utf-8", errors="replace")
+    links = [
+        ln
+        for ln in extract_links(html, page_url)
+        if ln.url != page_url
+        and same_site(ln.url, page_url)
+        and is_document_url(ln.url)
+        and score_document(ln) >= MIN_CANDIDATE_SCORE
+    ]
+    return sorted(links, key=lambda ln: (-score_document(ln), ln.url))
+
+
 def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
     """URL -> SHA-256 of documents already read by the current readers.
 
@@ -193,7 +209,7 @@ def gather_one(
     fetcher: PoliteFetcher,
     docs_dir: Path,
     known: dict[str, set[str]],
-    max_pages: int = 20,
+    max_pages: int = 25,
 ) -> DistrictWork:
     work = DistrictWork(item.district_id, item.nces_id, item.name, item.state, item.website, "")
     found = discover(fetcher, item.nces_id, item.website, max_pages=max_pages)
@@ -209,7 +225,10 @@ def gather_one(
         work.detail = f"Đã đọc {found.pages_fetched} trang, không thấy tài liệu bảng lương"
         return work
     errors = []
-    for cand in picked[:MAX_DOCS_PER_DISTRICT]:
+    pending = list(picked[:MAX_DOCS_PER_DISTRICT])
+    folder_budget = MAX_FOLDER_DOCS
+    while pending:
+        cand = pending.pop(0)
         url = export_url(cand.url)
         try:
             response = fetcher.get(url)
@@ -225,6 +244,17 @@ def gather_one(
                     response = fetcher.get(export_url(inner))
                     data = response.content
                     kind = detect_kind(data)
+                elif folder_budget > 0:
+                    # A folder of documents (Thrillshare "/documents/.../salary-schedules/826164"):
+                    # its best document pages are tried next (D-027).
+                    kids = folder_documents(data, response.final_url)[:folder_budget]
+                    folder_budget -= len(kids)
+                    pending[0:0] = [
+                        Candidate(k.url, response.final_url, k.text, "folder", score_document(k))
+                        for k in kids
+                    ]
+                    if kids:
+                        continue
         except FetchError as exc:
             errors.append(f"{cand.url}: {exc}"[:200])
             continue

@@ -209,6 +209,47 @@ class TestDiscoverUnits:
             "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit#gid=0"
         ).endswith("/spreadsheets/d/1AbCdEfGhIjK/export?format=xlsx")
 
+    def test_sitemap_pages_and_one_level_deeper_for_salary_pages(self) -> None:
+        # D-027: the salary page is only in the sitemap (index -> page sitemap), and another one
+        # sits three links below the home page.
+        from pay_pipeline.acquisition.http import PoliteFetcher
+        from pay_pipeline.discover.crawl import discover
+
+        site = "https://deep.example.invalid"
+        html = {"content-type": "text/html"}
+        xml = {"content-type": "application/xml"}
+        routes = {
+            f"{site}/robots.txt": httpx.Response(404),
+            f"{site}/": httpx.Response(200, headers=html, html='<a href="/departments">Departments</a>'),
+            f"{site}/departments": httpx.Response(200, headers=html, html='<a href="/departments/human-resources">Human Resources</a>'),
+            f"{site}/departments/human-resources": httpx.Response(200, headers=html, html='<a href="/departments/human-resources/salary-schedules">Salary Schedules</a>'),
+            f"{site}/departments/human-resources/salary-schedules": httpx.Response(200, headers=html, html='<a href="/f/2025-26-teacher-salary-schedule.pdf">Teacher</a>'),
+            f"{site}/sitemap.xml": httpx.Response(200, headers=xml, text=(
+                f"<?xml version='1.0'?><sitemapindex><sitemap><loc>{site}/post-sitemap.xml</loc></sitemap>"
+                f"<sitemap><loc>{site}/page-sitemap.xml</loc></sitemap></sitemapindex>")),
+            f"{site}/page-sitemap.xml": httpx.Response(200, headers=xml, text=(
+                f"<?xml version='1.0'?><urlset><url><loc>{site}/about</loc></url>"
+                f"<url><loc>{site}/hr/compensation/certificated-salary</loc></url>"
+                f"<url><loc>{site}/f/salary-schedule-2025-26.pdf</loc></url></urlset>")),
+            f"{site}/hr/compensation/certificated-salary": httpx.Response(200, headers=html, html='<a href="/f/2026-27-certificated-salary-schedule.pdf">2026-27</a>'),
+        }  # fmt: skip
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(str(request.url))
+            return routes.get(str(request.url), httpx.Response(404))
+
+        policy = CrawlPolicy(user_agent=UA, min_delay_seconds=1.0)
+        fetcher = PoliteFetcher(
+            policy, transport=httpx.MockTransport(handler), sleep=lambda _: None
+        )
+        found = discover(fetcher, "0000001", f"{site}/")
+        urls = {c.url for c in found.candidates}
+        assert f"{site}/f/2026-27-certificated-salary-schedule.pdf" in urls  # via the sitemap
+        assert f"{site}/f/2025-26-teacher-salary-schedule.pdf" in urls  # depth 3
+        assert f"{site}/f/salary-schedule-2025-26.pdf" in urls  # document listed in the sitemap
+        assert f"{site}/about" not in seen  # sitemap pages without salary words are not fetched
+
     def test_school_years(self) -> None:
         assert school_years("Salary Schedule 2025-2026 and 2024-25, FY26") == ["2025-26", "2024-25"]
         assert school_years("Effective 7/1/2021 - 6/30/2022") == ["2021-22"]
@@ -268,6 +309,35 @@ class TestPipeline:
         manifest = json.loads((tmp_path / "docs" / "manifest.json").read_text())
         assert {f["name"] for f in manifest["files"]} == {d.asset_name for d in by["0600001"].docs}
         assert [w.nces_id for w in load_work(tmp_path)] == [w.nces_id for w in works]
+
+    def test_folder_page_of_documents_is_opened(self, tmp_path: Path) -> None:
+        # D-027: the salary link leads to a folder page listing document pages (Thrillshare).
+        site = "https://folder.example.invalid"
+        folder = f"{site}/documents/human-resources/salary-schedules/826164"
+        html = {"content-type": "text/html"}
+        routes = {
+            f"{site}/robots.txt": httpx.Response(404),
+            f"{site}/sitemap.xml": httpx.Response(404),
+            f"{site}/": httpx.Response(200, headers=html, html=f'<a href="{folder}">Salary Schedules</a>'),
+            folder: httpx.Response(200, headers=html, html=(
+                f'<a href="{folder}/900001">2026-27 Teacher Salary Schedule</a>'
+                f'<a href="{folder}/900002">Bus driver pay</a>')),
+            f"{folder}/900001": httpx.Response(200, headers=html, html=(
+                '<script>var f="https:\\/\\/files-backend.assets.thrillshare.com\\/documents'
+                '\\/asset\\/uploaded_file\\/1\\/X\\/2026-27-Teacher-Salary.pdf"</script>')),
+            "https://files-backend.assets.thrillshare.com/robots.txt": httpx.Response(404),
+            "https://files-backend.assets.thrillshare.com/documents/asset/uploaded_file/1/X/2026-27-Teacher-Salary.pdf":
+                httpx.Response(200, headers={"content-type": "application/pdf"}, content=PDF),
+        }  # fmt: skip
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return routes.get(str(request.url), httpx.Response(404))
+
+        item = QueueItem(9, "0600009", "Folder USD", "CA", f"{site}/", 100)
+        works = gather([item], tmp_path, {}, UA, workers=1,
+                       transport=httpx.MockTransport(handler), sleep=lambda _: None)  # fmt: skip
+        assert works[0].status == "found"
+        assert works[0].docs[0].url == f"{folder}/900001"
 
     def test_known_documents_only_count_current_readers(self) -> None:
         from pay_pipeline.pdf_pipeline.gather import known_documents
