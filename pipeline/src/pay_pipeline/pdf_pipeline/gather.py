@@ -217,6 +217,7 @@ def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
 
 MAX_SHARDS = 20  # GitHub Free runs at most 20 jobs at once
 SEED_SCORE = 100.0
+BIG_DISTRICT = 10_000  # students; these sites are larger, so the crawl budget is doubled
 SEED_SOURCE = "schedule-urls.csv"
 MAX_SEED_PAGE_DOCS = 6  # files tried from one hand-found page
 SEED_CRAWL_PAGES = 8  # pages crawled from a hand-found page that links to no file
@@ -309,7 +310,8 @@ def gather_one(
         website = reachable_website(fetcher, item.website)
         if website != item.website:
             work.website = website
-        found = discover(fetcher, item.nces_id, website, max_pages=max_pages)
+        pages = max_pages * 2 if (item.enrollment or 0) >= BIG_DISTRICT else max_pages
+        found = discover(fetcher, item.nces_id, website, max_pages=pages)
         work.pages_fetched = found.pages_fetched
         work.candidates = [asdict(c) for c in found.candidates[:KEEP_CANDIDATES]]
         if found.status != "ok":

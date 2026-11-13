@@ -120,6 +120,37 @@ class _LinkParser(HTMLParser):
             self._href = None
 
 
+SCRIPT_LINKS_BELOW = 60  # pages with fewer <a> links are read for addresses in their scripts
+_SCRIPT_URL = re.compile(r"""["'](https?:\\?/\\?/[^"'\s<>]{4,300}|\\?/[a-z0-9][^"'\s<>]{3,300})["']""", re.I)
+_ASSET = re.compile(r"\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|json|mp4)(?:[?#]|$)", re.I)
+
+
+def script_links(html: str, page_url: str) -> list[Link]:
+    """Addresses written inside a page's scripts, for sites whose menus are built in the browser.
+
+    Apptegy/Thrillshare home pages ship megabytes of JSON and a couple of dozen ``<a>`` tags
+    (Frisco ISD, Alpine, Prosper); the menu is in that JSON. The link text is made from the last
+    path segment ("compensation-plan" becomes "compensation plan") so pages can be scored.
+    """
+    host = urlsplit(page_url).netloc
+    out: list[Link] = []
+    seen: set[str] = set()
+    for match in _SCRIPT_URL.finditer(html):
+        raw = match.group(1).replace("\\/", "/")
+        if _ASSET.search(raw) and not is_document_url(raw):
+            continue
+        url, _ = urldefrag(urljoin(page_url, raw))
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or url in seen:
+            continue
+        if parts.netloc != host and not is_document_url(url):
+            continue
+        seen.add(url)
+        slug = parts.path.rstrip("/").rsplit("/", 1)[-1]
+        out.append(Link(url, re.sub(r"[-_]+", " ", slug)[:300]))
+    return out
+
+
 def extract_links(html: str, page_url: str) -> list[Link]:
     parser = _LinkParser()
     try:
@@ -298,6 +329,9 @@ def discover(
             continue
         html = response.content.decode("utf-8", errors="replace")
         links = extract_links(html, response.final_url)
+        if len(links) < SCRIPT_LINKS_BELOW:
+            known = {ln.url for ln in links}
+            links += [ln for ln in script_links(html, response.final_url) if ln.url not in known]
         if depth == 0:
             result.home_url, result.home_bytes = response.final_url, len(response.content)
             result.home_links = len(links)

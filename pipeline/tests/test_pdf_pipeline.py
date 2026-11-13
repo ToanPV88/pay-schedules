@@ -997,3 +997,22 @@ class TestSeeds:
         assert seen.index(
             f"{SITE}/files/2025-26%20Certificated%20Salary%20Schedule.pdf"
         ) < seen.index(f"{SITE}/files/classified.pdf")
+
+
+class TestScriptLinks:
+    def test_menu_in_json(self) -> None:
+        from pay_pipeline.discover.crawl import script_links
+
+        html = (
+            '<a href="/">Home</a><script>window.__DATA__={"menu":[{"url":'
+            '"https:\\/\\/www.fisd.example.invalid\\/o\\/fisd\\/page\\/compensation-plan"},'
+            '{"url":"\\/page\\/human-resources"},{"img":"/assets/logo.png"},'
+            '{"url":"https:\\/\\/cdn.example.invalid\\/docs\\/salary.pdf"},'
+            '{"url":"https:\\/\\/other.example.invalid\\/page\\/x"}]}</script>'
+        )
+        links = script_links(html, "https://www.fisd.example.invalid/")
+        assert [(ln.url, ln.text) for ln in links] == [
+            ("https://www.fisd.example.invalid/o/fisd/page/compensation-plan", "compensation plan"),
+            ("https://www.fisd.example.invalid/page/human-resources", "human resources"),
+            ("https://cdn.example.invalid/docs/salary.pdf", "salary.pdf"),
+        ]
