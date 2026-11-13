@@ -30,6 +30,7 @@ from pay_pipeline.catalog.d1sql import render_sql
 from pay_pipeline.schedules import ca_j90, ky_kde
 from pay_pipeline.schedules.d1sql import AS_REPORTED, AUTO_RESOLVED, schedules_sql
 from pay_pipeline.schedules.state_import import (
+    IMPORTERS,
     CatalogDistrict,
     ImportResult,
     build_import,
@@ -654,3 +655,11 @@ class TestWranglerJson:
         assert load_published(pub)[0].start_cents == 5000000
         with pytest.raises(FileNotFoundError):
             load_catalog(tmp_path / "missing.json")
+
+
+def test_import_workflow_reads_every_importer_state() -> None:
+    # The workflow reads the catalogue only for these states; a state left out is skipped whole.
+    text = (REPO / ".github" / "workflows" / "import-schedules.yml").read_text()
+    line = next(ln for ln in text.splitlines() if ln.strip().startswith("STATES:"))
+    for state in IMPORTERS:
+        assert f"'{state}'" in line, state

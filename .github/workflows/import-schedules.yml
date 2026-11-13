@@ -28,6 +28,8 @@ concurrency:
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   STATE_MANIFEST: pipeline/sources/state-salaries-2425.json
+  # Bang có importer (pipeline/src/pay_pipeline/schedules/state_import.py IMPORTERS).
+  STATES: "'CA', 'KY', 'OK'"
   CCD_MANIFEST: pipeline/sources/nces-ccd-2425.json
   TARGET: ${{ inputs.target || (github.ref_name == 'run/import-schedules-production' && 'production' || 'preview') }}
 
@@ -83,10 +85,10 @@ jobs:
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
           npx wrangler d1 execute "$db" $flag --remote --json \
-            --command "SELECT nces_id, state, name, active FROM districts WHERE state IN ('CA', 'KY') AND nces_id IS NOT NULL" \
+            --command "SELECT nces_id, state, name, active FROM districts WHERE state IN ($STATES) AND nces_id IS NOT NULL" \
             > "$GITHUB_WORKSPACE/catalog.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT d.nces_id, s.school_year, s.schedule_type, s.title, (SELECT c.amount_cents FROM cells c JOIN steps t ON t.id = c.step_id LEFT JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = s.id AND t.position = 1 AND c.amount_cents IS NOT NULL ORDER BY l.position LIMIT 1) AS start_cents FROM schedules s JOIN districts d ON d.id = s.district_id WHERE s.status = 'published' AND d.state IN ('CA', 'KY')" \
+            "SELECT d.nces_id, s.school_year, s.schedule_type, s.title, (SELECT c.amount_cents FROM cells c JOIN steps t ON t.id = c.step_id LEFT JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = s.id AND t.position = 1 AND c.amount_cents IS NOT NULL ORDER BY l.position LIMIT 1) AS start_cents FROM schedules s JOIN districts d ON d.id = s.district_id WHERE s.status = 'published' AND d.state IN ($STATES)" \
             > "$GITHUB_WORKSPACE/published.json"
       - name: Build schedules
         working-directory: pipeline
