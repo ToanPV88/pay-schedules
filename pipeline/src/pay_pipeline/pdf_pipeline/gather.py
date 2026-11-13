@@ -15,6 +15,7 @@ the next run (checkpoint = D1 ``district_pipeline``).
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import hashlib
 import json
@@ -64,6 +65,7 @@ class QueueItem:
     state: str
     website: str | None
     enrollment: int | None = None
+    seeds: tuple[str, ...] = ()  # schedule URLs found by hand (D-038), tried before discovery
 
 
 @dataclass
@@ -208,6 +210,20 @@ def known_documents(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
 
 
 MAX_SHARDS = 20  # GitHub Free runs at most 20 jobs at once
+SEED_SCORE = 100.0
+
+
+def load_seeds(path: Path | None) -> dict[str, tuple[str, ...]]:
+    """``schedule-urls.csv`` (nces_id,url,note): NCES id -> schedule URLs, in file order (D-038)."""
+    if path is None or not path.exists():
+        return {}
+    seeds: dict[str, list[str]] = {}
+    with path.open(encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            nces, url = (r.get("nces_id") or "").strip(), (r.get("url") or "").strip()
+            if re.fullmatch(r"\d{7}", nces) and url.startswith(("https://", "http://")):
+                seeds.setdefault(nces, []).append(url)
+    return {k: tuple(v) for k, v in seeds.items()}
 
 
 def website_host(website: str | None) -> str | None:
@@ -246,14 +262,21 @@ def gather_one(
     max_pages: int = 25,
 ) -> DistrictWork:
     work = DistrictWork(item.district_id, item.nces_id, item.name, item.state, item.website, "")
-    found = discover(fetcher, item.nces_id, item.website, max_pages=max_pages)
-    work.pages_fetched = found.pages_fetched
-    work.candidates = [asdict(c) for c in found.candidates[:KEEP_CANDIDATES]]
-    if found.status != "ok":
-        work.status = found.status
-        work.detail = "; ".join(found.errors[:2])[:500]
-        return work
-    picked: list[Candidate] = [c for c in found.candidates if c.score >= MIN_CANDIDATE_SCORE]
+    picked: list[Candidate]
+    if item.seeds:
+        # A schedule URL found by hand: no crawl, so a home page that blocks bots or a website
+        # that moved does not matter; the fetcher still obeys the document host's robots.txt.
+        picked = [Candidate(u, "seed", "", "seed", SEED_SCORE) for u in item.seeds]
+        work.candidates = [asdict(c) for c in picked]
+    else:
+        found = discover(fetcher, item.nces_id, item.website, max_pages=max_pages)
+        work.pages_fetched = found.pages_fetched
+        work.candidates = [asdict(c) for c in found.candidates[:KEEP_CANDIDATES]]
+        if found.status != "ok":
+            work.status = found.status
+            work.detail = "; ".join(found.errors[:2])[:500]
+            return work
+        picked = [c for c in found.candidates if c.score >= MIN_CANDIDATE_SCORE]
     if not picked:
         work.status = "no_candidates"
         work.detail = f"Đã đọc {found.pages_fetched} trang, không thấy tài liệu bảng lương"

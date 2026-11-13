@@ -780,3 +780,13 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   ba lượt và các luật trên. Tỉ lệ ra bảng thấp là chấp nhận được: thà ít bảng còn hơn bảng sai.
 - Tài liệu scan đã xử lý trước khi có OCR được đọc lại: `known.json` kèm cờ `scanned`, và
   `known_documents` coi bản scan chưa qua OCR là chưa đọc.
+
+## D-038: Link bảng lương tìm tay cho học khu lớn
+
+- Ngày: 2026-11-13. Chủ dự án đồng ý ("hướng 1"). Nhiều học khu lớn không ra bảng vì website chặn
+  bot ở trang chủ, đã đổi domain, hoặc trang lương nằm sâu hơn 25 trang crawl.
+- `pipeline/sources/schedule-urls.csv` (`nces_id,url,note`): link tìm bằng tay tới tệp bảng lương
+  hoặc trang "salary schedules" chính thức của học khu (không dùng bản chép của bên thứ ba).
+  Học khu có link thì pipeline bỏ bước crawl, tải thẳng link (trang HTML thì đi tiếp một bước tới
+  tệp tốt nhất); robots.txt của host tài liệu vẫn được tuân thủ.
+- `pdf-pipeline-run.json` có `seeded_only: true` để chạy riêng các học khu trong tệp, mọi trạng thái.
