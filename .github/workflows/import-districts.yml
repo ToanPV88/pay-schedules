@@ -61,14 +61,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           prefix=$(python3 -c 'import json,os; print(json.load(open(os.environ["MANIFEST"]))["release_prefix"])')
-          tag=$(gh release list --limit 100 --json tagName --jq "[.[] | select(.tagName | startswith(\"$prefix-\"))][0].tagName")
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$prefix-" --jq '[.[].ref | sub("refs/tags/"; "")] | sort | last // ""')
           if [ -z "$tag" ]; then echo "::error::Chưa có Release $prefix-*"; exit 1; fi
           gh release download "$tag" --dir sources
           (cd pipeline && uv run pay-pipeline verify-sources ../sources)
           echo "SOURCE_TAG=$tag" >> "$GITHUB_ENV"
           # Danh mục trường (D-035): suy website học khu khi tệp LEA bỏ trống. Không có thì bỏ qua.
           sprefix=$(python3 -c 'import json; print(json.load(open("pipeline/sources/nces-ccd-schools-2425.json"))["release_prefix"])')
-          stag=$(gh release list --limit 100 --json tagName --jq "[.[] | select(.tagName | startswith(\"$sprefix-\"))][0].tagName")
+          stag=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$sprefix-" --jq '[.[].ref | sub("refs/tags/"; "")] | sort | last // ""')
           if [ -n "$stag" ]; then
             gh release download "$stag" --dir schools
             (cd pipeline && uv run pay-pipeline verify-sources ../schools)

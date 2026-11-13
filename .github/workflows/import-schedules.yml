@@ -68,7 +68,7 @@ jobs:
         run: |
           fetch() {
             prefix=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_prefix"])' "$1")
-            tag=$(gh release list --limit 100 --json tagName --jq "[.[] | select(.tagName | startswith(\"$prefix-\"))][0].tagName")
+            tag=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$prefix-" --jq '[.[].ref | sub("refs/tags/"; "")] | sort | last // ""')
             if [ -z "$tag" ]; then echo "::error::Chưa có Release $prefix-*"; exit 1; fi
             gh release download "$tag" --dir "$2" >&2
             (cd pipeline && uv run pay-pipeline verify-sources "$GITHUB_WORKSPACE/$2") >&2
