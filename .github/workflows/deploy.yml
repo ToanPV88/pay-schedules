@@ -7,10 +7,24 @@
 # pipeline/tests/test_repo_consistency.py chặn dùng ở chỗ khác).
 name: Deploy
 
+# Chỉ chạy khi thay đổi chạm tới Worker web hoặc CSDL (D-025): PR chỉ sửa pipeline hay tài liệu
+# không tốn phút cho bản xem trước và Lighthouse.
 on:
   pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/db/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy.yml"
   push:
     branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/db/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy.yml"
 
 permissions:
   contents: read

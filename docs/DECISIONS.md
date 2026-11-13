@@ -538,3 +538,43 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   lấy trung vị. Thất bại khi Performance, Accessibility hoặc Best practices dưới 90. SEO ghi vào tóm
   tắt nhưng không tính vì site đang noindex có chủ đích (D-002).
 - Job không checkout mã, không dùng secret, quyền chỉ đọc.
+
+## D-024: Kiểm tra `monotonic_lane` so lane theo trình độ ghi trên nhãn; bỏ qua chênh do làm tròn
+
+- Ngày: 2026-11-13. Claude đề xuất, chủ dự án đồng ý.
+- Bối cảnh: sau lần nhập tệp của bang (Công đoạn 4), 202 bảng CA/KY nằm trong hàng chờ xem tay, phần
+  lớn vì `monotonic_lane`. Tệp J-90 của California in nhiều ngạch cạnh nhau trong một bảng: lane giáo
+  viên chưa có chứng chỉ (NON-CRED, INTERN, EMERG), lane SPED, lane theo số ngày làm việc, lane "+MA"
+  xen giữa các lane đơn vị học. Lane cuối của ngạch NON-CRED trả cao hơn lane đầu của ngạch có chứng
+  chỉ là đúng với nguồn, không phải lỗi đọc. Tệp của Kentucky trả lương lẻ xu nên có chênh vài xu
+  đến vài đô ($91,493.01 rồi $91,493.00).
+- Nội dung (`pipeline/src/pay_pipeline/schedules/validate.py`):
+  - Đọc nhãn lane thành bậc học (`<BA`, BA, MA, 2MA, PhD), số đơn vị (`BA+30`, `MA+60+17`) và **ngạch**
+    (phần còn lại của nhãn: `NON-CRED`, `SPED`, `195 DAYS`…). `CRED`, `PRELIM`, `FULL STEP`, `WHOLE YR`
+    không tạo ngạch riêng. Với "A OR B" chỉ đọc vế đầu.
+  - Khi ít nhất 75% nhãn đọc được: chỉ so hai lane **cùng ngạch** mà lane này có bậc học và số đơn vị
+    đều không thấp hơn lane kia (và cao hơn ở ít nhất một). Số đơn vị chỉ so khi hai nhãn bắt đầu
+    bằng cùng bậc học (`MA+30` tính từ MA, `BA+75+MA` tính từ BA); `BA<45` không có số đơn vị để so.
+    Hai lane không so được (`BA+30+MA` và `BA+45`) thì bỏ qua. Thứ tự in trong tài liệu không còn
+    quan trọng.
+  - Khi nhãn không đọc được (Rank I–V, Column 1, Class A…): giữ cách cũ, so theo thứ tự in.
+  - Lương giảm không quá $10 (giữa hai bậc hoặc hai lane) coi là làm tròn của nguồn, không báo.
+- Kết quả đo trên tệp nguồn thật (CA J-90 2023-24, 2024-25; KY 2024-25, 2025-26): số bảng trượt
+  `monotonic_step`/`monotonic_lane` giảm từ 195 xuống 90; không bảng nào đang qua lại thành trượt
+  (`docs/reports/validate-lane-rank-2026-11-13.md`). Phần còn lại là chỗ lạ thật của nguồn (lương
+  giảm khi tăng bậc, lane trình độ cao trả thấp hơn) và vẫn cần người xem. Bộ chuẩn PDF: Chatom
+  2024-25 chuyển từ xem tay sang publish (125/125 ô đúng); vẫn 0 bảng sai lọt Validate.
+- Nhập lại tệp của bang (`d1sql.py`) tôn trọng quyết định của người xem tay: bảng đã **duyệt** không
+  bị đưa về draft, bảng đã **loại** không bị publish và không nhận lý do mới. Lý do xem tay đang mở
+  mà kiểm tra không còn báo thì được đóng với `resolution = "auto: the checks no longer report this on
+  re-import"`.
+
+## D-025: Workflow Deploy chỉ chạy khi thay đổi chạm tới web hoặc CSDL
+
+- Ngày: 2026-11-13. Chủ dự án yêu cầu tiết kiệm phút GitHub Actions (repo riêng tư).
+- `deploy.yml` (bản xem trước, Lighthouse, deploy production) chỉ chạy khi PR hoặc commit trên main
+  sửa `apps/web/**`, `packages/db/**`, `package.json`, `package-lock.json` hoặc chính `deploy.yml`.
+  PR chỉ sửa pipeline hay tài liệu chỉ chạy CI (khoảng 2 phút thay vì 6).
+- Migration nằm trong `packages/db/**` nên vẫn được áp lên preview và production như trước.
+- Quy ước làm việc: trước mỗi việc tốn phút Actions (đẩy commit lên PR, chạy pipeline, nhập dữ liệu,
+  chạy lại workflow), Claude báo ước tính số phút và chờ chủ dự án đồng ý.

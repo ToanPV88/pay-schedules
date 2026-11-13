@@ -27,7 +27,7 @@ import pytest
 
 from pay_pipeline.catalog.d1sql import render_sql
 from pay_pipeline.schedules import ca_j90, ky_kde
-from pay_pipeline.schedules.d1sql import schedules_sql
+from pay_pipeline.schedules.d1sql import AUTO_RESOLVED, schedules_sql
 from pay_pipeline.schedules.state_import import (
     CatalogDistrict,
     ImportResult,
@@ -125,8 +125,8 @@ T2_COLS = [
 T2 = [
     ["01", "00001", "0100001", "1", "BA      ", "", "", "", "", "1"],
     ["01", "00001", "0100001", "2", "BA+30 OR", "MA", "", "", "", "2"],
-    ["01", "00002", "0100002", "1", "BA NON-CRED", "", "", "", "", "3"],
-    ["01", "00002", "0100002", "2", "BA CRED", "", "", "", "", "4"],
+    ["01", "00002", "0100002", "1", "BA", "", "", "", "", "3"],
+    ["01", "00002", "0100002", "2", "BA+30", "", "", "", "", "4"],
 ]
 T3_COLS = [
     "COUNTY",
@@ -146,7 +146,7 @@ T3 = [
     ["01", "00001", "0100001", "1", "3", "64000", "1", "3", "64000"],
     ["01", "00001", "0100001", "2", "1", "65000", "2", "4", "130000"],
     ["01", "00001", "0100001", "2", "2", "67000.5", "1", "5", "67000.5"],
-    # Beta: the credentialed column pays less than the non-credentialed one -> review
+    # Beta: the BA+30 column pays less than the BA column -> review
     ["01", "00002", "0100002", "1", "1", "70000", "1", "6", "70000"],
     ["01", "00002", "0100002", "2", "1", "65000", "1", "7", "65000"],
     # City schools (supervisory union): one column, two steps
@@ -390,6 +390,14 @@ class TestBuildImport:
         assert "start_change" in report
 
 
+KY_2526 = (
+    "SELECT s.id, s.status FROM schedules s JOIN districts x ON x.id = s.district_id"
+    " WHERE x.nces_id = '2100001' AND s.school_year = '2025-26'"
+)
+HOLD_KEY = ("KY", "001", "2025-26")
+HOLD = {HOLD_KEY: "Kiểm tra chéo: ô lệch tài liệu học khu"}
+
+
 class TestSql:
     def test_load_is_idempotent_and_consistent(self, tmp_path: Path) -> None:
         result = run_import(tmp_path)
@@ -476,6 +484,61 @@ class TestSql:
         ).fetchall()
         assert years == [("2024-25",)]
         assert db.execute("SELECT count(*) FROM schedules").fetchone()[0] == 8
+
+    def open_reasons(self, db: sqlite3.Connection, schedule_id: int) -> list[str]:
+        rows = db.execute(
+            "SELECT reason FROM review_queue WHERE schedule_id = ? AND resolved_at IS NULL",
+            (schedule_id,),
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def test_reasons_no_longer_given_are_closed_and_schedule_published(
+        self, tmp_path: Path
+    ) -> None:
+        # D-024: a re-import with changed checks releases what now passes.
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a", holds=HOLD))
+        sid, status = db.execute(KY_2526).fetchone()
+        assert status == "draft" and len(self.open_reasons(db, sid)) == 1
+        load(db, run_import(tmp_path / "b"))
+        assert db.execute(KY_2526).fetchone() == (sid, "published")
+        assert self.open_reasons(db, sid) == []
+        resolution = db.execute(
+            "SELECT resolution FROM review_queue WHERE schedule_id = ?", (sid,)
+        ).fetchone()[0]
+        assert resolution == AUTO_RESOLVED
+
+    def test_rejected_draft_is_not_published_by_a_re_import(self, tmp_path: Path) -> None:
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a", holds=HOLD))
+        sid, _ = db.execute(KY_2526).fetchone()
+        db.execute(
+            "UPDATE review_queue SET resolved_at = '2026-11-13T00:00:00Z',"
+            " resolution = 'rejected: không phải bảng giáo viên' WHERE schedule_id = ?",
+            (sid,),
+        )
+        load(db, run_import(tmp_path / "b"))
+        assert db.execute(KY_2526).fetchone() == (sid, "draft")
+        load(db, run_import(tmp_path / "c", holds={HOLD_KEY: "lý do khác"}))
+        assert self.open_reasons(db, sid) == []
+
+    def test_approved_schedule_is_not_sent_back_by_a_re_import(self, tmp_path: Path) -> None:
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a", holds=HOLD))
+        sid, _ = db.execute(KY_2526).fetchone()
+        db.execute(
+            "UPDATE schedules SET status = 'published', published_at = '2026-11-13T00:00:00Z'"
+            " WHERE id = ?",
+            (sid,),
+        )
+        db.execute(
+            "UPDATE review_queue SET resolved_at = '2026-11-13T00:00:00Z',"
+            " resolution = 'approved (0 cell edits)' WHERE schedule_id = ?",
+            (sid,),
+        )
+        load(db, run_import(tmp_path / "b", holds=HOLD))
+        assert db.execute(KY_2526).fetchone() == (sid, "published")
+        assert self.open_reasons(db, sid) == []
 
     def test_holds_file(self, tmp_path: Path) -> None:
         path = tmp_path / "h.json"
