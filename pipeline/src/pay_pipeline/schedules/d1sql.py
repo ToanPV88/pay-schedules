@@ -40,6 +40,7 @@ STAGING = {
     "_imp_cells": "k INTEGER, step_pos INTEGER, lane_pos INTEGER, amount_cents INTEGER, note TEXT",
     "_imp_stipends": "k INTEGER, name TEXT, amount_cents INTEGER, amount_raw TEXT, condition TEXT",
     "_imp_reviews": "k INTEGER, reason TEXT",
+    "_imp_accepted": "k INTEGER, reason TEXT",
     "_imp_map": "k INTEGER PRIMARY KEY, schedule_id INTEGER NOT NULL",
 }
 
@@ -72,6 +73,8 @@ def state_runs(result: ImportResult) -> list[RunRecord]:
 
 
 AUTO_RESOLVED = "auto: the checks no longer report this on re-import"
+AS_REPORTED = "as reported: published from the state file as the district reported it (D-028)"
+"""Resolution of a finding on a state-file schedule that is published anyway (D-028)."""
 """Resolution of an open review reason that a re-import with changed checks no longer gives."""
 
 
@@ -173,6 +176,10 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
     sql += batched_insert(
         "INSERT INTO _imp_reviews (k, reason)",
         ((p.key, reason) for p in result.prepared for reason in p.reasons),
+    )
+    sql += batched_insert(
+        "INSERT INTO _imp_accepted (k, reason)",
+        ((p.key, reason) for p in result.prepared for reason in p.accepted_reasons),
     )
 
     # Source documents: a state file has district_id NULL (it covers many districts).
@@ -279,11 +286,26 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
     )
     # Open reasons the checks no longer give (a rule changed) are closed, so the review page
     # only lists what is still wrong.
+    accepted = (
+        "SELECT 1 FROM _imp_accepted x JOIN _imp_map m ON m.k = x.k"
+        " WHERE m.schedule_id = review_queue.schedule_id AND x.reason = review_queue.reason"
+    )
     sql.append(
-        f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution = {quote(AUTO_RESOLVED)}"
+        f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution ="
+        f" CASE WHEN EXISTS ({accepted}) THEN {quote(AS_REPORTED)} ELSE {quote(AUTO_RESOLVED)} END"
         " WHERE resolved_at IS NULL AND schedule_id IN (SELECT schedule_id FROM _imp_map)"
         " AND NOT EXISTS (SELECT 1 FROM _imp_reviews x JOIN _imp_map m ON m.k = x.k"
         " WHERE m.schedule_id = review_queue.schedule_id AND x.reason = review_queue.reason)"
+    )
+    # Findings of a schedule published as reported are kept, already resolved: the website says
+    # the figures are shown as the district reported them (D-028).
+    sql.append(
+        "INSERT INTO review_queue (schedule_id, reason, created_at, resolved_at, resolution)"
+        f" SELECT m.schedule_id, x.reason, {quote(stamp)}, {quote(stamp)}, {quote(AS_REPORTED)}"
+        " FROM _imp_accepted x JOIN _imp_map m ON m.k = x.k"
+        " WHERE NOT EXISTS (SELECT 1 FROM review_queue r"
+        " WHERE r.schedule_id = m.schedule_id AND r.reason = x.reason)"
+        f" AND NOT EXISTS ({_decided('m.schedule_id', 'rejected')})"
     )
     sql.append(
         "INSERT INTO review_queue (schedule_id, reason, created_at)"

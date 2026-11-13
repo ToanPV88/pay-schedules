@@ -100,3 +100,25 @@ export function escapeXml(value: string): string {
 export function plural(count: number, one: string, many: string): string {
   return `${count.toLocaleString("en-US")} ${count === 1 ? one : many}`;
 }
+
+export interface SourceLanding {
+  href: string;
+  label: string;
+}
+
+const J90_FILE = /^https?:\/\/www3?\.cde\.ca\.gov\/ds-downloads\/fd\/cs\/(j90\d{4}\.exe)$/i;
+
+/**
+ * Trang chính thức giới thiệu tệp dữ liệu của bang, để không đưa người xem tới thẳng một tệp
+ * .exe (tệp J-90 của California là ZIP tự giải nén; pipeline chỉ mở như ZIP). D-028.
+ */
+export function sourceLanding(url: string): SourceLanding | null {
+  const j90 = J90_FILE.exec(url);
+  if (j90) {
+    return {
+      href: "https://www.cde.ca.gov/ds/fd/cs/",
+      label: `California Department of Education, Form J-90 data (${j90[1]})`,
+    };
+  }
+  return null;
+}

@@ -167,6 +167,40 @@ describe("trang học khu", () => {
   });
 });
 
+describe("bảng của tệp nguồn của bang (D-028)", () => {
+  it("bảng publish như nguồn: ghi rõ kiểm tra đã báo, không còn câu 'passed'", async () => {
+    const { a } = await seed();
+    await db
+      .prepare(
+        `INSERT INTO review_queue (schedule_id, reason, created_at, resolved_at, resolution)
+         VALUES (?, '[monotonic_step] Lương giảm khi tăng bậc', '2026-11-13T00:00:00Z',
+                 '2026-11-13T00:00:00Z', 'as reported: published from the state file')`,
+      )
+      .bind(a.scheduleId)
+      .run();
+    const html = await page("/test-state/test-valley-unified");
+    expect(html).toContain("Shown as the district reported it to the state");
+    expect(html).toContain("pay goes down from one step to the next");
+    expect(html).not.toContain("Passed automated checks");
+  });
+
+  it("tệp .exe của bang: link tới trang dữ liệu chính thức, không tới tệp", async () => {
+    const { a } = await seed();
+    const exe = "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902425.exe";
+    await db
+      .prepare(
+        "UPDATE source_documents SET url = ? WHERE id = (SELECT source_document_id FROM schedules WHERE id = ?)",
+      )
+      .bind(exe, a.scheduleId)
+      .run();
+    const html = await page("/test-state/test-valley-unified");
+    expect(html).toContain('href="https://www.cde.ca.gov/ds/fd/cs/"');
+    expect(html).toContain("Form J-90 data (j902425.exe)");
+    expect(html).not.toContain(`href="${exe}"`);
+    expect(html).toContain("Passed automated checks");
+  });
+});
+
 describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
   it("trang bang liệt kê học khu và sắp xếp phía server", async () => {
     await seed();

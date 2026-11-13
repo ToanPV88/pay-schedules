@@ -2,7 +2,15 @@
 import type { Cell, Schedule } from "@pay-schedules/db";
 import { html, raw } from "hono/html";
 import { type Calculation, calculate } from "../calc";
-import { formatCents, formatDate, hostOf, payBasisNoun, safeHttpUrl, stepLabel } from "../format";
+import {
+  formatCents,
+  formatDate,
+  hostOf,
+  payBasisNoun,
+  safeHttpUrl,
+  sourceLanding,
+  stepLabel,
+} from "../format";
 import type { Html } from "./layout";
 
 // ---------------------------------------------------------------- bảng
@@ -188,12 +196,39 @@ ${notes}`;
 // ---------------------------------------------------------------- nguồn
 
 /** Nguồn của bảng: link tài liệu gốc, vị trí trong tài liệu, ngày tải, trạng thái kiểm tra. */
-export function sourceBlock(schedule: Schedule, reportHref: string | null): Html {
+/** Lời giải thích (tiếng Anh) cho mã kiểm tra đã báo ở bảng publish "như nguồn" (D-028). */
+const AS_REPORTED_TEXT: Record<string, string> = {
+  monotonic_step: "pay goes down from one step to the next",
+  monotonic_lane: "a lane with more education pays less than a lower one",
+  start_change: "starting pay changed by more than 20% from the previous year",
+};
+
+function checkStatus(asReported: string[]): Html {
+  if (asReported.length === 0) {
+    return html`Passed automated checks; not reviewed by a person. <a href="/methodology#checks">How we check</a>`;
+  }
+  const found = asReported.map((code) => AS_REPORTED_TEXT[code] ?? code).join("; ");
+  return html`Shown as the district reported it to the state. Our automated checks flagged values that look unusual (${found}); they have not been changed. <a href="/methodology#checks">How we check</a>`;
+}
+
+export function sourceBlock(
+  schedule: Schedule,
+  reportHref: string | null,
+  asReported: string[] = [],
+): Html {
   const { source } = schedule;
+  const landing = sourceLanding(source.url);
   const url = safeHttpUrl(source.url);
-  const link = url
-    ? html`<a href="${url}" rel="nofollow noopener">${hostOf(url)}</a> (original document)`
-    : html`${source.url}`;
+  let link: Html;
+  if (landing) {
+    link = html`<a href="${landing.href}" rel="nofollow noopener">${landing.label}</a>`;
+  } else if (url && /\.exe$/i.test(new URL(url).pathname)) {
+    link = html`${hostOf(url)} (data file, not linked)`;
+  } else if (url) {
+    link = html`<a href="${url}" rel="nofollow noopener">${hostOf(url)}</a> (original document)`;
+  } else {
+    link = html`${source.url}`;
+  }
   let location = "Not recorded";
   if (source.page !== null) {
     location = `Page ${source.page}`;
@@ -208,7 +243,7 @@ export function sourceBlock(schedule: Schedule, reportHref: string | null): Html
 <div><dt>Source document</dt><dd>${link}</dd></div>
 <div><dt>Location in document</dt><dd>${location}</dd></div>
 <div><dt>Retrieved</dt><dd>${formatDate(source.fetchedAt)}</dd></div>
-<div><dt>Check status</dt><dd>Passed automated checks; not reviewed by a person. <a href="/methodology#checks">How we check</a></dd></div>
+<div><dt>Check status</dt><dd>${checkStatus(asReported)}</dd></div>
 <div><dt>File fingerprint</dt><dd><abbr title="SHA-256 ${source.sha256}">${fingerprint}…</abbr></dd></div>
 </dl>
 ${report}`;

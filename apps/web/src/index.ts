@@ -13,6 +13,7 @@ import {
   getSchedule,
   getStateBySlug,
   insertErrorReport,
+  listAsReportedChecks,
   listDistrictsOfState,
   listNeighbors,
   listPublishedSchedules,
@@ -459,6 +460,7 @@ app.get("/demo", (c) => {
     neighbors: DEMO_NEIGHBORS,
     selection: selectionOf(c, [DEMO_SCHEDULE]),
     reportsEnabled: false,
+    asReported: new Map(),
     path: "/demo",
     demo: true,
   };
@@ -547,6 +549,8 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     return notFound(c);
   }
   const path = yearParam === null ? base : `${base}/${year}`;
+  const ids = schedules.map((s) => s.id);
+  const asReported = await listAsReportedChecks(c.env.DB, ids);
   const data: DistrictPageData = {
     district,
     year,
@@ -557,6 +561,7 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     neighbors,
     selection: selectionOf(c, schedules),
     reportsEnabled: reportsEnabled(c.env),
+    asReported,
     path,
     demo: false,
   };

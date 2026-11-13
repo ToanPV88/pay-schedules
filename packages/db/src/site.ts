@@ -537,3 +537,37 @@ export async function listStateCodesOfDistricts(db: D1Database, ids: number[]): 
   const { results } = await stmt.all<{ state: string }>();
   return results.map((r) => r.state);
 }
+
+/**
+ * Kiểm tra tự động đã báo ở bảng của tệp nguồn của bang mà bảng vẫn publish "như nguồn" (D-028):
+ * dòng review_queue đã đóng với resolution bắt đầu bằng "as reported".
+ */
+const SQL_AS_REPORTED = `
+SELECT schedule_id, reason FROM review_queue
+ WHERE schedule_id IN (SELECT value FROM json_each(?)) AND resolution LIKE 'as reported%'
+ ORDER BY id`;
+
+/** Mã kiểm tra (`monotonic_step`, `start_change`...) theo id bảng; bảng không bị báo thì vắng. */
+export async function listAsReportedChecks(
+  db: D1Database,
+  scheduleIds: number[],
+): Promise<Map<number, string[]>> {
+  const out = new Map<number, string[]>();
+  if (scheduleIds.length === 0) {
+    return out;
+  }
+  const stmt = db.prepare(SQL_AS_REPORTED).bind(JSON.stringify(scheduleIds));
+  const { results } = await stmt.all<{ schedule_id: number; reason: string }>();
+  for (const row of results) {
+    const code = /^\[([a-z_]+)\]/.exec(row.reason)?.[1];
+    if (!code) {
+      continue;
+    }
+    const codes = out.get(row.schedule_id) ?? [];
+    if (!codes.includes(code)) {
+      codes.push(code);
+    }
+    out.set(row.schedule_id, codes);
+  }
+  return out;
+}
