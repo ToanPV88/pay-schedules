@@ -955,3 +955,11 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   lương đầu tiên là một phần nhãn bậc, nên bỏ cả dòng.
 - Bỏ số phụ (theo `_SIDE`) ở cuối phần nhãn; nhận `$0` và số thập phân tới năm chữ số là số phụ;
   bỏ chữ "monthly/semi-monthly/biweekly" khỏi nhãn lane. Bộ đọc lên @9. Bộ chuẩn không đổi.
+
+## D-055: Học khu Ohio trùng tên khớp theo quận
+
+- Ngày: 2026-11-14. Bổ sung D-047: tên trùng nay khớp theo quận. Bảng SERB có cột County (4 chữ đầu, ví dụ
+  `BUTL`), so với 4 chữ đầu tên quận NCES (cột county của bảng thống kê). 44/46 học khu trùng tên
+  khớp đúng một hợp đồng giáo viên Current (có Lakota Local, Butler, 17,9 nghìn học sinh); Crestview
+  (Van Wert) và Northwest (Scioto) không có hợp đồng Current. Danh sách chạy:
+  `pipeline/sources/ohio-dup-1.csv`.
