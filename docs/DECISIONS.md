@@ -878,4 +878,6 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   Danh sách được đọc qua công cụ đọc web (trang dài 3,6 MB nên chỉ đọc được tới vần "Mi"): 314
   hợp đồng giáo viên Current; 290 khớp đúng một học khu NCES theo tên (bỏ tên trùng ở nhiều quận
   như Madison Local, Green Local), đưa vào `schedule-urls.csv` (D-038).
-- Phần N–Z và các tên trùng làm sau, khi có cách đọc hết danh sách (kèm county).
+- Phần còn lại đọc trong Chrome của chủ dự án (trang công khai, robots.txt không chặn): bảng JSON
+  có cột Bargaining Unit, mã `T` là đơn vị giáo viên. Thêm 226 học khu khớp đúng một tên NCES;
+  tên trùng ở nhiều quận vẫn bỏ (không có county trong danh mục học khu).
