@@ -41,11 +41,11 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@8"
-WORDS = "pdfplumber-words@8"
-XLSX = "xlsx-cells@8"
-DOCX = "docx-cells@8"
-HTML = "html-cells@8"
+LAYOUT = "layout-text@9"
+WORDS = "pdfplumber-words@9"
+XLSX = "xlsx-cells@9"
+DOCX = "docx-cells@9"
+HTML = "html-cells@9"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -63,10 +63,10 @@ _LABEL = re.compile(
 _LETTER = re.compile(r"^([A-Z])\1?(?:&[A-Z]{1,2})?$")
 _PLACEMENT = re.compile(r"^[\d,\-–+]+$")
 _CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
-_NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,4}\)?\**$")
+_NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,5}\)?\**$")
 # Figures that sit beside the annual amounts without being one: a daily rate ("336.90"), a stipend
 # below MIN_AMOUNT ("2,500", Garland ISD's retention allotment) or an empty cell ("-").
-_SIDE = re.compile(r"^(?:\(?\$?\d[\d,]*\.\d{1,4}\)?\**|\$?\d,\d{3}|-|–|—|--)$")
+_SIDE = re.compile(r"^(?:\(?\$?\d[\d,]*\.\d{1,5}\)?\**|\$?\d,\d{3}|\$0|-|–|—|--)$")
 _TITLE = re.compile(
     r"salary|salaries|schedule|district|schools?\b|board|approved|adopted|effective|revised|"
     r"unified|county|fiscal|\b20\d\d\b",
@@ -217,8 +217,10 @@ def parse_row(line: Line, index: int) -> Row | None:
     if first is None:
         return None
     head = words[:first]
-    while head and _NUMBER.match(head[-1].text):
-        head = head[:-1]  # a daily/hourly figure before the first annual amount
+    while head and (_NUMBER.match(head[-1].text) or _SIDE.match(head[-1].text)):
+        # a daily/hourly/semi-monthly figure ("$2,521") or an increase ("$0") before the first
+        # annual amount (D-054)
+        head = head[:-1]
     label = " ".join(w.text for w in head).strip()
     # "0,1,2   1   $27,175": a placement column (years of experience) before the step
     if (
@@ -588,7 +590,20 @@ def to_answer(table: Table | None, page_text: str, reader: str, reason: str = ""
 
 
 # Column-unit words printed under each lane ("Hourly Rate | Annual Rate"): not part of the lane.
-_UNIT_WORDS = frozenset({"hourly", "daily", "annual", "annualized", "rate", "rates"})
+_UNIT_WORDS = frozenset(
+    {
+        "hourly",
+        "daily",
+        "annual",
+        "annualized",
+        "rate",
+        "rates",
+        "monthly",
+        "semi-monthly",
+        "biweekly",
+        "bi-weekly",
+    }
+)
 # Words that name a lane: never removed even when the title uses them too.
 _LANE_WORDS = re.compile(
     r"^(ba|bs|ma|ms|bachelors?|masters?|bachelor's|master's|doctor\w*|degrees?|phd|eds?|"
