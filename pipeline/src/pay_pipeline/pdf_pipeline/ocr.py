@@ -19,6 +19,7 @@ import io
 import re
 import subprocess
 import tempfile
+from collections import Counter
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -26,8 +27,10 @@ from typing import Any
 from pay_pipeline.documents.classify import score_page
 from pay_pipeline.pdf_pipeline import read as rd
 
-#: Pages scanned at low resolution to find the schedule pages.
-MAX_SCAN_PAGES = 40
+#: Pages scanned at low resolution to find the schedule pages. Contracts put the schedule in an
+#: appendix near the end (Michigan: page 62 of 67), so a long scan keeps its first and last pages.
+MAX_SCAN_PAGES = 160
+SCAN_HEAD_PAGES = 40
 #: Pages read carefully (both readings).
 MAX_READ_PAGES = 2
 SCAN_DPI = 200
@@ -98,7 +101,9 @@ def _tesseract(image: Path, psm: int) -> list[dict[str, str]]:
 
 def fix_token(text: str) -> str:
     """Undo the usual OCR slips in amounts: S for $, O for 0, l or I for 1, a dot for a comma."""
-    t = text.strip().strip("|[]“”‘’'\"`~")
+    t = text.strip().strip("|[]“”‘’'\"`~«»")
+    if re.search(r"\d[,.;:!]+$", t):
+        t = t.rstrip(",.;:!")  # "$48,306," — punctuation or a speck after the amount
     if t.endswith(")") and "(" not in t:
         t = t[:-1]  # a table rule read as ")" after the amount
     if re.fullmatch(r"[LlI|]\d", t):
@@ -145,7 +150,7 @@ def ocr_lines(rows: list[dict[str, str]]) -> list[rd.Line]:
         lines[-1].words.append(word)
     for line in lines:
         line.words = sorted(line.words, key=lambda w: w.x0)
-    return fill_step_labels(lines)
+    return fill_step_labels(repair_step_labels(lift_step_labels(lines)))
 
 
 _STEP = re.compile(r"^\d{1,2}$")
@@ -163,6 +168,74 @@ def _row_kind(line: rd.Line) -> tuple[str, int | None]:
     if rd.money(first.text) is not None:
         return "bare", None
     return "other", None
+
+
+_JUNK = re.compile(r"^[^\d]{1,3}$")
+#: Lines looked back over for a step number printed above its row.
+LIFT_REACH = 3
+
+
+def lift_step_labels(lines: list[rd.Line]) -> list[rd.Line]:
+    """Join a step number printed at the top of a tall cell to the amounts at its bottom.
+
+    Waterford (MI) prints "1" on one text line and "$43,992 $45,221 …" on the next. A row of
+    amounts with nothing before it takes the nearest step number above it, looking past specks
+    ("oe", "~") but not past another row of amounts. Specks before the first amount ("iz") go.
+    """
+    out = [rd.Line(list(ln.words)) for ln in lines]
+    used: set[int] = set()
+    for i, line in enumerate(out):
+        words = line.words
+        amounts = [w for w in words if rd.money(w.text) is not None]
+        if len(amounts) < MIN_ROW_AMOUNTS:
+            continue
+        lead = words[: words.index(amounts[0])]
+        if not all(_JUNK.match(w.text) for w in lead):
+            continue
+        for k in range(i - 1, max(-1, i - 1 - LIFT_REACH), -1):
+            if k in used:
+                break
+            above = out[k].words
+            if sum(rd.money(w.text) is not None for w in above) >= MIN_ROW_AMOUNTS:
+                break
+            steps = [w for w in above if _STEP.match(w.text) and w.x1 <= amounts[0].x0]
+            if steps:
+                if len(steps) == len([w for w in above if not _JUNK.match(w.text)]):
+                    line.words = [steps[-1], *words[len(lead) :]]
+                    out[k] = rd.Line([])
+                    used.add(k)
+                break
+    return [ln for ln in out if ln.words]
+
+
+def repair_step_labels(lines: list[rd.Line]) -> list[rd.Line]:
+    """Fix a step number OCR misread inside a run of rows that count up by one.
+
+    "10, 1, 12" becomes "10, 11, 12" (a dropped digit), and a last row that goes backwards after
+    two rows counting up ("13, 14, 7") becomes the next step. Any other break is left alone: steps
+    can jump on purpose (longevity rows). Only rows of amounts led by a number are looked at.
+    """
+    out = [rd.Line(list(ln.words)) for ln in lines]
+    kinds = [_row_kind(ln) for ln in out]
+
+    def relabel(k: int, n: int) -> None:
+        w = out[k].words[0]
+        out[k].words[0] = rd.Word(str(n), w.x0, w.x1)
+
+    # Rows of amounts in page order; specks between them ("oe") do not break the run.
+    run = [k for k in range(len(out)) if kinds[k][0] == "label"]
+    for a, b, c in zip(run, run[1:], run[2:], strict=False):
+        la, lb, lc = kinds[a][1], kinds[b][1], kinds[c][1]
+        if la is not None and lb is not None and lc is not None and lc == la + 2 and lb != la + 1:
+            relabel(b, la + 1)
+            kinds[b] = ("label", la + 1)
+    if len(run) >= 3:
+        a, b, c = run[-3:]
+        la, lb, lc = kinds[a][1], kinds[b][1], kinds[c][1]
+        if la is not None and lb is not None and lc is not None and lb == la + 1 and lc <= lb:
+            relabel(c, lb + 1)
+            kinds[c] = ("label", lb + 1)
+    return out
 
 
 def fill_step_labels(lines: list[rd.Line]) -> list[rd.Line]:
@@ -215,10 +288,18 @@ def page_count(pdf: Path) -> int:
     return int(m.group(1)) if m else 0
 
 
+def scan_order(pages: int) -> list[int]:
+    """Pages to scan: all of them, or the first SCAN_HEAD_PAGES and the last ones up to the cap."""
+    if pages <= MAX_SCAN_PAGES:
+        return list(range(1, pages + 1))
+    tail = MAX_SCAN_PAGES - SCAN_HEAD_PAGES
+    return list(range(1, SCAN_HEAD_PAGES + 1)) + list(range(pages - tail + 1, pages + 1))
+
+
 def schedule_pages(pdf: Path, tmp: Path, pages: int) -> list[int]:
     """Pages most like a salary schedule, from a fast low-resolution pass."""
     scores = []
-    for p in range(1, min(pages, MAX_SCAN_PAGES) + 1):
+    for p in scan_order(pages):
         lines = ocr_lines(_tesseract(clean(_render(pdf, p, SCAN_DPI, tmp), SCAN_DPI), 6))
         s = score_page("\n".join(ln.text for ln in lines), p)
         if s.amounts >= 12:
@@ -235,12 +316,12 @@ def schedule_pages(pdf: Path, tmp: Path, pages: int) -> list[int]:
 
 #: OCR settings tried in turn: (reader, dpi, page segmentation mode, clean the image first).
 CONFIGS = (
-    ("tesseract-psm6-300dpi-clean@1", 300, 6, True),
-    ("tesseract-psm4-300dpi-clean@1", 300, 4, True),
-    ("tesseract-psm6-300dpi@1", 300, 6, False),
-    ("tesseract-psm4-300dpi@1", 300, 4, False),
-    ("tesseract-psm6-400dpi-clean@1", 400, 6, True),
-    ("tesseract-psm4-400dpi-clean@1", 400, 4, True),
+    ("tesseract-psm6-300dpi-clean@2", 300, 6, True),
+    ("tesseract-psm4-300dpi-clean@2", 300, 4, True),
+    ("tesseract-psm6-300dpi@2", 300, 6, False),
+    ("tesseract-psm4-300dpi@2", 300, 4, False),
+    ("tesseract-psm6-400dpi-clean@2", 400, 6, True),
+    ("tesseract-psm4-400dpi-clean@2", 400, 4, True),
 )
 READERS = frozenset(c[0] for c in CONFIGS)
 
@@ -271,6 +352,68 @@ def same_grid(a: dict[str, Any], b: dict[str, Any]) -> bool:
 AGREE_TO_PUBLISH = 3
 #: Longest lane label accepted from a scan without review.
 MAX_LANE_LABEL = 30
+
+
+def vote(answers: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """One grid from several OCR readings, cell by cell (D-057).
+
+    Readings of the same page with the most common lane count are lined up by step label. A step
+    is kept when AGREE_TO_PUBLISH readings have it; each cell takes the amount most readings
+    agree on, which must have AGREE_TO_PUBLISH votes and more votes than any other amount. The
+    reading with the most rows gives the labels and their order, and each of its rows must be
+    kept. Returns None when any of that fails; the answer's
+    ``ocr_agree`` is the smallest winning vote, so a weak cell still holds the table for review.
+    """
+    full = [a for a in answers if _cells(a)]
+    if len(full) < AGREE_TO_PUBLISH:
+        return None
+    # Readings of one page with one lane count: a reading of another page is another table.
+    shape = Counter(
+        (tuple(a.get("source_pages") or ()), len(a["lanes"])) for a in full
+    ).most_common(1)[0][0]
+    full = [a for a in full if (tuple(a.get("source_pages") or ()), len(a["lanes"])) == shape]
+    lanes = shape[1]
+    if len(full) < AGREE_TO_PUBLISH:
+        return None
+    rows = [
+        {st["label"]: row for st, row in zip(a["steps"], a["cells"], strict=False)} for a in full
+    ]
+    seen = Counter(label for r in rows for label in r)
+    keep = {label for label, n in seen.items() if n >= AGREE_TO_PUBLISH}
+    base_i = max(range(len(full)), key=lambda i: len(rows[i]))
+    base = full[base_i]
+    order = [st["label"] for st in base["steps"]]
+    # Every row of the fullest reading must be confirmed: a row only some readings saw (often
+    # the last) is never dropped to make the vote pass.
+    if not order or set(order) != keep or len(order) != len(set(order)):
+        return None
+    cells: list[list[float | None]] = []
+    weakest = len(full)
+    for label in order:
+        row: list[float | None] = []
+        for j in range(lanes):
+            votes = Counter(
+                None if r[label][j] is None else round(float(r[label][j]), 2)
+                for r in rows
+                if label in r and j < len(r[label])
+            ).most_common(2)
+            top, n = votes[0]
+            if n < AGREE_TO_PUBLISH or (len(votes) > 1 and votes[1][1] >= n):
+                return None
+            weakest = min(weakest, n)
+            row.append(top)
+        cells.append(row)
+    years = Counter(a.get("school_year") for a in full if a.get("school_year")).most_common(1)
+    steps = {st["label"]: st for st in base["steps"]}
+    out = dict(base)
+    out.update(
+        cells=cells,
+        steps=[steps[label] for label in order],
+        school_year=years[0][0] if years else base.get("school_year"),
+        ocr_agree=weakest,
+        ocr_vote=len(full),
+    )
+    return out
 
 
 def read_scanned(pdf: Path) -> list[dict[str, Any]]:
@@ -314,6 +457,10 @@ def read_scanned(pdf: Path) -> list[dict[str, Any]]:
         reason = f"OCR lỗi: {type(exc).__name__}"[:200]
         return [rd.to_answer(None, "", CONFIGS[0][0], reason)]
     best = max(groups, key=len, default=[])
+    if len(best) < AGREE_TO_PUBLISH:
+        voted = vote(answers)
+        if voted is not None:
+            return [voted, dict(voted)]
     if len(best) >= 2:
         best[0]["ocr_agree"] = len(best)
         return best[:2]

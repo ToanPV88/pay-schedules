@@ -977,3 +977,20 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   vào `schedule-urls.csv`; danh sách chạy `pipeline/sources/michigan-mackinac-1.csv`.
 - Các kho khác đã xem: SeeThroughNY (New York) lấy danh sách qua `/tools/...`, bị robots.txt chặn,
   nên không dùng tự động. Chưa tìm thấy kho công khai còn hoạt động cho Pennsylvania.
+
+## D-057: OCR quét cả phụ lục cuối hợp đồng, nhận số bậc in phía trên hàng, bỏ phiếu từng ô
+
+- Ngày: 2026-11-15. Hợp đồng Michigan (D-056) để bảng lương ở phụ lục cuối: Marysville trang 62/67,
+  Waterford trang 48–49/68. Lượt dò trang chỉ xét 40 trang đầu nên không thấy. Nay dò tối đa 160
+  trang: 40 trang đầu và các trang cuối.
+- Waterford in số bậc ở đầu ô cao, còn số tiền ở đáy ô, nên OCR tách thành hai dòng. Một hàng số
+  tiền không có nhãn sẽ lấy số bậc gần nhất phía trên. Được bỏ qua tối đa 3 dòng rác ("oe", "~"),
+  nhưng không vượt qua một hàng số tiền khác. Dấu câu dính sau số tiền ("$48,306,") được bỏ.
+- Sửa số bậc đọc sai trong dãy tăng đều: "10, 1, 12" thành 11. Hàng cuối đi lùi sau hai hàng tăng
+  đều ("13, 14, 7") thành 15. Các bước nhảy khác giữ nguyên (bậc thâm niên).
+- Bỏ phiếu từng ô khi không có 3 lượt OCR khớp nguyên bảng. Chỉ xét các lượt đọc cùng trang và
+  cùng số lane. Mỗi ô cần ít nhất 3 phiếu và nhiều phiếu hơn mọi số khác. Mọi hàng của lượt đọc đầy
+  đủ nhất phải có đủ 3 phiếu, nên một hàng chỉ vài lượt thấy (thường là hàng cuối) không bị cắt đi
+  để cho qua. `ocr_agree` là số phiếu thấp nhất, nên quy tắc 3/3 của D-036 vẫn áp dụng.
+- Tên bộ đọc OCR lên @2 để đọc lại các bản scan cũ. Bộ chuẩn không đổi: 24 publish, 2.560/2.560 ô
+  đúng.

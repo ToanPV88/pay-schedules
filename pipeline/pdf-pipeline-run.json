@@ -1,12 +1,15 @@
 {
   "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*. rerun: trạng thái district_pipeline được chạy lại ngay. shards: số lô song song (1-20, D-030); deadline_minutes: phút tối đa để bắt đầu học khu mới trong mỗi lô. manual_release: tên bộ file tải tay (D-051).",
-  "limit": 500,
+  "limit": 2000,
   "state": "",
-  "rerun": [],
-  "shards": 10,
-  "deadline_minutes": 90,
-  "seeded_only": false,
-  "ids_file": "pipeline/sources/michigan-mackinac-1.csv",
+  "rerun": [
+    "no_schedule",
+    "review"
+  ],
+  "shards": 20,
+  "deadline_minutes": 150,
+  "seeded_only": true,
+  "ids_file": "",
   "manual_release": "",
   "reread_drafts": false
 }

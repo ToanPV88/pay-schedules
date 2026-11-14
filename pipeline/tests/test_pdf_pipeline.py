@@ -812,6 +812,83 @@ class TestOcr:
         assert fix_token("L3") == "13"
         assert fix_token("“10") == "10"
 
+    def test_step_number_above_its_row(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import (
+            fill_step_labels,
+            lift_step_labels,
+            repair_step_labels,
+        )
+
+        def line(*items: tuple[str, float]) -> rd.Line:
+            return rd.Line([rd.Word(t, x, x + 60) for t, x in items])
+
+        amounts = [("$43,992", 300.0), ("$45,221", 400.0), ("$48,303", 500.0)]
+        lines = [
+            line(("1", 100.0)),
+            line(*amounts),
+            line(("oe", 120.0)),
+            line(("2", 100.0)),
+            line(("iz", 200.0), *amounts),
+            line(("3", 100.0)),
+            line(*amounts),
+        ]
+        rows = fill_step_labels(repair_step_labels(lift_step_labels(lines)))
+        assert [ln.words[0].text for ln in rows if len(ln.words) > 3] == ["1", "2", "3"]
+        assert all(len(ln.words) == 4 for ln in rows if len(ln.words) > 3)
+
+    def test_repair_step_labels(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import repair_step_labels
+
+        amounts = ["$41,000", "$42,000", "$43,000"]
+
+        def row(label: str) -> rd.Line:
+            return rd.Line(
+                [rd.Word(t, 100.0 * i, 100.0 * i + 60) for i, t in enumerate([label, *amounts])]
+            )
+
+        labels = ["9", "10", "1", "12", "13", "14", "7"]
+        fixed = [ln.words[0].text for ln in repair_step_labels([row(x) for x in labels])]
+        assert fixed == ["9", "10", "11", "12", "13", "14", "15"]
+        jump = ["1", "2", "3", "10", "15"]  # longevity steps stay as printed
+        assert [ln.words[0].text for ln in repair_step_labels([row(x) for x in jump])] == jump
+
+    def test_vote_cell_by_cell(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import vote
+
+        def answer(cells: list[list[float | None]], labels: list[str], page: int = 48) -> dict:
+            return {
+                "is_teacher_salary_schedule": True, "school_year": "2026-27",
+                "lanes": ["BA", "MA"], "steps": [{"label": x} for x in labels],
+                "cells": cells, "source_pages": [page],
+            }  # fmt: skip
+
+        good = [[100.0, 200.0], [110.0, 220.0]]
+        readings = [
+            answer(good, ["1", "2"]),
+            answer([[100.0, 200.0], [110.0, 228.0]], ["1", "2"]),  # one misread digit
+            answer([[110.0, 220.0]], ["2"]),  # first row dropped
+            answer(good, ["1", "2"]),
+            answer([[900.0, 900.0], [900.0, 900.0]], ["1", "2"], page=49),  # another page
+        ]
+        voted = vote(readings)
+        assert voted is not None
+        assert voted["cells"] == good
+        assert voted["ocr_agree"] == 3
+        assert vote(readings[:2]) is None  # too few readings
+        split = [answer(good, ["1", "2"]), answer(good, ["1", "2"]),
+                 answer([[100.0, 201.0], [110.0, 220.0]], ["1", "2"]),
+                 answer([[100.0, 201.0], [110.0, 220.0]], ["1", "2"])]  # fmt: skip
+        assert vote(split) is None  # 2 against 2: no amount wins
+
+    def test_scan_order_keeps_the_appendix(self) -> None:
+        from pay_pipeline.pdf_pipeline.ocr import MAX_SCAN_PAGES, SCAN_HEAD_PAGES, scan_order
+
+        assert scan_order(67) == list(range(1, 68))  # Marysville: schedule on page 62
+        long = scan_order(400)
+        assert len(long) == MAX_SCAN_PAGES
+        assert long[:SCAN_HEAD_PAGES] == list(range(1, SCAN_HEAD_PAGES + 1))
+        assert long[-1] == 400
+
     def test_known_documents_reread_old_scans(self) -> None:
         from pay_pipeline.pdf_pipeline.gather import known_documents
         from pay_pipeline.pdf_pipeline.ocr import CONFIGS
