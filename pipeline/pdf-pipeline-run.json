@@ -1,10 +1,11 @@
 {
-  "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*. rerun: trạng thái district_pipeline được chạy lại ngay. shards: số lô song song (1-20, D-030); deadline_minutes: phút tối đa để bắt đầu học khu mới trong mỗi lô.",
-  "limit": 500,
+  "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*. rerun: trạng thái district_pipeline được chạy lại ngay. shards: số lô song song (1-20, D-030); deadline_minutes: phút tối đa để bắt đầu học khu mới trong mỗi lô. manual_release: tên bộ file tải tay (D-051).",
+  "limit": 200,
   "state": "",
   "rerun": [],
-  "shards": 8,
+  "shards": 4,
   "deadline_minutes": 60,
-  "seeded_only": true,
-  "ids_file": ""
+  "seeded_only": false,
+  "ids_file": "",
+  "manual_release": "manual-20261114-tai-tay-1"
 }
