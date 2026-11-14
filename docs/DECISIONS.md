@@ -914,3 +914,14 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Đọc báo cáo năm 2026 trong Chrome của chủ dự án: 303 file. Học khu tải nhiều bản thì lấy bản
   tải lên sau cùng. Ghép NCES theo tên đã chuẩn hóa cùng quận, cộng 19 cặp ghép tay; bỏ hợp tác
   xã giáo dục đặc biệt, trung tâm nghề và học khu đã có bảng.
+
+## D-051: File chủ dự án tải tay
+
+- Ngày: 2026-11-14. Các file bị robots.txt chặn bot (Google Drive, ParentSquare, site tự cấm,
+  D-044) được chủ dự án tự tải bằng trình duyệt theo Sheet "150 học khu", rồi gửi lại.
+- File nằm trong Release `manual-<ngày>-<tên>` (asset `files.tar`, không đưa vào git). Danh
+  sách `pipeline/sources/manual-<ngày>-<tên>.csv` (`nces_id,file,url`) ghi mã NCES, đường dẫn
+  file trong tar và link gốc của file; link gốc là nguồn hiển thị trên site.
+- Chạy: đặt `manual_release` trong `pdf-pipeline-run.json`. Lượt chỉ lấy các học khu trong
+  danh sách; `pdf-gather --manual` đọc file từ đĩa, không tải mạng, rồi phân loại, đọc bảng và
+  kiểm tra như mọi tài liệu khác. Đường dẫn ra ngoài thư mục file bị bỏ.
