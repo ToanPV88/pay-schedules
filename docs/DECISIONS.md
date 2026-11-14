@@ -892,3 +892,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   (318 học khu). 314 khớp tên NCES, bỏ 8 học khu đã có bảng; 306 link đưa vào `schedule-urls.csv`
   (D-038). Một số file chỉ là phụ lục gia hạn hoặc MOU, không có thang lương: pipeline sẽ báo
   không tìm thấy bảng, không cần lọc tay.
+
+## D-049: Hợp đồng giáo viên New Jersey từ PERC
+
+- Ngày: 2026-11-14. Luật NJ buộc chủ lao động công nộp mọi hợp đồng cho PERC; PERC công khai
+  kho `perc.state.nj.us/publicsectorcontracts.nsf` (Lotus Domino, robots.txt: 404, không chặn).
+- Đọc view `Unit` qua `?ReadViewEntries&OutputFormat=JSON` trong Chrome của chủ dự án (25.188 hợp
+  đồng). Giữ loại chủ lao động "School District", đơn vị có chữ "Teach", hợp đồng hết hạn muộn
+  nhất của mỗi chủ lao động, chỉ lấy hợp đồng hết hạn từ 2023 (262 hợp đồng).
+- Ghép NCES theo tên đã chuẩn hóa (Tp, Boro, Reg, Hgts…) cùng quận (cột county trong D1), thêm
+  10 cặp ghép tay. Bỏ trường charter, trường nghề quận không có trong danh mục và học khu đã có
+  bảng: 240 link vào `schedule-urls.csv`. Link là trang tài liệu Domino; pipeline mở trang và
+  thử các file đính kèm (D-038).
