@@ -41,11 +41,11 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@7"
-WORDS = "pdfplumber-words@7"
-XLSX = "xlsx-cells@7"
-DOCX = "docx-cells@7"
-HTML = "html-cells@7"
+LAYOUT = "layout-text@8"
+WORDS = "pdfplumber-words@8"
+XLSX = "xlsx-cells@8"
+DOCX = "docx-cells@8"
+HTML = "html-cells@8"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -507,6 +507,12 @@ def pick_table(tables: list[Table]) -> Table | None:
     # a standard year is taken instead (Mobile County prints 202- and 187-day schedules after
     # one for 240/260 days).
     good = [t for t in usable if _score(t) >= best * 0.6]
+    # A multi-year contract prints one grid per school year (2022-23, 2023-24, 2024-25): the
+    # latest year is the one in force, so only its grids stay in the running (D-052).
+    years = {id(t): (school_years(t.context) or [""])[-1] for t in good}
+    latest = max(years.values())
+    if latest and len({y for y in years.values() if y}) > 1:
+        good = [t for t in good if years[id(t)] == latest]
     first_days = _table_days(good[0])
     if first_days is None or _standard(first_days):
         return good[0]
