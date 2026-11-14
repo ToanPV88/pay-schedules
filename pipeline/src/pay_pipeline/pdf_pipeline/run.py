@@ -70,6 +70,8 @@ def read_document(path: Path, kind: str, classification: dict[str, Any]) -> list
         return [rd.read_xlsx(path)]
     if kind == "docx":
         return [rd.read_docx(path)]
+    if kind == "html":
+        return [rd.read_html(path)]
     return [rd.to_answer(None, "", rd.LAYOUT, f"Không đọc được tệp {kind}")]
 
 
