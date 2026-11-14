@@ -850,3 +850,10 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   - Bậc in từ lớn xuống nhỏ: bộ đọc theo chiều của các hàng đầu, không cắt bảng ở mỗi hàng.
 - Bộ mẫu chuẩn không đổi (24 publish, 2560/2560, 0 sai). Thử trên lô 0 của lượt toàn quốc: thêm
   3/141 học khu đọc được. Bộ đọc lên @7 để lượt sau đọc lại tài liệu đã biết.
+
+## D-045: Tự publish bảng một cột chỉ thiếu tên cột
+
+- Ngày: 2026-11-14. Hàng chờ có 245 lý do mở; 13 bảng chỉ có lý do "Nhãn lane thiếu tên:
+  'salary'": bảng một cột (thường ở Texas) mà tiêu đề cột là "Salary". Hai bộ đọc đã khớp, số
+  liệu không đổi, nên tự publish như nguồn (D-034). Các lý do khác của lane_label (nhiều lane cùng
+  nhãn) vẫn để người xem vì không biết cột nào là bằng cấp nào.
