@@ -119,6 +119,10 @@ def _wrangler_rows(path: Path) -> list[dict[str, object]]:
 
 def _cmd_pdf_gather(args: argparse.Namespace) -> int:
     seeds = pdf_gather.load_seeds(Path(args.seeds) if args.seeds else None)
+    manual = pdf_gather.load_manual(
+        Path(args.manual) if args.manual else None,
+        Path(args.manual_dir) if args.manual_dir else None,
+    )
     queue = [
         pdf_gather.QueueItem(
             district_id=int(str(r["district_id"])),
@@ -128,6 +132,7 @@ def _cmd_pdf_gather(args: argparse.Namespace) -> int:
             website=str(r["website"]) if r.get("website") else None,
             enrollment=int(str(r["enrollment"])) if r.get("enrollment") is not None else None,
             seeds=seeds.get(str(r["nces_id"]), ()),
+            manual=manual.get(str(r["nces_id"]), ()),
         )
         for r in _wrangler_rows(Path(args.queue))
     ]
@@ -243,6 +248,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--queue", required=True, help="JSON hàng đợi từ D1 (wrangler --json)")
     p.add_argument("--known", help="JSON tài liệu đã xử lý (url, sha256, model)")
     p.add_argument("--seeds", help="CSV link bảng lương tìm tay: nces_id,url,note (D-038)")
+    p.add_argument("--manual", help="CSV file tải tay: nces_id,file,url (D-051)")
+    p.add_argument("--manual-dir", help="Thư mục chứa file tải tay")
     p.add_argument("--out", required=True, help="Thư mục làm việc")
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--deadline-minutes", type=float, default=40)

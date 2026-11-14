@@ -71,6 +71,8 @@ class QueueItem:
     website: str | None
     enrollment: int | None = None
     seeds: tuple[str, ...] = ()  # schedule URLs found by hand (D-038), tried before discovery
+    manual: tuple[tuple[str, str], ...] = ()
+    """Files the owner downloaded by hand (D-051): (local path, original URL); no fetching."""
 
 
 @dataclass
@@ -241,6 +243,35 @@ def load_seeds(path: Path | None) -> dict[str, tuple[str, ...]]:
     return {k: tuple(v) for k, v in seeds.items()}
 
 
+MANUAL_SOURCE = "manual-files"
+
+
+ManualFiles = dict[str, tuple[tuple[str, str], ...]]
+
+
+def load_manual(path: Path | None, files_dir: Path | None) -> ManualFiles:
+    """Hand-downloaded files (D-051): CSV ``nces_id,file,url`` -> NCES id -> (path, URL).
+
+    ``file`` is relative to ``files_dir``; it must stay inside it and exist.
+    """
+    if path is None or files_dir is None or not path.exists():
+        return {}
+    root = files_dir.resolve()
+    out: dict[str, list[tuple[str, str]]] = {}
+    with path.open(encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            nces = (r.get("nces_id") or "").strip()
+            name = (r.get("file") or "").strip()
+            url = (r.get("url") or "").strip()
+            if not re.fullmatch(r"\d{7}", nces) or not name or not url.startswith("http"):
+                continue
+            local = (root / name).resolve()
+            if not local.is_relative_to(root) or not local.is_file():
+                continue
+            out.setdefault(nces, []).append((str(local), url))
+    return {k: tuple(v) for k, v in out.items()}
+
+
 def website_host(website: str | None) -> str | None:
     """Host of a district website without ``www.``; None when there is no usable URL."""
     if not website:
@@ -305,6 +336,8 @@ def gather_one(
     max_pages: int = 25,
 ) -> DistrictWork:
     work = DistrictWork(item.district_id, item.nces_id, item.name, item.state, item.website, "")
+    if item.manual:
+        return manual_one(item, work, docs_dir, known)
     picked: list[Candidate]
     if item.seeds:
         # A schedule URL found by hand: no crawl, so a home page that blocks bots or a website
@@ -402,27 +435,72 @@ def gather_one(
         if kind not in EXTENSIONS:
             errors.append(f"{cand.url}: không phải PDF/DOCX/XLSX")
             continue
-        sha = hashlib.sha256(data).hexdigest()
-        if any(d.sha256 == sha for d in work.docs):
-            continue
-        asset = f"{item.nces_id}-{sha[:12]}.{EXTENSIONS[kind]}"
-        path = docs_dir / asset
-        path.write_bytes(data)
-        result: Classification = classify(path, data)
-        work.docs.append(
-            DocWork(
-                url=cand.url,
-                final_url=response.final_url,
-                sha256=sha,
-                bytes=len(data),
-                kind=kind,
-                asset_name=asset,
-                fetched_at=_now(),
-                content_type=response.headers.get("content-type"),
-                known=sha in known.get(cand.url, set()),
-                classification=asdict(result),
-            )
+        add_doc(
+            work, docs_dir, known, cand.url, response.final_url, data, kind,
+            response.headers.get("content-type"),
+        )  # fmt: skip
+    return finish(work, errors)
+
+
+def add_doc(
+    work: DistrictWork,
+    docs_dir: Path,
+    known: dict[str, set[str]],
+    url: str,
+    final_url: str,
+    data: bytes,
+    kind: str,
+    content_type: str | None,
+) -> None:
+    """Save one document under its content hash, classify it and add it to ``work``."""
+    sha = hashlib.sha256(data).hexdigest()
+    if any(d.sha256 == sha for d in work.docs):
+        return
+    asset = f"{work.nces_id}-{sha[:12]}.{EXTENSIONS[kind]}"
+    path = docs_dir / asset
+    path.write_bytes(data)
+    result: Classification = classify(path, data)
+    work.docs.append(
+        DocWork(
+            url=url,
+            final_url=final_url,
+            sha256=sha,
+            bytes=len(data),
+            kind=kind,
+            asset_name=asset,
+            fetched_at=_now(),
+            content_type=content_type,
+            known=sha in known.get(url, set()),
+            classification=asdict(result),
         )
+    )
+
+
+def manual_one(
+    item: QueueItem, work: DistrictWork, docs_dir: Path, known: dict[str, set[str]]
+) -> DistrictWork:
+    """Hand-downloaded files (D-051): read from disk, keep the original URL as the source."""
+    work.candidates = [asdict(Candidate(u, MANUAL_SOURCE, "", "manual", SEED_SCORE))
+                       for _, u in item.manual]  # fmt: skip
+    errors = []
+    for local, url in item.manual:
+        data = Path(local).read_bytes()
+        kind = detect_kind(data)
+        if kind == "html":
+            page = salary_table_page(data)
+            if page is None:
+                errors.append(f"{url}: trang HTML không có bảng lương")
+                continue
+            data = page
+        if kind not in EXTENSIONS:
+            errors.append(f"{url}: không phải PDF/DOCX/XLSX")
+            continue
+        add_doc(work, docs_dir, known, url, url, data, kind, None)
+    return finish(work, errors)
+
+
+def finish(work: DistrictWork, errors: list[str]) -> DistrictWork:
+    """Pick the best document and set the district status."""
     best = choose(work.docs)
     if best is None:
         work.status = "no_schedule"

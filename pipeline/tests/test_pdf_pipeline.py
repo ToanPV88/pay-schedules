@@ -1072,3 +1072,42 @@ class TestHtmlTables:
         assert answer["lanes"] == ["Bachelor's", "Master's"]
         assert answer["cells"][0] == [60000.0, 62000.0]
         assert len(answer["cells"]) == 12
+
+
+class TestManualFiles:
+    """Files the owner downloaded by hand (D-051): read from disk, never fetched."""
+
+    def test_manual_files_are_read_from_disk(self, tmp_path: Path) -> None:
+        from dataclasses import replace
+
+        from pay_pipeline.pdf_pipeline.gather import load_manual
+
+        files = tmp_path / "files"
+        files.mkdir()
+        (files / "001_schedule.pdf").write_bytes(PDF)
+        (files / "001_other.pdf").write_bytes(make_pdf(["Lunch menu", "Monday pizza"]))
+        csv_path = tmp_path / "manual.csv"
+        url = "https://drive.google.com/file/d/abcdefghijk/view"
+        csv_path.write_text(
+            "nces_id,file,url\n"
+            f"{QUEUE[1].nces_id},001_other.pdf,https://example.invalid/menu.pdf\n"
+            f"{QUEUE[1].nces_id},001_schedule.pdf,{url}\n"
+            f"{QUEUE[1].nces_id},../outside.pdf,https://example.invalid/x.pdf\n"
+            "bad,001_schedule.pdf,https://example.invalid/y.pdf\n",
+            encoding="utf-8",
+        )
+        manual = load_manual(csv_path, files)
+        assert len(manual[QUEUE[1].nces_id]) == 2  # the path outside the folder is dropped
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise AssertionError(f"no network expected: {request.url}")
+
+        item = replace(QUEUE[1], manual=manual[QUEUE[1].nces_id])
+        works = gather(
+            [item], tmp_path / "work", {}, UA, workers=1,
+            transport=httpx.MockTransport(handler), sleep=lambda _: None,
+        )  # fmt: skip
+        assert works[0].status == "found"
+        chosen = next(d for d in works[0].docs if d.asset_name == works[0].chosen)
+        assert chosen.url == url
+        assert (tmp_path / "work" / "docs" / chosen.asset_name).read_bytes() == PDF
