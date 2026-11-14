@@ -919,7 +919,9 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 
 - Ngày: 2026-11-14. Các file bị robots.txt chặn bot (Google Drive, ParentSquare, site tự cấm,
   D-044) được chủ dự án tự tải bằng trình duyệt theo Sheet "150 học khu", rồi gửi lại.
-- File nằm trong Release `manual-<ngày>-<tên>` (asset `files.tar`, không đưa vào git). Danh
+- File nằm trong `files.tar` trên nhánh riêng `manual-files/manual-<ngày>-<tên>`, không merge
+  vào main (phiên làm việc không được tạo Release). Lượt chạy lưu lại tài liệu vào Release
+  `docs-*` như mọi tài liệu; xong thì xóa được nhánh. Danh
   sách `pipeline/sources/manual-<ngày>-<tên>.csv` (`nces_id,file,url`) ghi mã NCES, đường dẫn
   file trong tar và link gốc của file; link gốc là nguồn hiển thị trên site.
 - Chạy: đặt `manual_release` trong `pdf-pipeline-run.json`. Lượt chỉ lấy các học khu trong

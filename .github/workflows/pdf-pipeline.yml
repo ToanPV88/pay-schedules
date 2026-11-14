@@ -89,7 +89,7 @@ jobs:
             IDS_FILE=$(get ids_file "")
             MANUAL_RELEASE=$(get manual_release "")
           fi
-          # File tải tay (D-051): danh sách nces_id,file,url nằm trong repo, file nằm trong Release.
+          # File tải tay (D-051): danh sách nces_id,file,url nằm trên main, files.tar trên nhánh manual-files/<tên>.
           [[ -z "${MANUAL_RELEASE:-}" || "$MANUAL_RELEASE" =~ ^manual-[0-9]{8}-[a-z0-9-]+$ ]] || { echo "::error::manual_release sai"; exit 1; }
           if [ -n "${MANUAL_RELEASE:-}" ]; then IDS_FILE="pipeline/sources/${MANUAL_RELEASE}.csv"; fi
           [[ -z "${IDS_FILE:-}" || "$IDS_FILE" =~ ^pipeline/sources/[a-z0-9-]+\.csv$ ]] || { echo "::error::ids_file sai"; exit 1; }
@@ -195,13 +195,12 @@ jobs:
         with:
           name: inputs
           path: inputs
-      - name: Download hand-downloaded files
+      - name: Get hand-downloaded files
         if: env.MANUAL_RELEASE != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "$GITHUB_WORKSPACE/manual"
-          gh release download "$MANUAL_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern files.tar --dir "$RUNNER_TEMP"
+          git fetch --quiet --depth 1 origin "refs/heads/manual-files/$MANUAL_RELEASE"
+          git show FETCH_HEAD:files.tar > "$RUNNER_TEMP/files.tar"
           tar -xf "$RUNNER_TEMP/files.tar" -C "$GITHUB_WORKSPACE/manual" --no-same-owner --no-same-permissions
       - name: Discover, fetch, classify
         working-directory: pipeline
