@@ -1111,3 +1111,21 @@ class TestManualFiles:
         chosen = next(d for d in works[0].docs if d.asset_name == works[0].chosen)
         assert chosen.url == url
         assert (tmp_path / "work" / "docs" / chosen.asset_name).read_bytes() == PDF
+
+
+def test_multi_year_contract_takes_latest_year(tmp_path: Path) -> None:
+    # A contract prints the grid of each year it covers; the latest year is the one in force.
+    def grid(year: str, base: int) -> list[str]:
+        return [f"{year} Teacher Salary Schedule", "Step      BA        BA+30      MA"] + [
+            f"{s:>4}   {base + 1500 * s:,}   {base + 3000 + 1600 * s:,}   {base + 6000 + 1700 * s:,}"
+            for s in range(1, 13)
+        ]
+
+    lines = ["Agreement between the Board and the Education Association", ""]
+    lines += [*grid("2023-2024", 50000), "", *grid("2024-2025", 52000)]
+    path = tmp_path / "contract.pdf"
+    path.write_bytes(make_pdf(lines))
+    answers = rd.read_pdf(path, [1])
+    assert answers[0]["is_teacher_salary_schedule"]
+    assert answers[0]["school_year"] == "2024-25"
+    assert answers[0]["cells"][0][0] == 53500

@@ -927,3 +927,12 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Chạy: đặt `manual_release` trong `pdf-pipeline-run.json`. Lượt chỉ lấy các học khu trong
   danh sách; `pdf-gather --manual` đọc file từ đĩa, không tải mạng, rồi phân loại, đọc bảng và
   kiểm tra như mọi tài liệu khác. Đường dẫn ra ngoài thư mục file bị bỏ.
+
+## D-052: Hợp đồng nhiều năm lấy bảng năm muộn nhất
+
+- Ngày: 2026-11-14. Hợp đồng NJ, Ohio, Iowa in một lưới lương cho mỗi năm hợp đồng. Bộ đọc lấy
+  bảng đủ tốt đầu tiên nên hay ra năm đầu hợp đồng, trượt kiểm tra `school_year` ("đã cũ";
+  43 bảng trong lượt NJ + Indiana).
+- Khi các bảng đủ tốt ghi những năm học khác nhau ngay phía trên, chỉ giữ các bảng của năm muộn
+  nhất rồi chọn như cũ. Bộ đọc lên @8 để tài liệu đã đọc được đọc lại. Bộ chuẩn không đổi
+  (2.560/2.560 ô đúng).
