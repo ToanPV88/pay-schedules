@@ -88,7 +88,9 @@ jobs:
             SHARDS=$(get shards 1); DEADLINE=$(get deadline_minutes 45); SEEDED_ONLY=$(get seeded_only False)
             IDS_FILE=$(get ids_file "")
             MANUAL_RELEASE=$(get manual_release "")
+            REREAD_DRAFTS=$(get reread_drafts False)
           fi
+          [[ "${REREAD_DRAFTS:-False}" =~ ^(True|False)$ ]] || { echo "::error::reread_drafts sai"; exit 1; }
           # File tải tay (D-051): danh sách nces_id,file,url nằm trên main, files.tar trên nhánh manual-files/<tên>.
           [[ -z "${MANUAL_RELEASE:-}" || "$MANUAL_RELEASE" =~ ^manual-[0-9]{8}-[a-z0-9-]+$ ]] || { echo "::error::manual_release sai"; exit 1; }
           if [ -n "${MANUAL_RELEASE:-}" ]; then IDS_FILE="pipeline/sources/${MANUAL_RELEASE}.csv"; fi
@@ -106,7 +108,7 @@ jobs:
           tag="docs-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
           { echo "tag=$tag"; echo "deadline=$DEADLINE"; echo "manual=${MANUAL_RELEASE:-}"; } >> "$GITHUB_OUTPUT"
           [[ "${SEEDED_ONLY:-False}" =~ ^(True|False)$ ]] || { echo "::error::seeded_only sai"; exit 1; }
-          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; echo "IDS_FILE=${IDS_FILE:-}"; } >> "$GITHUB_ENV"
+          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; echo "IDS_FILE=${IDS_FILE:-}"; echo "REREAD_DRAFTS=${REREAD_DRAFTS:-False}"; } >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -142,8 +144,15 @@ jobs:
             filter="$filter AND d.nces_id IN ($ids)"
             rerun="SELECT status FROM district_pipeline"
           fi
+          drafts="SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft'"
+          if [ "$REREAD_DRAFTS" = True ]; then
+            # Học khu chỉ có bảng nháp do bộ đọc PDF đời cũ đọc: đọc lại bằng bộ đọc hiện tại (D-053).
+            models=$(cd ../../pipeline && uv run --no-dev python -c 'from pay_pipeline.pdf_pipeline.ocr import READERS as O; from pay_pipeline.pdf_pipeline.read import READERS as R; print(",".join(sorted(chr(39) + m + chr(39) for m in R | O)))')
+            drafts="$drafts AND NOT EXISTS (SELECT 1 FROM extraction_runs e WHERE e.id = s.extraction_run_id AND e.model GLOB '*@[0-9]*' AND e.model NOT IN ($models))"
+            rerun="SELECT status FROM district_pipeline"
+          fi
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft') AND ((NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published') AND (p.district_id IS NULL OR p.status IN ($rerun))) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
+            "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND NOT EXISTS ($drafts) AND ((NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published') AND (p.district_id IS NULL OR p.status IN ($rerun))) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
             > "$GITHUB_WORKSPACE/inputs/queue.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT DISTINCT d.url, d.sha256, e.model, EXISTS (SELECT 1 FROM document_classifications c WHERE c.source_document_id = d.id AND c.scanned = 1) AS scanned FROM source_documents d JOIN extraction_runs e ON e.source_document_id = d.id WHERE d.district_id IS NOT NULL" \

@@ -73,6 +73,7 @@ def state_runs(result: ImportResult) -> list[RunRecord]:
 
 
 AUTO_RESOLVED = "auto: the checks no longer report this on re-import"
+SUPERSEDED = "auto: a newer reading of the same document replaced this draft (D-053)"
 AS_REPORTED = "as reported: published from the state file as the district reported it (D-028)"
 """Resolution of a finding on a state-file schedule that is published anyway (D-028)."""
 """Resolution of an open review reason that a re-import with changed checks no longer gives."""
@@ -315,6 +316,28 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " WHERE NOT EXISTS (SELECT 1 FROM review_queue r"
         " WHERE r.schedule_id = m.schedule_id AND r.reason = x.reason)"
         f" AND NOT EXISTS ({_decided('m.schedule_id', 'rejected')})"
+    )
+
+    # A newer reading of the same document (a new reader version, D-052) can give a different
+    # school year or title, hence a new schedule: the old draft from that document is retired
+    # and its open review reasons closed, so the review page does not list both (D-053).
+    # Drafts a person decided on are left alone.
+    newer = (
+        "SELECT max(m.schedule_id) FROM _imp_map m JOIN schedules n ON n.id = m.schedule_id"
+        " WHERE n.source_document_id = schedules.source_document_id"
+        " AND n.schedule_type = schedules.schedule_type"
+    )
+    sql.append(
+        f"UPDATE schedules SET status = 'superseded', superseded_by = ({newer})"
+        " WHERE status = 'draft' AND id NOT IN (SELECT schedule_id FROM _imp_map)"
+        f" AND ({newer}) IS NOT NULL"
+        f" AND NOT EXISTS ({_decided('schedules.id', 'approved')})"
+        f" AND NOT EXISTS ({_decided('schedules.id', 'rejected')})"
+    )
+    sql.append(
+        f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution = {quote(SUPERSEDED)}"
+        " WHERE resolved_at IS NULL AND schedule_id IN (SELECT id FROM schedules"
+        " WHERE status = 'superseded' AND superseded_by IN (SELECT schedule_id FROM _imp_map))"
     )
 
     # Publish: first retire the published schedule each new one replaces, then publish.
