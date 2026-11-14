@@ -904,3 +904,13 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   10 cặp ghép tay. Bỏ trường charter, trường nghề quận không có trong danh mục và học khu đã có
   bảng: 240 link vào `schedule-urls.csv`. Link là trang tài liệu Domino; pipeline mở trang và
   thử các file đính kèm (D-038).
+
+## D-050: Hợp đồng giáo viên Indiana từ IEERB Gateway
+
+- Ngày: 2026-11-14. Luật Indiana buộc học khu tải hợp đồng giáo viên đã ký lên Gateway trước
+  15/11; IEERB công khai qua Report Builder "Collective Bargaining Contract Uploads"
+  (`gateway.ifionline.org`, robots.txt không có luật chặn). File nằm ở
+  `public_download/cbr_contract_uploads/<năm>/<tên>.pdf`.
+- Đọc báo cáo năm 2026 trong Chrome của chủ dự án: 303 file. Học khu tải nhiều bản thì lấy bản
+  tải lên sau cùng. Ghép NCES theo tên đã chuẩn hóa cùng quận, cộng 19 cặp ghép tay; bỏ hợp tác
+  xã giáo dục đặc biệt, trung tâm nghề và học khu đã có bảng.
