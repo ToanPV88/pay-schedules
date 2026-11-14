@@ -1,12 +1,10 @@
 {
   "description": "Tham số khi chạy pdf-pipeline.yml bằng cách đẩy lên nhánh run/pdf-pipeline-*. rerun: trạng thái district_pipeline được chạy lại ngay. shards: số lô song song (1-20, D-030); deadline_minutes: phút tối đa để bắt đầu học khu mới trong mỗi lô.",
-  "limit": 6000,
+  "limit": 50,
   "state": "",
-  "rerun": [
-    "no_candidates"
-  ],
-  "shards": 20,
-  "deadline_minutes": 180,
-  "seeded_only": false,
+  "rerun": [],
+  "shards": 1,
+  "deadline_minutes": 12,
+  "seeded_only": true,
   "ids_file": ""
 }
