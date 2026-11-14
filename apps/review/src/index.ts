@@ -8,7 +8,7 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { sameOriginPost } from "./origin";
-import { TRIAGE_PUBLISHED, TRIAGE_REJECTED, triage } from "./triage";
+import { SINGLE_SALARY_LANE, TRIAGE_PUBLISHED, TRIAGE_REJECTED, triage } from "./triage";
 
 export type Env = {
   DB: D1Database;
@@ -536,12 +536,13 @@ export async function autoTriage(db: D1Database, today = new Date()): Promise<Tr
           AND NOT EXISTS (SELECT 1 FROM review_queue o WHERE o.schedule_id = s.id
                            AND o.resolved_at IS NULL
                            AND o.reason NOT LIKE '[step_start]%'
-                           AND o.reason NOT LIKE '[school_year] Bảng năm %đã cũ%')
+                           AND o.reason NOT LIKE '[school_year] Bảng năm %đã cũ%'
+                           AND o.reason <> ?2)
         GROUP BY s.id
         ORDER BY s.id
         LIMIT ?1`,
     )
-    .bind(TRIAGE_PER_RUN)
+    .bind(TRIAGE_PER_RUN, SINGLE_SALARY_LANE)
     .all<DraftKey & { reasons: string }>();
   const stamp = nowIso();
   const statements: D1PreparedStatement[] = [];

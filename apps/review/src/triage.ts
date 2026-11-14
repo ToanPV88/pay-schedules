@@ -13,6 +13,8 @@ export const TRIAGE_REJECTED = "rejected: auto-triage (D-034)";
 
 const CODE = /^\[([a-z_]+)\]/;
 const OLD_YEAR = /^\[school_year\] Bảng năm (\d{4})-\d{2} đã cũ/;
+/** Bảng một cột mà cột chỉ có nhãn "salary" (D-045): số liệu không đổi, chỉ thiếu tên cột. */
+export const SINGLE_SALARY_LANE = "[lane_label] Nhãn lane thiếu tên: 'salary'";
 
 export type Decision = { kind: "publish" } | { kind: "reject"; reason: string } | { kind: "keep" };
 
@@ -26,7 +28,7 @@ export function triage(reasons: string[], today: Date): Decision {
   let oldStart: number | null = null;
   for (const reason of reasons) {
     const code = CODE.exec(reason)?.[1];
-    if (code === "step_start") continue;
+    if (code === "step_start" || reason === SINGLE_SALARY_LANE) continue;
     const old = OLD_YEAR.exec(reason);
     if (code === "school_year" && old) {
       oldStart = Number(old[1]);

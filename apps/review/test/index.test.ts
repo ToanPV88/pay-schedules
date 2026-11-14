@@ -319,6 +319,8 @@ describe("tự phân loại hàng chờ (D-034)", () => {
     // Cùng mã school_year nhưng là kiểm tra "cũ hơn bảng đang published": để người xem.
     expect(kind("[school_year] Năm học 2024-25 cũ hơn bảng đang published (2025-26)")).toBe("keep");
     expect(kind("[step_start] Bảng bắt đầu ở bậc 3", "[double_extraction] Lệch")).toBe("keep");
+    expect(kind("[lane_label] Nhãn lane thiếu tên: 'salary'")).toBe("publish");
+    expect(kind("[lane_label] Nhiều lane cùng nhãn 'ba': thiếu tiêu đề cột")).toBe("keep");
     expect(kind("Không mã")).toBe("keep");
     expect(kind()).toBe("keep");
   });
