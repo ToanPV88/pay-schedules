@@ -1,0 +1,10 @@
+{
+  "release_prefix": "src-oh-serb-contracts",
+  "description": "Ohio SERB: danh sách hợp đồng lao động công (D-047). Trang có bảng JSON nhúng: số vụ, link PDF, employer, county, bargaining unit, union, ngày hiệu lực, Current/Previous.",
+  "files": [
+    {
+      "url": "https://serb.ohio.gov/wps/portal/gov/serb/view-document-archive/collective-bargaining-agreements/02-collective-bargaining-agreements",
+      "note": "Collective Bargaining Agreements (document archive)"
+    }
+  ]
+}
