@@ -29,6 +29,7 @@ deterministic version of "extract twice independently" (as travienphi's trace-ch
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 import statistics
 import subprocess
@@ -40,12 +41,14 @@ from typing import Any
 import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
+from pay_pipeline.schedules.model import school_year_start
+from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@9"
-WORDS = "pdfplumber-words@9"
-XLSX = "xlsx-cells@9"
-DOCX = "docx-cells@9"
-HTML = "html-cells@9"
+LAYOUT = "layout-text@10"
+WORDS = "pdfplumber-words@10"
+XLSX = "xlsx-cells@10"
+DOCX = "docx-cells@10"
+HTML = "html-cells@10"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -496,6 +499,14 @@ def _score(t: Table) -> float:
     return score
 
 
+def year_in_force(years: set[str], today: dt.date | None = None) -> str:
+    """The latest school year no later than next school year; the latest if all are later."""
+    limit = current_school_year_start(today or dt.datetime.now(dt.UTC).date()) + 1
+    dated = [y for y in years if y]
+    near = [y for y in dated if school_year_start(y) <= limit]
+    return max(near or dated, default="")
+
+
 def pick_table(tables: list[Table]) -> Table | None:
     usable = [t for t in tables if _score(t) > 0]
     if not usable:
@@ -510,11 +521,12 @@ def pick_table(tables: list[Table]) -> Table | None:
     # one for 240/260 days).
     good = [t for t in usable if _score(t) >= best * 0.6]
     # A multi-year contract prints one grid per school year (2022-23, 2023-24, 2024-25): the
-    # latest year is the one in force, so only its grids stay in the running (D-052).
+    # latest year is the one in force, so only its grids stay in the running (D-052). A contract
+    # running past next school year (Michigan: through 2029-30) gives the latest year no later
+    # than next school year instead (D-058).
     years = {id(t): (school_years(t.context) or [""])[-1] for t in good}
-    latest = max(years.values())
-    if latest and len({y for y in years.values() if y}) > 1:
-        good = [t for t in good if years[id(t)] == latest]
+    if len({y for y in years.values() if y}) > 1:
+        good = [t for t in good if years[id(t)] == year_in_force(set(years.values()))]
     first_days = _table_days(good[0])
     if first_days is None or _standard(first_days):
         return good[0]

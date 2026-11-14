@@ -994,3 +994,12 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   để cho qua. `ocr_agree` là số phiếu thấp nhất, nên quy tắc 3/3 của D-036 vẫn áp dụng.
 - Tên bộ đọc OCR lên @2 để đọc lại các bản scan cũ. Bộ chuẩn không đổi: 24 publish, 2.560/2.560 ô
   đúng.
+
+## D-058: Hợp đồng nhiều năm lấy năm học đang áp dụng, không lấy năm quá xa
+
+- Ngày: 2026-11-15. Sửa D-052. Hợp đồng Michigan in bảng lương cho từng năm tới 2029-30. D-052
+  lấy năm mới nhất, nên 31 bảng bị kiểm tra năm học giữ lại vì "quá xa trong tương lai". Nay lấy
+  năm mới nhất không quá năm học kế tiếp, tức cùng giới hạn của `check_school_year`. Nếu mọi năm
+  đều xa hơn thì vẫn lấy năm mới nhất, và kiểm tra năm học giữ bảng lại như cũ.
+- Bộ đọc văn bản lên @10, rồi đọc lại các bảng nháp (D-053). Bộ chuẩn không đổi: 24 publish,
+  2.560/2.560 ô đúng.
