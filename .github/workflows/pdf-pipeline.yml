@@ -150,6 +150,7 @@ jobs:
             models=$(cd ../../pipeline && uv run --no-dev python -c 'from pay_pipeline.pdf_pipeline.ocr import READERS as O; from pay_pipeline.pdf_pipeline.read import READERS as R; print(",".join(sorted(chr(39) + m + chr(39) for m in R | O)))')
             drafts="$drafts AND NOT EXISTS (SELECT 1 FROM extraction_runs e WHERE e.id = s.extraction_run_id AND e.model GLOB '*@[0-9]*' AND e.model NOT IN ($models))"
             rerun="SELECT status FROM district_pipeline"
+            filter="$filter AND EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft')"
           fi
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT d.id AS district_id, d.nces_id, d.name, d.state, d.website, d.enrollment FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' $filter AND NOT EXISTS ($drafts) AND ((NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'published') AND (p.district_id IS NULL OR p.status IN ($rerun))) OR (p.next_run_at IS NOT NULL AND p.next_run_at <= '$now')) ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
