@@ -41,10 +41,10 @@ import pdfplumber
 
 from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_years
 
-LAYOUT = "layout-text@6"
-WORDS = "pdfplumber-words@6"
-XLSX = "xlsx-cells@6"
-DOCX = "docx-cells@6"
+LAYOUT = "layout-text@7"
+WORDS = "pdfplumber-words@7"
+XLSX = "xlsx-cells@7"
+DOCX = "docx-cells@7"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -347,7 +347,17 @@ def find_tables(lines: list[Line], page: int) -> list[Table]:
                 _label_number(row.label),
                 _label_number(current[-1].label) if current else None,
             )
-            if current and (gap > 1 or (n is not None and prev is not None and n <= prev)):
+            # Steps run up, or (Muhlenberg: "From Top", 16 down to 1) down; a step that breaks the
+            # direction of the rows so far starts a new table.
+            first_n = _label_number(current[0].label) if current else None
+            descending = (
+                len(current) >= 2 and first_n is not None and prev is not None and prev < first_n
+            )
+            if n is not None and prev is not None:
+                broken = n == prev or (n < prev) != (descending or (len(current) == 1 and n < prev))
+            else:
+                broken = False
+            if current and (gap > 1 or broken):
                 close()
             current.append(row)
             gap = 0
