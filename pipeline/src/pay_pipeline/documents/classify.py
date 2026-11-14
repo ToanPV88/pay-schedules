@@ -24,6 +24,7 @@ LANE_RE = re.compile(
     r"doctorate|ph\.?d)\b",
     re.I,
 )
+SALARY_RE = re.compile(r"\b(salar(?:y|ies)|pay\s+scales?|compensation)\b", re.I)
 TEACHER_RE = re.compile(
     r"\b(teachers?|certificated|certified|instructional|licensed|faculty)\b", re.I
 )
@@ -175,7 +176,14 @@ def score_page(text: str, page: int) -> PageScore:
     score = (
         min(amounts, 80) / 10 + 2 * has_step + 2 * has_lane + 2 * teacher - min(negative, 6) * 0.5
     )
-    is_schedule = amounts >= 12 and has_step and (has_lane or teacher)
+    salary = bool(SALARY_RE.search(text))
+    is_schedule = (
+        (amounts >= 12 and has_step and (has_lane or teacher))
+        # Rows numbered without the word "step" (Muhlenberg: "From Top 16 … 1"; Carroll: rows A-Z)
+        or (amounts >= 40 and salary and (has_lane or teacher))
+        # A short single-lane schedule (Tyler ISD: 11 rows of years of experience)
+        or (amounts >= 8 and has_step and teacher and salary)
+    )
     return PageScore(page, amounts, round(score, 2), is_schedule, teacher, negative)
 
 

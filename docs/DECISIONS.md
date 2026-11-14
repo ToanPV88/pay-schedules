@@ -838,3 +838,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   miền đó: `district-websites.csv` có thêm cột `replaces_nces`; dòng có `1` thay địa chỉ NCES.
 - Nhiều học khu còn lại (Baltimore County, Lee, Albuquerque) có tên miền vẫn sống nhưng chặn bot
   ở tầng mạng; đó là ý của họ, không lách.
+
+## D-044: Nhận diện trang bảng lương rộng hơn; bậc chạy ngược; bộ đọc phiên bản 7
+
+- Ngày: 2026-11-14. Trong 3.361 học khu "tải được tệp nhưng không giống bảng lương", phần lớn
+  tệp đúng là không phải bảng lương (sổ tay, kế hoạch). Số bị bỏ sót có ba dạng:
+  - Bảng một cột ngắn (Tyler ISD: 11 dòng năm kinh nghiệm): trang có ít nhất 8 số tiền, chữ
+    bậc/năm, chữ giáo viên và chữ "salary" được nhận.
+  - Bảng không ghi chữ "step" (Muhlenberg "From Top 16…1", Carroll hàng A–Z): trang có ít nhất 40
+    số tiền, chữ "salary" và chữ lane hoặc giáo viên được nhận.
+  - Bậc in từ lớn xuống nhỏ: bộ đọc theo chiều của các hàng đầu, không cắt bảng ở mỗi hàng.
+- Bộ mẫu chuẩn không đổi (24 publish, 2560/2560, 0 sai). Thử trên lô 0 của lượt toàn quốc: thêm
+  3/141 học khu đọc được. Bộ đọc lên @7 để lượt sau đọc lại tài liệu đã biết.
