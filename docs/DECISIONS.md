@@ -963,3 +963,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   khớp đúng một hợp đồng giáo viên Current (có Lakota Local, Butler, 17,9 nghìn học sinh); Crestview
   (Van Wert) và Northwest (Scioto) không có hợp đồng Current. Danh sách chạy:
   `pipeline/sources/ohio-dup-1.csv`.
+
+## D-056: Hợp đồng giáo viên Michigan từ kho Mackinac Center
+
+- Ngày: 2026-11-14. Mackinac Center giữ kho PDF hợp đồng lao động của mọi học khu Michigan
+  (`mackinac.org/depts/epi/agreement.aspx`; robots.txt chỉ chặn trang tìm kiếm và trang lương cá
+  nhân, không chặn kho này). File nằm ở
+  `mackinac.org/archives/epi/contracts/<mã quận>/<mã học khu>_<ngày hết hạn>_<công đoàn>_E.pdf`,
+  đuôi `_E` là đơn vị giáo viên.
+- Đọc danh sách trong Chrome của chủ dự án (mỗi học khu một yêu cầu, cách nhau 0,25 giây), lấy hợp
+  đồng giáo viên mới nhất, khớp tên với NCES sau khi bỏ các chữ chung ("Public Schools", "Community
+  Schools"…). Bỏ tên khớp hai học khu (Mason), bỏ hợp đồng hết hạn trước 2025-06. Thêm 456 học khu
+  vào `schedule-urls.csv`; danh sách chạy `pipeline/sources/michigan-mackinac-1.csv`.
+- Các kho khác đã xem: SeeThroughNY (New York) lấy danh sách qua `/tools/...`, bị robots.txt chặn,
+  nên không dùng tự động. Chưa tìm thấy kho công khai còn hoạt động cho Pennsylvania.
