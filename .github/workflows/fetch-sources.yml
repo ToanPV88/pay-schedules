@@ -10,7 +10,7 @@ on:
     inputs:
       manifest:
         description: "Tệp kê khai nguồn"
-        default: pipeline/sources/nces-ccd-2425.json
+        default: pipeline/sources/oh-serb-contracts.json
   push:
     branches: ["run/fetch-sources"]
 
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  MANIFEST: ${{ inputs.manifest || 'pipeline/sources/nces-ccd-2425.json' }}
+  MANIFEST: ${{ inputs.manifest || 'pipeline/sources/oh-serb-contracts.json' }}
 
 jobs:
   fetch:
