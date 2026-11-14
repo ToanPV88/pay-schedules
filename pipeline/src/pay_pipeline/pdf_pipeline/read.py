@@ -45,6 +45,7 @@ LAYOUT = "layout-text@7"
 WORDS = "pdfplumber-words@7"
 XLSX = "xlsx-cells@7"
 DOCX = "docx-cells@7"
+HTML = "html-cells@7"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -695,3 +696,20 @@ def read_docx(path: Path) -> dict[str, Any]:
     table = pick_table(tables)
     text = re.sub(r"<[^>]+>", " ", xml)
     return to_answer(table, text if table else "", DOCX)
+
+
+def read_html(path: Path) -> dict[str, Any]:
+    """Salary tables written as HTML tables on a district web page (D-046)."""
+    from pay_pipeline.documents.classify import html_table_rows, html_tables
+
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    tables: list[Table] = []
+    pages: dict[int, str] = {}
+    for i, block in enumerate(html_tables(text), 1):
+        lines = grid_lines(html_table_rows(block))
+        pages[i] = "\n".join(ln.text for ln in lines)
+        tables += find_tables(lines, i)
+    table = pick_table(tables)
+    title = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+    head = (title.group(1).strip() + "\n") if title else ""
+    return to_answer(table, head + pages.get(table.page, "") if table else "", HTML)

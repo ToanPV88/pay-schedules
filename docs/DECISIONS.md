@@ -857,3 +857,13 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   'salary'": bảng một cột (thường ở Texas) mà tiêu đề cột là "Salary". Hai bộ đọc đã khớp, số
   liệu không đổi, nên tự publish như nguồn (D-034). Các lý do khác của lane_label (nhiều lane cùng
   nhãn) vẫn để người xem vì không biết cột nào là bằng cấp nào.
+
+## D-046: Bảng lương viết thành bảng HTML trên trang web
+
+- Ngày: 2026-11-14. Nhiều học khu lớn (Frisco, Plano…) đăng thang lương thành bảng HTML trên trang
+  Compensation, không có tệp PDF; pipeline trước đây chỉ đọc tệp nên crawl hết trang vẫn "không
+  thấy tài liệu".
+- Trang có bảng `<table>` qua được `score_page` (như một trang PDF có bảng lương) được coi là tài
+  liệu loại `html`: lưu lại chỉ các bảng đó và tiêu đề trang (để hash không đổi theo menu,
+  script, giờ), phân loại như tài liệu khác và đọc bằng `html-cells` (cùng cách đọc ô như Word).
+- Khi crawl gặp trang như vậy thì trang đó thành ứng viên tài liệu.

@@ -19,6 +19,7 @@ from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlsplit
 
 from pay_pipeline.acquisition.http import FetchError, PoliteFetcher
+from pay_pipeline.documents.classify import salary_table_page
 
 DOC_EXTENSIONS = (".pdf", ".xlsx", ".xls", ".docx", ".doc")
 # Hosts that serve uploaded district documents without a file extension in the URL.
@@ -337,6 +338,9 @@ def discover(
         if depth == 0:
             result.home_url, result.home_bytes = response.final_url, len(response.content)
             result.home_links = len(links)
+        if salary_table_page(response.content) is not None:
+            # The page itself holds the schedule as an HTML table (D-046).
+            add(Link(response.final_url, "salary schedule table"), response.final_url, "crawl")
         for link in links:
             if is_document_url(link.url):
                 add(link, response.final_url, "crawl")

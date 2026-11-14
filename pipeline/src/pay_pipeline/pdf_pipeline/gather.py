@@ -44,7 +44,12 @@ from pay_pipeline.discover.crawl import (
     same_site,
     score_document,
 )
-from pay_pipeline.documents.classify import Classification, classify, detect_kind
+from pay_pipeline.documents.classify import (
+    Classification,
+    classify,
+    detect_kind,
+    salary_table_page,
+)
 from pay_pipeline.pdf_pipeline.ocr import READERS as OCR_READERS
 from pay_pipeline.pdf_pipeline.read import READERS as TEXT_READERS
 
@@ -54,7 +59,7 @@ MAX_FOLDER_DOCS = 2
 MIN_CANDIDATE_SCORE = 2.0
 MAX_DOC_BYTES = 40 * 1024 * 1024
 KEEP_CANDIDATES = 15
-EXTENSIONS = {"pdf": "pdf", "docx": "docx", "xlsx": "xlsx"}
+EXTENSIONS = {"pdf": "pdf", "docx": "docx", "xlsx": "xlsx", "html": "html"}
 
 
 @dataclass(frozen=True)
@@ -338,6 +343,17 @@ def gather_one(
             response = fetcher.get(url)
             data = response.content
             kind = detect_kind(data)
+            if kind == "html" or (
+                kind not in EXTENSIONS
+                and _looks_html(response.headers.get("content-type", ""), data)
+            ):
+                # A web page whose salary schedule is an HTML table (D-046) is the document; any
+                # other page is a landing page, a folder or a page to crawl from.
+                page = salary_table_page(data)
+                if page is not None:
+                    data, kind = page, "html"
+                else:
+                    kind = "other"
             if kind not in EXTENSIONS and _looks_html(
                 response.headers.get("content-type", ""), data
             ):

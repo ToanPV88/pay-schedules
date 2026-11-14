@@ -70,9 +70,37 @@ class Classification:
     reason: str = ""
 
 
+_TABLE = re.compile(r"<table\b.*?</table>", re.I | re.S)
+_ROW = re.compile(r"<tr\b.*?(?:</tr>|(?=<tr\b)|$)", re.I | re.S)
+_CELL = re.compile(r"<t[dh]\b[^>]*>(.*?)(?=<t[dh]\b|</tr>|$)", re.I | re.S)
+
+
+def html_table_rows(table_html: str) -> list[list[str]]:
+    """Cell texts of an HTML table, row by row (D-046)."""
+    import html as _html
+
+    rows = []
+    for tr in _ROW.findall(table_html):
+        cells = []
+        for cell in _CELL.findall(tr):
+            text = re.sub(r"<[^>]+>", " ", cell)
+            cells.append(" ".join(_html.unescape(text).split()))
+        if any(cells):
+            rows.append(cells)
+    return rows
+
+
+def html_tables(html_text: str) -> list[str]:
+    """The ``<table>`` blocks of a page, innermost content kept as written."""
+    return _TABLE.findall(html_text)
+
+
 def detect_kind(data: bytes) -> str:
     if data[:5] == b"%PDF-":
         return "pdf"
+    head = data[:300].lstrip().lower()
+    if head.startswith((b"<!doctype html", b"<html", b"<table", b"<meta", b"<title")):
+        return "html"
     if data[:2] == b"PK":
         head = data[:4000]
         if b"word/" in head:
@@ -121,7 +149,20 @@ def xlsx_pages(path: Path) -> list[str]:
         wb.close()
 
 
+def html_pages(path: Path) -> list[str]:
+    """One page per HTML table: its rows, cells separated by two spaces."""
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    title = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+    head = (" ".join(title.group(1).split()) + "\n") if title else ""
+    pages = []
+    for table in html_tables(text):
+        pages.append(head + "\n".join("  ".join(row) for row in html_table_rows(table)))
+    return pages or [head]
+
+
 def document_pages(path: Path, kind: str) -> list[str]:
+    if kind == "html":
+        return html_pages(path)
     if kind == "pdf":
         return pdf_pages(path)
     if kind == "docx":
@@ -190,7 +231,7 @@ def score_page(text: str, page: int) -> PageScore:
 def classify(path: Path, data: bytes | None = None) -> Classification:
     data = data if data is not None else path.read_bytes()
     kind = detect_kind(data)
-    if kind not in ("pdf", "docx", "xlsx"):
+    if kind not in ("pdf", "docx", "xlsx", "html"):
         return Classification(kind, 0, False, reason="Không phải PDF/DOCX/XLSX")
     try:
         pages = document_pages(path, kind)
@@ -216,3 +257,23 @@ def classify(path: Path, data: bytes | None = None) -> Classification:
         f"{len(schedule)} trang có dạng bảng lương" if schedule else "Không thấy trang bảng lương"
     )
     return result
+
+
+def salary_table_page(data: bytes) -> bytes | None:
+    """The salary tables of a web page as a small, stable HTML document, or None (D-046).
+
+    Only tables that look like a salary schedule page (score_page) are kept, with the page title,
+    so the document's hash does not change with the page's menus, scripts and timestamps.
+    """
+    text = data.decode("utf-8", errors="replace")
+    keep = []
+    for table in html_tables(text):
+        rows = html_table_rows(table)
+        if score_page("\n".join("  ".join(r) for r in rows), 1).is_schedule:
+            keep.append(table)
+    if not keep:
+        return None
+    title = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+    head = f"<title>{title.group(1).strip()}</title>" if title else ""
+    body = "\n".join(keep)
+    return f"<!doctype html><html><head>{head}</head><body>\n{body}\n</body></html>".encode()

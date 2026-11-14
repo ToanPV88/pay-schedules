@@ -1043,3 +1043,32 @@ class TestRelaxedPages:
         tables = rd.find_tables(lines, 1)
         assert len(tables) == 1
         assert [r.label for r in tables[0].rows] == ["5", "4", "3", "2", "1"]
+
+
+class TestHtmlTables:
+    PAGE = (
+        "<!DOCTYPE html><html><head><title>2026-27 Teacher Salary Schedule</title>"
+        "<script>var t = Date.now();</script></head><body><nav><a href='/'>Home</a></nav>"
+        "<table><tr><th>Years of Experience</th><th>Bachelor's</th><th>Master's</th></tr>"
+        + "".join(
+            f"<tr><td>{y}</td><td>${60000 + 900 * y:,}</td><td>${62000 + 900 * y:,}</td></tr>"
+            for y in range(12)
+        )
+        + "</table><table><tr><td>Menu</td></tr></table></body></html>"
+    )
+
+    def test_page_with_salary_table_is_a_document(self, tmp_path: Path) -> None:
+        from pay_pipeline.documents.classify import classify, detect_kind, salary_table_page
+
+        page = salary_table_page(self.PAGE.encode())
+        assert page is not None and b"Menu" not in page and b"Date.now" not in page
+        assert salary_table_page(b"<html><body><table><tr><td>x</td></tr></table>") is None
+        path = tmp_path / "p.html"
+        path.write_bytes(page)
+        assert detect_kind(page) == "html"
+        c = classify(path)
+        assert c.is_candidate and c.schedule_pages == [1] and c.best_year == "2026-27"
+        answer = rd.read_html(path)
+        assert answer["lanes"] == ["Bachelor's", "Master's"]
+        assert answer["cells"][0] == [60000.0, 62000.0]
+        assert len(answer["cells"]) == 12
