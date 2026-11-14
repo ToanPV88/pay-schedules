@@ -936,3 +936,13 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Khi các bảng đủ tốt ghi những năm học khác nhau ngay phía trên, chỉ giữ các bảng của năm muộn
   nhất rồi chọn như cũ. Bộ đọc lên @8 để tài liệu đã đọc được đọc lại. Bộ chuẩn không đổi
   (2.560/2.560 ô đúng).
+
+## D-053: Đọc lại bảng nháp của bộ đọc đời cũ
+
+- Ngày: 2026-11-14. Học khu có bảng nháp (chờ duyệt) bị loại khỏi hàng đợi, nên bộ đọc mới
+  (D-052) không chạm tới 320 bảng đang chờ.
+- Khóa `reread_drafts` trong `pdf-pipeline-run.json`: hàng đợi nhận cả học khu mà mọi bảng nháp
+  đều do bộ đọc PDF đời cũ (tên có `@phiên bản`, không thuộc bộ đọc hiện tại) tạo ra. Bảng nháp
+  từ file bang (CA, KY…) và bảng do bộ đọc hiện tại tạo vẫn chặn như cũ.
+- Khi lần đọc mới của cùng tài liệu ra một bảng khác khóa (năm học, tên), bảng nháp cũ chuyển
+  `superseded` và lý do chờ duyệt của nó được đóng, trừ bảng người duyệt đã quyết.

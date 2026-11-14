@@ -28,7 +28,7 @@ import pytest
 
 from pay_pipeline.catalog.d1sql import render_sql
 from pay_pipeline.schedules import ca_j90, ky_kde
-from pay_pipeline.schedules.d1sql import AS_REPORTED, AUTO_RESOLVED, schedules_sql
+from pay_pipeline.schedules.d1sql import AS_REPORTED, AUTO_RESOLVED, SUPERSEDED, schedules_sql
 from pay_pipeline.schedules.state_import import (
     IMPORTERS,
     CatalogDistrict,
@@ -486,6 +486,33 @@ class TestSql:
                 "SELECT count(*) FROM schedules s JOIN districts x ON x.id = s.district_id WHERE x.state = 'CA'"
             ).fetchone()[0]
             == 4
+        )
+
+    def test_newer_reading_retires_old_draft(self, tmp_path: Path) -> None:
+        # An older reader gave the wrong school year; the draft waits on the review page (D-053).
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a", holds=HOLD))
+        old_id = db.execute(KY_2526).fetchone()[0]
+        db.execute("UPDATE schedules SET school_year = '2022-23' WHERE id = ?", (old_id,))
+        # The same document read again gives 2025-26: a new schedule, published.
+        load(db, run_import(tmp_path / "b"))
+        new_id, status = db.execute(KY_2526).fetchone()
+        assert new_id != old_id and status == "published"
+        old = db.execute(
+            "SELECT status, superseded_by FROM schedules WHERE id = ?", (old_id,)
+        ).fetchone()
+        assert old == ("superseded", new_id)
+        open_reviews = db.execute(
+            "SELECT count(*) FROM review_queue WHERE schedule_id = ? AND resolved_at IS NULL",
+            (old_id,),
+        ).fetchone()[0]
+        assert open_reviews == 0
+        assert (
+            db.execute(
+                "SELECT count(*) FROM review_queue WHERE schedule_id = ? AND resolution = ?",
+                (old_id, SUPERSEDED),
+            ).fetchone()[0]
+            >= 1
         )
 
     def test_hold_sends_published_schedule_back_to_review(self, tmp_path: Path) -> None:
