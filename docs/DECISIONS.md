@@ -946,3 +946,12 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   từ file bang (CA, KY…) và bảng do bộ đọc hiện tại tạo vẫn chặn như cũ.
 - Khi lần đọc mới của cùng tài liệu ra một bảng khác khóa (năm học, tên), bảng nháp cũ chuyển
   `superseded` và lý do chờ duyệt của nó được đóng, trừ bảng người duyệt đã quyết.
+
+## D-054: Số phụ đứng trước số lương năm
+
+- Ngày: 2026-11-14. Nhiều bảng in số phụ cạnh lương năm: Fulton GA in lương nửa tháng
+  ("$2,521") trước mỗi cột lương năm, Northside ISD in cột tăng lương ("$0", "$1,200") trước cột
+  lương, Duval in lương giờ năm chữ số thập phân ("25.32960"). Bộ đọc coi số phụ đứng trước số
+  lương đầu tiên là một phần nhãn bậc, nên bỏ cả dòng.
+- Bỏ số phụ (theo `_SIDE`) ở cuối phần nhãn; nhận `$0` và số thập phân tới năm chữ số là số phụ;
+  bỏ chữ "monthly/semi-monthly/biweekly" khỏi nhãn lane. Bộ đọc lên @9. Bộ chuẩn không đổi.

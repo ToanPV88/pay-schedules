@@ -1129,3 +1129,18 @@ def test_multi_year_contract_takes_latest_year(tmp_path: Path) -> None:
     assert answers[0]["is_teacher_salary_schedule"]
     assert answers[0]["school_year"] == "2024-25"
     assert answers[0]["cells"][0][0] == 53500
+
+
+def test_side_figures_before_and_between_annual_amounts() -> None:
+    # Fulton: a semi-monthly figure before each annual one; Northside: a "$0" increase column;
+    # Duval: an hourly rate with five decimals after the annual one (D-054).
+    fulton = rd.parse_row(L("0", "$2,521", "$60,506", "$2,771", "$66,514", step=12.0), 0)
+    assert fulton is not None and fulton.label == "0"
+    assert [a[2] for a in fulton.amounts] == [60506.0, 66514.0]
+    northside = rd.parse_row(L("3", "$1,200", "$63,155", step=12.0), 0)
+    assert northside is not None and [a[2] for a in northside.amounts] == [63155.0]
+    zero = rd.parse_row(L("1", "$0", "$61,285", step=12.0), 0)
+    assert zero is not None and [a[2] for a in zero.amounts] == [61285.0]
+    duval = rd.parse_row(L("01", "52,888", "25.32960", step=12.0), 0)
+    assert duval is not None and [a[2] for a in duval.amounts] == [52888.0]
+    assert rd.lane_label("T5 - Masters SEMI-MONTHLY") == "T5 - Masters"
