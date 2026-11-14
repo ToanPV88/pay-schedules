@@ -3,11 +3,10 @@
   "limit": 6000,
   "state": "",
   "rerun": [
-    "no_schedule",
-    "unchanged"
+    "no_candidates"
   ],
   "shards": 20,
-  "deadline_minutes": 150,
+  "deadline_minutes": 180,
   "seeded_only": false,
   "ids_file": ""
 }
