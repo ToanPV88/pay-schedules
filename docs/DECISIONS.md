@@ -881,3 +881,14 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Phần còn lại đọc trong Chrome của chủ dự án (trang công khai, robots.txt không chặn): bảng JSON
   có cột Bargaining Unit, mã `T` là đơn vị giáo viên. Thêm 226 học khu khớp đúng một tên NCES;
   tên trùng ở nhiều quận vẫn bỏ (không có county trong danh mục học khu).
+
+## D-048: Hợp đồng giáo viên Iowa từ PERB (suPERB)
+
+- Ngày: 2026-11-14. Chức năng của Iowa PERB nay thuộc Employment Appeal Board; kho tìm kiếm
+  công khai `iowa-superb.iowa.gov` (robots.txt: 404, không chặn) lưu mọi hợp đồng lao động công.
+  File nằm ở `perbstorage.blob.core.windows.net/public-search-prod/contract/<tên file>`.
+- Đọc trong Chrome của chủ dự án: lọc Employer Type = K/12, Bargaining Type = Teachers (4.348
+  hợp đồng), lật qua các trang kết quả, giữ hợp đồng có ngày hết hạn muộn nhất của mỗi học khu
+  (318 học khu). 314 khớp tên NCES, bỏ 8 học khu đã có bảng; 306 link đưa vào `schedule-urls.csv`
+  (D-038). Một số file chỉ là phụ lục gia hạn hoặc MOU, không có thang lương: pipeline sẽ báo
+  không tìm thấy bảng, không cần lọc tay.
