@@ -867,3 +867,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   liệu loại `html`: lưu lại chỉ các bảng đó và tiêu đề trang (để hash không đổi theo menu,
   script, giờ), phân loại như tài liệu khác và đọc bằng `html-cells` (cùng cách đọc ô như Word).
 - Khi crawl gặp trang như vậy thì trang đó thành ứng viên tài liệu.
+
+## D-047: Hợp đồng giáo viên Ohio từ SERB
+
+- Ngày: 2026-11-14. SERB (State Employment Relations Board) Ohio công khai mọi hợp đồng lao động
+  công; hợp đồng của hiệp hội giáo viên có phụ lục thang lương. Trang lưu trữ có bảng JSON nhúng
+  (số vụ, employer, county, union, ngày, Current/Previous).
+- Máy chạy GitHub nhận 404 từ serb.ohio.gov (cả trang danh sách và `/static/PDF`), còn bản trên
+  `dam.assets.ohio.gov/image/upload/serb.ohio.gov/PDF/Contracts/<năm>/<số vụ>.pdf` thì tải được.
+  Danh sách được đọc qua công cụ đọc web (trang dài 3,6 MB nên chỉ đọc được tới vần "Mi"): 314
+  hợp đồng giáo viên Current; 290 khớp đúng một học khu NCES theo tên (bỏ tên trùng ở nhiều quận
+  như Madison Local, Green Local), đưa vào `schedule-urls.csv` (D-038).
+- Phần N–Z và các tên trùng làm sau, khi có cách đọc hết danh sách (kèm county).
