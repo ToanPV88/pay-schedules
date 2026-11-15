@@ -78,6 +78,19 @@ function seriesOf(schedule: Schedule): Series[] {
   return series;
 }
 
+/** Chỉ số các bậc có nhãn trên trục x: cách đều, tối đa khoảng tám, luôn có bậc đầu và bậc cuối. */
+export function xTickIndexes(count: number): number[] {
+  const every = Math.max(1, Math.ceil(count / 8));
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const isLast = i === count - 1;
+    if (isLast || (i % every === 0 && count - 1 - i >= every)) {
+      out.push(i);
+    }
+  }
+  return out;
+}
+
 /** Đặt nhãn cuối đường không chồng nhau: xếp theo y, đẩy xuống khi quá gần, rồi kéo lại vào khung. */
 export function spreadLabels(ys: number[], gap: number, top: number, bottom: number): number[] {
   const order = ys.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
@@ -130,16 +143,9 @@ export function payChart(schedule: Schedule): Html | null {
     );
   }
   // Nhãn trục x: tối đa khoảng 8 vạch, luôn có bậc đầu và bậc cuối.
-  const every = Math.max(1, Math.ceil(steps.length / 8));
   const xTicks: string[] = [];
-  for (const [i, step] of steps.entries()) {
-    if (i % every !== 0 && i !== steps.length - 1) {
-      continue;
-    }
-    if (i !== steps.length - 1 && steps.length - 1 - i < every / 2) {
-      continue;
-    }
-    const label = escapeText(truncate(step.labelRaw, 6));
+  for (const i of xTickIndexes(steps.length)) {
+    const label = escapeText(truncate(steps[i]?.labelRaw ?? "", 6));
     xTicks.push(
       `<text x="${r(xAt(i))}" y="${H - M.bottom + 16}" text-anchor="middle">${label}</text>`,
     );
