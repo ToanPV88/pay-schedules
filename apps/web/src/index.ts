@@ -86,7 +86,7 @@ import {
   searchPage,
   statePage,
 } from "./views/pages";
-import { districtPath } from "./views/parts";
+import { districtPath, placeLine } from "./views/parts";
 import { calculatorPage, comparePage, type ReportError, reportPage } from "./views/tools";
 import { scheduleXlsx, XLSX_TYPE, xlsxFileName } from "./xlsx";
 
@@ -164,7 +164,9 @@ app.get("/robots.txt", (c) => {
     return c.text("User-agent: *\nDisallow: /\n");
   }
   const origin = new URL(c.req.url).origin;
-  return c.text(`User-agent: *\nDisallow: /report\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
+  return c.text(
+    `User-agent: *\nDisallow: /report\nDisallow: /api/\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+  );
 });
 
 /** Sitemap chỉ liệt kê trang học khu có bảng published (PLAN Công đoạn 6, nghiệm thu). */
@@ -246,6 +248,7 @@ app.get("/", async (c) => {
     description:
       "Look up the teacher salary schedule of a US public school district, with a salary calculator, nearby-district comparison and a link to the source document.",
     canonicalPath: "/",
+    script: true,
   };
   const body = homePage({ states, coverage, pay, recent });
   return page(c, meta, body, { control: PAGE_CACHE, tags: [TAG_HOME] });
@@ -286,9 +289,32 @@ async function search(c: Context<AppEnv>, query: string): Promise<SearchHit[]> {
 app.get("/search", async (c) => {
   const query = queryParam(c, "q");
   const hits = await search(c, query);
-  const meta = { title: pageTitle("Search school districts"), noindex: true };
+  const meta = { title: pageTitle("Search school districts"), noindex: true, script: true };
   const caching = { control: "public, max-age=300, s-maxage=3600" };
   return page(c, meta, searchPage(query, hits), caching);
+});
+
+/** Số gợi ý tối đa khi gõ vào ô tìm kiếm. */
+export const SUGGEST_LIMIT = 8;
+
+/**
+ * Gợi ý học khu khi gõ (site.js). Cùng truy vấn với /search, ít kết quả hơn, trả JSON. Dưới hai ký
+ * tự thì trả danh sách rỗng để không quét cả bảng FTS với một chữ cái.
+ */
+app.get("/api/suggest", async (c) => {
+  const query = queryParam(c, "q");
+  const hits = query.length < 2 ? [] : await searchDistricts(c.env.DB, query, SUGGEST_LIMIT);
+  c.header("Cache-Control", "public, max-age=300, s-maxage=3600");
+  c.header("X-Robots-Tag", "noindex");
+  return c.json({
+    q: query,
+    hits: hits.map((hit) => ({
+      name: hit.name,
+      place: placeLine(hit.city, hit.county, hit.state.name),
+      href: districtPath(hit.state.slug, hit.slug),
+      hasSchedule: hit.hasSchedule,
+    })),
+  });
 });
 
 // ---------------------------------------------------------------- trang nội dung

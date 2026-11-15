@@ -54,10 +54,12 @@ export function searchForm(options: SearchFormOptions): Html {
     hidden.push(html`<input type="hidden" name="${name}" value="${value}">`);
   }
   const button = options.button ?? "Search";
+  // Ô tìm học khu chung (/search): site.js gợi ý học khu khi gõ, qua /api/suggest.
+  const suggest = options.action === "/search" ? raw(' data-suggest="/api/suggest"') : "";
   return html`<form class="search-form" method="get" action="${options.action}" role="search">
 ${hidden}<label for="q">${options.label}</label>
 <div class="search-row">
-<input id="q" name="q" type="search" value="${options.query}" maxlength="80" autocomplete="off" required>
+<input id="q" name="q" type="search" value="${options.query}" maxlength="80" autocomplete="off" required${suggest}>
 <button type="submit">${button}</button>
 </div>
 </form>`;
