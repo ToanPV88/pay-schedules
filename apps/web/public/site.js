@@ -257,4 +257,43 @@
     svg.addEventListener("pointerdown", show);
     svg.addEventListener("pointerleave", hide);
   }
+
+  // Cỡ chữ của bảng lương: bốn mức, nhớ trong trình duyệt (bỏ qua nếu bộ nhớ bị chặn).
+  const TABLE_SIZES = [0.85, 1, 1.15, 1.3];
+  const textTools = document.querySelectorAll("[data-text-size]");
+  if (textTools.length > 0) {
+    let level = 1;
+    try {
+      const saved = localStorage.getItem("ps-table-size");
+      if (saved !== null && TABLE_SIZES[Number(saved)] !== undefined) {
+        level = Number(saved);
+      }
+    } catch {
+      // Bộ nhớ trình duyệt bị chặn: dùng cỡ mặc định.
+    }
+    const apply = () => {
+      document.documentElement.style.setProperty("--table-scale", String(TABLE_SIZES[level]));
+      for (const box of textTools) {
+        box.querySelector('[data-size="-1"]').disabled = level === 0;
+        box.querySelector('[data-size="1"]').disabled = level === TABLE_SIZES.length - 1;
+      }
+    };
+    for (const box of textTools) {
+      box.hidden = false;
+      box.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-size]");
+        if (!button) {
+          return;
+        }
+        level = Math.min(TABLE_SIZES.length - 1, Math.max(0, level + Number(button.dataset.size)));
+        try {
+          localStorage.setItem("ps-table-size", String(level));
+        } catch {
+          // Không lưu được thì vẫn đổi cỡ cho trang này.
+        }
+        apply();
+      });
+    }
+    apply();
+  }
 })();
