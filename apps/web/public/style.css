@@ -799,6 +799,17 @@ td.empty {
   touch-action: pan-y;
 }
 
+/* Màn hẹp: SVG thu nhỏ theo chiều rộng nên tăng cỡ chữ (đơn vị của viewBox) để vẫn đọc được. */
+@media (max-width: 30rem) {
+  .pay-chart {
+    padding: 0.6rem 0.4rem 0.4rem;
+  }
+
+  .pay-chart svg {
+    font-size: 14px;
+  }
+}
+
 .pay-chart .grid line {
   stroke: var(--line);
   stroke-width: 1;

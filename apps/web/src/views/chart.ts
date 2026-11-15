@@ -18,7 +18,8 @@ export const MAX_SERIES = 4;
 const W = 420;
 const H = 250;
 const M = { top: 12, right: 96, bottom: 34, left: 50 };
-const LABEL_GAP = 13;
+/** Khoảng cách tối thiểu giữa hai nhãn cuối đường, đủ cho cỡ chữ lớn hơn trên màn hẹp. */
+const LABEL_GAP = 15;
 
 interface Series {
   laneIndex: number;
