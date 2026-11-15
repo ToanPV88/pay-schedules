@@ -44,9 +44,12 @@ export function adSlot(site: Site, position: string): Html {
   return html`<aside class="ad-slot" aria-label="Advertisement" data-ad-slot="${position}"></aside>`;
 }
 
-/** Logo cạnh tên site, vẽ thẳng trong HTML (không thêm request), cùng hình với favicon. */
+/**
+ * Logo "PS" cạnh tên site, vẽ thẳng trong HTML (không thêm request), cùng hình với favicon. Chữ là
+ * đường vẽ lấy từ phông Inter ExtraBold (OFL) để hiện giống nhau trên mọi máy, không phụ thuộc phông.
+ */
 const LOGO = raw(
-  '<svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22h16M8 16h16M8 10h16M14 7v18" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  '<svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="currentColor"/><path class="logo-text" fill="#fff" d="M5.56 22.33H8.56V18.38H10.66C13.56 18.38 15.35 16.65 15.35 14.05C15.35 11.45 13.6 9.67 10.74 9.67H5.56ZM8.56 16.01V12.1H10.1C11.51 12.1 12.24 12.86 12.24 14.05C12.24 15.22 11.51 16.01 10.11 16.01ZM21.44 22.5C24.57 22.5 26.44 21.06 26.44 18.66C26.44 16.64 25.02 15.41 22.58 14.88L21.48 14.62C20.35 14.37 19.61 13.99 19.61 13.21C19.61 12.51 20.23 11.99 21.43 11.99C22.64 11.99 23.31 12.52 23.39 13.44H26.27C26.24 11.1 24.37 9.5 21.44 9.5C18.57 9.5 16.51 11.07 16.51 13.42C16.51 15.32 17.84 16.42 20.02 16.92L21.36 17.23C22.75 17.55 23.41 17.93 23.41 18.65C23.41 19.46 22.64 20.01 21.4 20.01C20.04 20.01 19.13 19.38 19.06 18.15H16.18C16.23 21.07 18.27 22.5 21.44 22.5Z"/></svg>',
 );
 
 const MENU_ICON = raw(
@@ -102,6 +105,7 @@ export function renderPage(site: Site, meta: PageMeta, body: Html): Html {
 <meta name="robots" content="${robots}">
 <title>${meta.title}</title>
 ${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
