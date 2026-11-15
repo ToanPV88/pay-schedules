@@ -80,7 +80,7 @@ Claude cũ, nhưng tài khoản mới có thể không mở được.
 | Tệp | Nội dung | Trạng thái |
 |---|---|---|
 | `dot-1-150-hoc-khu.csv` | 150 học khu | Đã nhận và chạy: 26/129 học khu lên site |
-| `dot-2-120-hoc-khu-lon.csv` | 120 học khu lớn nhất còn thiếu (8,4 triệu học sinh) | Đã nhận 2026-11-15 (36 file, 35 học khu, `manual-20261115-tai-tay-2`): 6 lên site, 6 chờ duyệt; 4 đã có bảng từ trước |
+| `dot-2-120-hoc-khu-lon.csv` | 120 học khu lớn nhất còn thiếu (8,4 triệu học sinh) | Đã nhận 2026-11-15 (36 file, 35 học khu, `manual-20261115-tai-tay-2`): 6 lên site, 8 chờ duyệt; 4 đã có bảng từ trước |
 | `dot-3-229-hoc-khu.csv` | 229 học khu kế tiếp (4,1 triệu học sinh) | Chưa tải |
 | `tat-ca-con-thieu-9737.csv` | Mọi học khu còn thiếu, xếp theo số học sinh | Tên file có tiền tố `T`, ví dụ `T0001_…` |
 
