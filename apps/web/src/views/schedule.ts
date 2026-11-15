@@ -78,17 +78,42 @@ ${noteList}`;
 
 export interface CalculationText {
   amount: string;
+  perMonth: string;
   perDay: string;
   raise: string;
+  top: string;
 }
 
-/** Ba dòng kết quả. Câu chữ phải khớp với `public/site.js`. */
+/** "$97,726 at Step 16 (15 more steps)" hoặc "This is the top of the lane". */
+function topText(schedule: Schedule, result: Calculation | null): string {
+  if (!result || result.topStepIndex === null || result.topCents === null) {
+    return "—";
+  }
+  const more = result.topStepIndex - result.stepIndex;
+  if (more <= 0) {
+    return "This is the top of the lane";
+  }
+  const step = schedule.steps[result.topStepIndex];
+  const label = step ? stepLabel(step) : `Step ${result.topStepIndex + 1}`;
+  return `${formatCents(result.topCents)} at ${label} (${more} more ${more === 1 ? "step" : "steps"})`;
+}
+
+/** Các dòng kết quả. Câu chữ phải khớp với `public/site.js`. */
 export function calculationText(schedule: Schedule, result: Calculation | null): CalculationText {
+  const top = topText(schedule, result);
   if (!result || result.amountCents === null) {
     const raise = result?.isTopStep ? "Top step of this schedule" : "—";
-    return { amount: "No amount listed for this step and lane", perDay: "—", raise };
+    return {
+      amount: "No amount listed for this step and lane",
+      perMonth: "—",
+      perDay: "—",
+      raise,
+      top,
+    };
   }
   const amount = `${formatCents(result.amountCents)} ${payBasisNoun(schedule.payBasis)}`;
+  const perMonth =
+    result.perMonthCents === null ? "—" : `${formatCents(result.perMonthCents)} (12 equal checks)`;
   let perDay = "—";
   if (result.perDayCents !== null) {
     perDay = `${formatCents(result.perDayCents)} (${schedule.contractDays} contract days)`;
@@ -102,7 +127,7 @@ export function calculationText(schedule: Schedule, result: Calculation | null):
     const sign = result.nextStepRaiseCents >= 0 ? "+" : "";
     raise = `${sign}${formatCents(result.nextStepRaiseCents)} at the next step`;
   }
-  return { amount, perDay, raise };
+  return { amount, perMonth, perDay, raise, top };
 }
 
 export interface CalculatorOptions {
@@ -112,6 +137,15 @@ export interface CalculatorOptions {
   hidden: Record<string, string>;
   laneIndex: number;
   stepIndex: number;
+}
+
+function yearsText(years: number): string {
+  return years === 1 ? "1 year" : `${years} years`;
+}
+
+/** Mọi bậc đều ghi số năm kinh nghiệm: ô chọn hỏi theo số năm thay vì theo bậc. */
+export function stepsHaveYears(schedule: Schedule): boolean {
+  return schedule.steps.length > 0 && schedule.steps.every((step) => step.yearsExperience !== null);
 }
 
 function experienceSuffix(years: number | null): string {
@@ -145,24 +179,42 @@ export function calculator(schedule: Schedule, options: CalculatorOptions): Html
     laneField = html`<div class="field"><label for="lane-${id}">Education lane</label>
 <select id="lane-${id}" name="lane">${lanes}</select></div>`;
   }
+  const byYears = stepsHaveYears(schedule);
   const steps: Html[] = [];
   for (const [i, step] of schedule.steps.entries()) {
-    const label = `${stepLabel(step)}${experienceSuffix(step.yearsExperience)}`;
+    let label = `${stepLabel(step)}${experienceSuffix(step.yearsExperience)}`;
+    if (byYears && step.yearsExperience !== null) {
+      // Nhãn gốc khác số năm (vd. bậc "1" = 0 năm, "40+"): ghi kèm để đối chiếu với bảng.
+      const same = step.labelRaw === String(step.yearsExperience);
+      label = same
+        ? yearsText(step.yearsExperience)
+        : `${yearsText(step.yearsExperience)} (${stepLabel(step)})`;
+    }
     steps.push(option(i + 1, label, i === options.stepIndex));
   }
+  const stepFieldLabel = byYears ? "Years of experience" : "Step";
   const result = calculate(schedule, options.laneIndex, options.stepIndex);
   const text = calculationText(schedule, result);
-  return html`<form class="calc" method="get" action="${options.action}#calc-${id}" data-calc-table="schedule-${id}" data-calc-result="calc-${id}">
+  const form = html`<form class="calc" method="get" action="${options.action}#calc-${id}" data-calc-table="schedule-${id}" data-calc-result="calc-${id}">
 ${hidden}<input type="hidden" name="s" value="${id}">
 ${laneField}
-<div class="field"><label for="step-${id}">Step</label>
+<div class="field"><label for="step-${id}">${stepFieldLabel}</label>
 <select id="step-${id}" name="step">${steps}</select></div>
 <button type="submit">Calculate</button>
-</form>
+</form>`;
+  // Bảng không tính theo năm (theo giờ, ngày, tháng): bỏ hai ô quy đổi từ lương năm.
+  const annual = schedule.payBasis === "annual";
+  const perMonth = annual
+    ? html`<div><dt>Per month</dt><dd data-out="per-month">${text.perMonth}</dd></div>`
+    : html``;
+  const perDay = annual
+    ? html`<div><dt>Per contract day</dt><dd data-out="per-day">${text.perDay}</dd></div>`
+    : html``;
+  return html`${form}
 <dl class="facts calc-result" id="calc-${id}" aria-live="polite">
 <div><dt>Salary on schedule</dt><dd data-out="amount">${text.amount}</dd></div>
-<div><dt>Per contract day</dt><dd data-out="per-day">${text.perDay}</dd></div>
-<div><dt>Raise at next step</dt><dd data-out="raise">${text.raise}</dd></div>
+${perMonth}${perDay}<div><dt>Raise at next step</dt><dd data-out="raise">${text.raise}</dd></div>
+<div><dt>Top of this lane</dt><dd data-out="top">${text.top}</dd></div>
 </dl>`;
 }
 
