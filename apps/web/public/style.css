@@ -735,6 +735,18 @@ td.empty {
   color: var(--muted);
 }
 
+.download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.download span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .download a {
   display: inline-flex;
   align-items: center;

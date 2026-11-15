@@ -358,6 +358,32 @@ describe("tải CSV và câu hỏi thường gặp", () => {
     expect((await request("/schedules/999999.csv")).status).toBe(404);
   });
 
+  it("tải bảng dạng Excel (.xlsx): tệp zip có trang tính với số tiền và nguồn", async () => {
+    const { a, c } = await seed();
+    const html = await page("/test-state/test-valley-unified");
+    expect(html).toContain(`href="/schedules/${a.scheduleId}.xlsx"`);
+    const res = await request(`/schedules/${a.scheduleId}.xlsx`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    expect(res.headers.get("Content-Disposition")).toContain(
+      `test-valley-unified-2025-26-salary-schedule-${a.scheduleId}.xlsx`,
+    );
+    expect(res.headers.get("X-Robots-Tag")).toContain("noindex");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // Chữ ký zip "PK\x03\x04"; tệp không nén nên đọc được XML bên trong.
+    expect([...bytes.slice(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04]);
+    const text = new TextDecoder().decode(bytes);
+    expect(text).toContain("xl/worksheets/sheet1.xml");
+    expect(text).toContain('<c r="A1" t="inlineStr" s="1"><is><t xml:space="preserve">Step</t>');
+    // bậc đầu, lane đầu của bảng mẫu: 50.000 USD, định dạng tiền chẵn đô (kiểu 2)
+    expect(text).toContain('<c r="B2" s="2"><v>50000</v></c>');
+    expect(text).toContain("Source: https://test-valley.example.invalid/");
+    expect((await request(`/schedules/${c.scheduleId}.xlsx`)).status).toBe(404);
+    expect((await request("/schedules/1.xls")).status).toBe(404);
+  });
+
   it("câu hỏi sinh từ dữ liệu, có JSON-LD hợp lệ và không mở được thẻ script", async () => {
     await seed();
     const html = await page("/test-state/test-valley-unified");
