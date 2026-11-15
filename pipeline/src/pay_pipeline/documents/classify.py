@@ -21,7 +21,9 @@ MONEY_RE = re.compile(r"(?<![\d.])\$?\s?(\d{2,3}),?(\d{3})(?:\.\d{2})?(?![\d,])"
 STEP_RE = re.compile(r"\b(step|steps|years?|yrs|experience|level)\b", re.I)
 LANE_RE = re.compile(
     r"\b(B\.?A\.?|M\.?A\.?|bachelor'?s?|master'?s?|class\s+[IVX\dA-H]|column|rank|lane|"
-    r"doctorate|ph\.?d)\b",
+    r"doctorate|ph\.?d)\b"
+    # Lane headings with credits after the degree: B+10, M+20 (Goddard), BS+8G (Carl Junction)
+    r"|\b[BM]\.?(?:[AS]\.?)?\s?\+\s?\d{1,2}",
     re.I,
 )
 SALARY_RE = re.compile(r"\b(salar(?:y|ies)|pay\s+scales?|compensation)\b", re.I)

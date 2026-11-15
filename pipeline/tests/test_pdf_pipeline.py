@@ -1113,6 +1113,17 @@ class TestRelaxedPages:
         text = f"SALARY SCHEDULE\nTop  Bachelors  B+9  Masters  M+9\n{rows}"
         assert score_page(text, 1).is_schedule
 
+    def test_lane_headings_with_credits(self) -> None:
+        # Goddard KS: "STEP  B  B+10  M  M+10" with no teacher/salary word on the page
+        from pay_pipeline.documents.classify import score_page
+
+        rows = "\n".join(
+            f"{n}  " + "  ".join(f"{50000 + 500 * n + 1300 * c:,}" for c in range(4))
+            for n in range(1, 16)
+        )
+        for header in ("STEP  B  B+10  M  M+10", "Certfied Staff  Step\n  BS  BS+8G  MS  MS+8G"):
+            assert score_page(f"2026-2027 Placement Schedule\n{header}\n{rows}", 1).is_schedule
+
     def test_descending_steps(self) -> None:
         lines = [L("Top", "BA", "MA")] + [
             L(str(n), f"{70000 - 1000 * n:,}", f"{80000 - 1000 * n:,}") for n in range(5, 0, -1)
