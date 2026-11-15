@@ -100,6 +100,7 @@ describe("trang học khu", () => {
       '<h2 id="notes-heading">Stipends and notes</h2>',
       '<h2 id="source-heading">Source</h2>',
       '<h2 id="years-heading">Other school years</h2>',
+      '<h2 id="faq-heading">Questions people ask</h2>',
     ];
     let last = -1;
     for (const marker of order) {
@@ -306,5 +307,46 @@ describe("trang chủ và trang mới cập nhật", () => {
     expect(html).toContain("updated November 12, 2026");
     expect((await request("/recently-updated?page=2")).status).toBe(404);
     expect((await request("/recently-updated?page=abc")).status).toBe(404);
+  });
+});
+
+describe("tải CSV và câu hỏi thường gặp", () => {
+  it("bảng published tải được CSV đúng ô; bảng draft hay mã lạ thì 404", async () => {
+    const { a, c } = await seed();
+    const html = await page("/test-state/test-valley-unified");
+    expect(html).toContain(`href="/schedules/${a.scheduleId}.csv"`);
+    const res = await request(`/schedules/${a.scheduleId}.csv`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/csv");
+    expect(res.headers.get("Content-Disposition")).toContain(
+      `test-valley-unified-2025-26-salary-schedule-${a.scheduleId}.csv`,
+    );
+    expect(res.headers.get("X-Robots-Tag")).toContain("noindex");
+    expect(res.headers.get("Cache-Tag")).toContain(`district-${a.districtId}`);
+    const lines = (await res.text()).split("\r\n");
+    const header = [
+      "Step",
+      ...standard.lanes.map((l) => (/[",]/.test(l.labelRaw) ? `"${l.labelRaw}"` : l.labelRaw)),
+    ];
+    expect(lines[0]).toBe(header.join(","));
+    // bậc đầu, lane đầu của bảng mẫu: 5_000_000 cent
+    expect(lines[1]?.split(",")[1]).toBe("50000");
+    expect(lines.some((l) => l.includes("Source: https://test-valley.example.invalid/"))).toBe(true);
+    expect((await request(`/schedules/${c.scheduleId}.csv`)).status).toBe(404);
+    expect((await request("/schedules/abc.csv")).status).toBe(404);
+    expect((await request("/schedules/999999.csv")).status).toBe(404);
+  });
+
+  it("câu hỏi sinh từ dữ liệu, có JSON-LD hợp lệ và không mở được thẻ script", async () => {
+    await seed();
+    const html = await page("/test-state/test-valley-unified");
+    expect(html).toContain(
+      "What is the starting teacher salary in Test Valley Unified School District?",
+    );
+    expect(html).toContain("earns $50,000 per year");
+    const ld = /<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)?.[1] ?? "";
+    expect(ld).not.toContain("<");
+    const data = JSON.parse(ld) as { "@graph": { "@type": string }[] };
+    expect(data["@graph"].map((g) => g["@type"])).toEqual(["FAQPage", "BreadcrumbList"]);
   });
 });

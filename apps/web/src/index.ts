@@ -8,6 +8,7 @@ import {
   type District,
   type DistrictSort,
   getCoverage,
+  getDistrictById,
   getDistrictBySlug,
   getLatestSummary,
   getPayOverview,
@@ -55,6 +56,7 @@ import {
   parseDistrictKey,
   parseDistrictKeys,
 } from "./compare";
+import { csvFileName, scheduleCsv } from "./csv";
 import { DEMO_DISTRICT, DEMO_HISTORY, DEMO_NEIGHBORS, DEMO_SCHEDULE, DEMO_SUMMARY } from "./demo";
 import { type AppEnv, isIndexable, isProduction, reportsEnabled, SITE_NAME } from "./env";
 import { escapeXml, isSchoolYear } from "./format";
@@ -519,6 +521,28 @@ function sortOf(value: string | undefined): DistrictSort {
 function directionOf(value: string | undefined): SortDirection {
   return value === "desc" ? "desc" : "asc";
 }
+
+app.get("/schedules/:file", async (c) => {
+  const match = /^([0-9]{1,9})\.csv$/.exec(c.req.param("file"));
+  if (!match) {
+    return notFound(c);
+  }
+  const schedule = await getSchedule(c.env.DB, Number(match[1]));
+  if (schedule?.status !== "published" || schedule.scheduleType !== "teacher") {
+    return notFound(c);
+  }
+  const district = await getDistrictById(c.env.DB, schedule.districtId);
+  if (!district) {
+    return notFound(c);
+  }
+  c.header("Cache-Control", PAGE_CACHE);
+  c.header("Cache-Tag", cacheTags(districtTag(district.id)));
+  c.header("Content-Disposition", `attachment; filename="${csvFileName(district, schedule)}"`);
+  c.header("X-Robots-Tag", "noindex");
+  return c.body(scheduleCsv(district, schedule), 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+  });
+});
 
 app.get("/:state", async (c) => {
   const state = await getStateBySlug(c.env.DB, c.req.param("state"));
