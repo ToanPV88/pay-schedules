@@ -115,6 +115,34 @@ main {
   gap: 0.25rem 1rem;
 }
 
+.states-menu {
+  position: relative;
+}
+
+.states-menu summary {
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.states-menu ul {
+  position: absolute;
+  z-index: 5;
+  min-width: 12rem;
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0;
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+}
+
+.states-menu li a {
+  display: block;
+  padding: 0.35rem 1rem;
+}
+
 main {
   padding-top: 1rem;
   padding-bottom: 2rem;
