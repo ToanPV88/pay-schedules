@@ -46,7 +46,7 @@ jobs:
           for spec in "/|Teacher pay across the site" "/recently-updated|Recently updated salary schedules" \
                       "/california|Teacher pay in California" "/texas|Districts in Texas" \
                       "/search?q=austin|Austin" "/compare|Compare" "/calculator|Calculator" \
-                      "/methodology|" "/sitemap.xml|<urlset" "/robots.txt|Sitemap"; do
+                      "/methodology|" "/sitemap.xml|<urlset" "/robots.txt|User-agent"; do
             path=${spec%%|*}; want=${spec#*|}
             code=$(get "${BASE_URL}${path}")
             ok="ok"
@@ -80,7 +80,7 @@ jobs:
             cells=$(grep -c '<td data-cents=' page.html || true)
             faq=$(grep -q 'id="faq-heading"' page.html && echo có || echo không)
             ld=$(grep -oP '(?<=<script type="application/ld\+json">).*?(?=</script>)' page.html | head -1)
-            if [ -n "$ld" ] && echo "$ld" | jq -e '."@graph"[0]."@type" == "FAQPage"' > /dev/null; then json=hợp lệ; else json=lỗi; fi
+            if [ -n "$ld" ] && echo "$ld" | jq -e '."@graph"[0]."@type" == "FAQPage"' > /dev/null; then json="hợp lệ"; else json="lỗi"; fi
             csv=$(grep -oE 'href="/schedules/[0-9]+\.csv"' page.html | head -1 | sed -E 's/^href="//; s/"$//')
             csvok="không có link"
             if [ -n "$csv" ]; then
@@ -91,7 +91,7 @@ jobs:
             [ "$code" = 200 ] || fail "${url}: HTTP ${code}"
             [ "$cells" -gt 0 ] || fail "${url}: không có ô tiền"
             [ "$faq" = có ] || fail "${url}: thiếu FAQ"
-            [ "$json" = hợp\ lệ ] || fail "${url}: JSON-LD lỗi"
+            [ "$json" = "hợp lệ" ] || fail "${url}: JSON-LD lỗi"
             [ "$csvok" = ok ] || fail "${url}: CSV ${csvok}"
             echo "| ${url#"$BASE_URL"} | ${code} | ${cells} | ${faq} | ${json} | ${csvok} |" >> "$GITHUB_STEP_SUMMARY"
           done < districts.txt
