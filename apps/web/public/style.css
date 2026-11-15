@@ -2,46 +2,47 @@
 /* Một tệp CSS, không phông web, không framework: trang nhẹ để Lighthouse mobile >= 90. */
 
 :root {
-  --text: #18212b;
-  --muted: #56606d;
+  /* Bảng màu theo VnExpress: đỏ mận #9f224e, chữ #222, kẻ #e5e5e5, nền xám rất nhạt. */
+  --text: #222222;
+  --muted: #5c5c5c;
   --bg: #ffffff;
-  --page: #f6f8fb;
-  --surface: #f1f4f8;
+  --page: #f7f7f7;
+  --surface: #f4f4f4;
   --card: #ffffff;
-  --line: #dfe4ea;
-  --line-strong: #c7cfd9;
-  --accent: #0b5cad;
-  --accent-hover: #084a8c;
-  --accent-soft: #e9f1fb;
+  --line: #e5e5e5;
+  --line-strong: #cfcfcf;
+  --accent: #9f224e;
+  --accent-hover: #7e1a3d;
+  --accent-soft: #f9eef2;
   --accent-text: #ffffff;
   --notice: #fff7df;
   --notice-line: #d9b43c;
-  --row-alt: #f8fafc;
-  --row-hover: #eef4fb;
-  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 8%);
-  --shadow-lg: 0 10px 30px rgb(16 24 40 / 12%);
+  --row-alt: #fafafa;
+  --row-hover: #fbf1f5;
+  --shadow: 0 1px 2px rgb(0 0 0 / 5%), 0 1px 3px rgb(0 0 0 / 7%);
+  --shadow-lg: 0 10px 30px rgb(0 0 0 / 12%);
   --radius: 0.75rem;
   --radius-sm: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #e8ebef;
-    --muted: #a8b0bb;
-    --bg: #12161b;
-    --page: #0e1115;
-    --surface: #1b2128;
-    --card: #161b21;
-    --line: #2c343e;
-    --line-strong: #3b4552;
-    --accent: #7ab4f5;
-    --accent-hover: #a3cbf8;
-    --accent-soft: #18283a;
-    --accent-text: #0b0b0b;
+    --text: #ececec;
+    --muted: #b3b3b3;
+    --bg: #151515;
+    --page: #101010;
+    --surface: #1e1e1e;
+    --card: #191919;
+    --line: #2e2e2e;
+    --line-strong: #404040;
+    --accent: #e8829f;
+    --accent-hover: #f2a7bc;
+    --accent-soft: #34151f;
+    --accent-text: #151515;
     --notice: #2e260d;
     --notice-line: #8a7224;
-    --row-alt: #151a20;
-    --row-hover: #1c2836;
+    --row-alt: #171717;
+    --row-hover: #2a1820;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
     --shadow-lg: 0 10px 30px rgb(0 0 0 / 50%);
   }
