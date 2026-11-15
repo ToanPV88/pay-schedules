@@ -64,9 +64,9 @@ export const MIN_STATE_DISTRICTS = 5;
 /** Câu hướng dẫn của máy tính: hỏi số năm khi bảng ghi số năm cho mọi bậc. */
 function calcHint(schedule: Schedule): string {
   if (stepsHaveYears(schedule)) {
-    return "Pick a lane and your years of experience to read the amount from the table above.";
+    return "Pick a lane and your years of experience, or tap a cell in the table above.";
   }
-  return "Pick a lane and a step to read the amount from the table above.";
+  return "Pick a lane and a step, or tap a cell in the table above.";
 }
 
 export function districtTitle(district: District, year: string): string {
