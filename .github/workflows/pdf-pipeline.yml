@@ -93,7 +93,13 @@ jobs:
           [[ "${REREAD_DRAFTS:-False}" =~ ^(True|False)$ ]] || { echo "::error::reread_drafts sai"; exit 1; }
           # File tải tay (D-051): danh sách nces_id,file,url nằm trên main, files.tar trên nhánh manual-files/<tên>.
           [[ -z "${MANUAL_RELEASE:-}" || "$MANUAL_RELEASE" =~ ^manual-[0-9]{8}-[a-z0-9-]+$ ]] || { echo "::error::manual_release sai"; exit 1; }
-          if [ -n "${MANUAL_RELEASE:-}" ]; then IDS_FILE="pipeline/sources/${MANUAL_RELEASE}.csv"; fi
+          if [ -n "${MANUAL_RELEASE:-}" ]; then
+            # ids_file và manual_release loại trừ nhau: trước đây manual_release cũ ghi đè ids_file mà không báo.
+            if [ -n "${IDS_FILE:-}" ] && [ "$IDS_FILE" != "pipeline/sources/${MANUAL_RELEASE}.csv" ]; then
+              echo "::error::đặt cả ids_file và manual_release; để trống một trong hai"; exit 1
+            fi
+            IDS_FILE="pipeline/sources/${MANUAL_RELEASE}.csv"
+          fi
           [[ -z "${IDS_FILE:-}" || "$IDS_FILE" =~ ^pipeline/sources/[a-z0-9-]+\.csv$ ]] || { echo "::error::ids_file sai"; exit 1; }
           [[ "$TARGET" =~ ^(preview|production)$ ]] || { echo "::error::target sai"; exit 1; }
           [[ "$LIMIT" =~ ^[0-9]{1,5}$ ]] || { echo "::error::limit phải là số"; exit 1; }
