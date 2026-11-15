@@ -47,6 +47,18 @@ const LOGO = raw(
   '<svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22h16M8 16h16M8 10h16M14 7v18" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
 );
 
+const MENU_ICON = raw(
+  '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+);
+
+/**
+ * Menu thu gọn trên điện thoại. Script nằm ngay sau nav, chạy trước lần vẽ đầu nên không nháy.
+ * Tắt JavaScript thì header không có lớp js-nav: nút Menu bị ẩn và mọi liên kết vẫn hiện như cũ.
+ */
+const NAV_SCRIPT = raw(
+  '<script>(()=>{const b=document.querySelector(".nav-toggle");const h=b&&b.closest(".site-header");if(!h)return;h.classList.add("js-nav");b.addEventListener("click",()=>{const o=h.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(o));});})();</script>',
+);
+
 export interface Crumb {
   label: string;
   href?: string;
@@ -95,7 +107,8 @@ ${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <header class="site-header">
 <div class="wrap header-inner">
 <a class="site-name" href="/">${LOGO}<span>${SITE_NAME}</span></a>
-<nav class="site-nav" aria-label="Main">
+<button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">${MENU_ICON}<span>Menu</span></button>
+<nav class="site-nav" id="site-nav" aria-label="Main">
 ${statesMenu()}
 <a href="/search">Search</a>
 <a href="/recently-updated">Recently updated</a>
@@ -103,6 +116,7 @@ ${statesMenu()}
 <a href="/calculator">Calculator</a>
 <a href="/methodology">Methodology</a>
 </nav>
+${NAV_SCRIPT}
 </div>
 </header>
 <main id="main">

@@ -245,6 +245,62 @@ main {
   }
 }
 
+/* Nút Menu chỉ hiện trên màn hẹp và khi có JavaScript (header có lớp js-nav). */
+.nav-toggle {
+  display: none;
+}
+
+@media (max-width: 47.99rem) {
+  .js-nav .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+
+  .js-nav .nav-toggle:hover,
+  .js-nav.nav-open .nav-toggle {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .js-nav .site-nav {
+    display: none;
+  }
+
+  .js-nav.nav-open .site-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    margin: 0.25rem 0 0.25rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .js-nav.nav-open .site-nav > a,
+  .js-nav.nav-open .states-menu summary {
+    padding: 0.65rem 0.5rem;
+    font-size: 1rem;
+    color: var(--text);
+  }
+
+  .js-nav.nav-open .states-menu ul {
+    position: static;
+    min-width: 0;
+    margin: 0 0 0.25rem 0.75rem;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    columns: 2;
+  }
+}
+
 .states-menu {
   position: relative;
 }
@@ -658,6 +714,22 @@ td.empty {
   padding-bottom: 0.45rem;
 }
 
+/* Bảng lương dài: cuộn trong khung, hàng tên lane dính trên cùng, cột bậc dính bên trái. */
+.table-scroll.tall {
+  max-height: min(38rem, 78vh);
+  overflow: auto;
+}
+
+.tall thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.tall .schedule thead th:first-child {
+  z-index: 3;
+}
+
 .notes {
   font-size: 0.875rem;
   color: var(--muted);
@@ -818,6 +890,25 @@ button:hover,
 
 .calc-result > div:first-child dd {
   font-size: 1.4rem;
+}
+
+@media (max-width: 30rem) {
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .facts > div {
+    padding: 0.7rem 0.8rem;
+  }
+
+  .facts dd {
+    font-size: 1.1rem;
+  }
+
+  .calc-result > div:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .facts.source {
@@ -1003,4 +1094,22 @@ summary:focus-visible,
 [tabindex]:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
+}
+
+@media print {
+  .site-header,
+  .site-footer,
+  .ad-slot,
+  .calc,
+  .calc-result,
+  .download {
+    display: none;
+  }
+
+  .table-scroll,
+  .table-scroll.tall {
+    max-height: none;
+    overflow: visible;
+    box-shadow: none;
+  }
 }
