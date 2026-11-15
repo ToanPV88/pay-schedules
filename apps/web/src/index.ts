@@ -169,7 +169,7 @@ async function page(
 }
 
 function notFound(c: Context<AppEnv>) {
-  const meta = { title: pageTitle("Page not found"), noindex: true };
+  const meta = { title: pageTitle("Page not found"), noindex: true, script: true };
   return page(c, meta, notFoundPage(), { control: NO_STORE }, 404);
 }
 
@@ -341,6 +341,7 @@ app.get("/api/suggest", async (c) => {
       name: hit.name,
       place: placeLine(hit.city, hit.county, hit.state.name),
       href: districtPath(hit.state.slug, hit.slug),
+      key: `${hit.state.slug}/${hit.slug}`,
       hasSchedule: hit.hasSchedule,
     })),
   });
@@ -396,6 +397,9 @@ async function latestSchedules(db: D1Database, district: District): Promise<Sche
 
 // ---------------------------------------------------------------- so sánh, máy tính
 
+/** Số học khu gợi ý sẵn ở trang /calculator và /compare khi chưa chọn học khu nào. */
+const POPULAR_LIMIT = 8;
+
 app.get("/compare", async (c) => {
   const keys = parseDistrictKeys(c.req.query("d"));
   const entries: CompareEntry[] = [];
@@ -423,7 +427,8 @@ app.get("/compare", async (c) => {
     noindex: hasQuery(c),
   };
   const tags = [TAG_COMPARE, ...entries.map((e) => districtTag(e.district.id))];
-  const body = comparePage({ entries, lanes, lane, steps, step, query, hits });
+  const popular = entries.length === 0 ? await listLargestDistricts(c.env.DB, POPULAR_LIMIT) : [];
+  const body = comparePage({ entries, lanes, lane, steps, step, query, hits, popular });
   return page(c, meta, body, { control: PAGE_CACHE, tags });
 });
 
@@ -449,7 +454,8 @@ app.get("/calculator", async (c) => {
     script: true,
   };
   const tags = district ? [districtTag(district.id)] : [];
-  const body = calculatorPage({ query, hits, district, schedules, selection });
+  const popular = district ? [] : await listLargestDistricts(c.env.DB, POPULAR_LIMIT);
+  const body = calculatorPage({ query, hits, district, schedules, selection, popular });
   return page(c, meta, body, { control: PAGE_CACHE, tags });
 });
 

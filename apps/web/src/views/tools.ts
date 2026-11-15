@@ -1,5 +1,5 @@
 /** Trang /compare, /calculator và /report. */
-import type { District, Schedule, SearchHit } from "@pay-schedules/db";
+import type { District, LargeDistrict, Schedule, SearchHit } from "@pay-schedules/db";
 import { html, raw } from "hono/html";
 import { type CompareEntry, compareCell, MAX_COMPARE } from "../compare";
 import { formatCents, schoolYearLabel } from "../format";
@@ -25,6 +25,20 @@ export interface ComparePageData {
   step: number;
   query: string;
   hits: SearchHit[];
+  /** Học khu lớn có số liệu, gợi ý sẵn khi chưa chọn học khu nào. */
+  popular?: LargeDistrict[];
+}
+
+/** Danh sách học khu gợi ý sẵn (thẻ bấm được), mỗi thẻ dẫn tới `hrefOf(key)`. */
+export function popularList(items: LargeDistrict[], hrefOf: (key: string) => string): Html {
+  if (items.length === 0) {
+    return html``;
+  }
+  const links = items.map((item) => {
+    const key = `${item.stateSlug}/${item.slug}`;
+    return html`<li><a href="${hrefOf(key)}">${item.name} <span class="muted">${item.stateCode}</span></a></li>`;
+  });
+  return html`<ul class="chip-list">${links}</ul>`;
 }
 
 export function comparePath(keys: string[], lane: string | null, step: number): string {
@@ -160,6 +174,7 @@ export function comparePage(data: ComparePageData): Html {
       label: keys.length === 0 ? "Find the first district" : "Add another district",
       hidden,
       button: "Find",
+      suggestHref: comparePath([...keys, "{key}"], data.lane, data.step),
     });
     const candidates = data.hits.filter((hit) => !keys.includes(`${hit.state.slug}/${hit.slug}`));
     let results = html``;
@@ -177,9 +192,24 @@ ${results}
 </section>`;
   }
   if (data.entries.length === 0) {
+    const popular = data.popular ?? [];
+    let start = html``;
+    if (popular.length > 0) {
+      const sample = popular.slice(0, 3).map((p) => `${p.stateSlug}/${p.slug}`);
+      const quick =
+        sample.length >= 2
+          ? html`<p><a class="button" href="${comparePath(sample, null, 1)}">Compare the ${sample.length} largest districts</a></p>`
+          : html``;
+      start = html`<section aria-labelledby="popular-heading">
+<h2 id="popular-heading">Or start from a large district</h2>
+${quick}
+${popularList(popular, (key) => comparePath([key], null, 1))}
+</section>`;
+    }
     return html`<h1>Compare salary schedules</h1>
-<p class="lede">Put up to ${MAX_COMPARE} districts side by side at the same step and education lane.</p>
-${adder}`;
+<p class="lede">Put up to ${MAX_COMPARE} districts side by side at the same step and education lane. Each row reads one cell from that district’s latest published schedule.</p>
+${adder}
+${start}`;
   }
   const benchmarks: Html[] = [];
   for (const entry of data.entries) {
@@ -227,6 +257,8 @@ export interface CalculatorPageData {
   district: District | null;
   schedules: Schedule[];
   selection: Selection | null;
+  /** Học khu lớn có số liệu, gợi ý sẵn khi chưa chọn học khu. */
+  popular?: LargeDistrict[];
 }
 
 export function calculatorPage(data: CalculatorPageData): Html {
@@ -235,6 +267,7 @@ export function calculatorPage(data: CalculatorPageData): Html {
     query: data.query,
     label: "Find a school district",
     button: "Find",
+    suggestHref: "/calculator?d={key}",
   });
   const { district } = data;
   if (!district) {
@@ -244,10 +277,19 @@ export function calculatorPage(data: CalculatorPageData): Html {
     } else if (data.query !== "") {
       results = html`<p>No districts match “${data.query}”.</p>`;
     }
+    const popular = data.popular ?? [];
+    let start = html``;
+    if (popular.length > 0) {
+      start = html`<section aria-labelledby="popular-heading">
+<h2 id="popular-heading">Popular districts</h2>
+${popularList(popular, (key) => `/calculator?d=${key}`)}
+</section>`;
+    }
     return html`<h1>Teacher salary calculator</h1>
-<p class="lede">Choose a district, then a lane and a step, to read the salary from that district’s published schedule.</p>
+<p class="lede">Choose a district, then your education lane and years of experience, to read the salary from that district’s published schedule. You can also tap any cell in the table.</p>
 ${form}
-${results}`;
+${results}
+${start}`;
   }
   const key = keyOfDistrict(district);
   const page = districtPath(district.state.slug, district.slug);

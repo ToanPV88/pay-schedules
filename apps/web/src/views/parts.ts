@@ -46,6 +46,11 @@ export interface SearchFormOptions {
   /** Trường ẩn gửi kèm (trang /compare giữ danh sách học khu đang so). */
   hidden?: Record<string, string>;
   button?: string;
+  /**
+   * Gợi ý khi gõ dẫn tới đâu: mẫu đường dẫn có "{key}" (vd. "/calculator?d={key}"). Bỏ trống thì
+   * ô tìm chung (/search) dẫn tới trang học khu, các ô khác không gợi ý.
+   */
+  suggestHref?: string;
 }
 
 export function searchForm(options: SearchFormOptions): Html {
@@ -54,8 +59,14 @@ export function searchForm(options: SearchFormOptions): Html {
     hidden.push(html`<input type="hidden" name="${name}" value="${value}">`);
   }
   const button = options.button ?? "Search";
-  // Ô tìm học khu chung (/search): site.js gợi ý học khu khi gõ, qua /api/suggest.
-  const suggest = options.action === "/search" ? raw(' data-suggest="/api/suggest"') : "";
+  // site.js gợi ý học khu khi gõ, qua /api/suggest: ô tìm chung dẫn tới trang học khu, ô của
+  // /calculator và /compare dẫn vào luồng của chính trang đó.
+  let suggest: Html | string = "";
+  if (options.suggestHref) {
+    suggest = html` data-suggest="/api/suggest" data-suggest-href="${options.suggestHref}"`;
+  } else if (options.action === "/search") {
+    suggest = raw(' data-suggest="/api/suggest"');
+  }
   return html`<form class="search-form" method="get" action="${options.action}" role="search">
 ${hidden}<label for="q">${options.label}</label>
 <div class="search-row">
