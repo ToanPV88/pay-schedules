@@ -47,7 +47,21 @@ describe("tắt JavaScript vẫn đọc được toàn bộ bảng lương (nghi
     expect(html).toContain('<dd data-out="amount">$60,000 per year</dd>');
     expect(html).toContain('<dd data-out="per-day">$324.32 (185 contract days)</dd>');
     expect(html).toContain('<dd data-out="raise">Top step of this schedule</dd>');
+    expect(html).toContain('<dd data-out="per-month">$5,000 (12 equal checks)</dd>');
+    expect(html).toContain('<dd data-out="top">This is the top of the lane</dd>');
     expect(html).toContain('<form class="calc" method="get"');
+  });
+
+  it("máy tính hỏi theo số năm kinh nghiệm khi mọi bậc đều ghi số năm", async () => {
+    const { a } = await seed();
+    const html = await page(`/test-state/test-valley-unified?s=${a.scheduleId}&lane=1&step=1`);
+    // Bảng chuẩn: bậc "1" là 0 năm kinh nghiệm, ... bậc "5" là 4 năm.
+    expect(html).toContain(`<label for="step-${a.scheduleId}">Years of experience</label>`);
+    expect(html).toContain('<option value="1" selected>0 years (Step 1)</option>');
+    expect(html).toContain('<option value="2">1 year (Step 2)</option>');
+    // BA, bậc 1: 50.000 USD; đỉnh cột BA là 56.000 USD ở bậc 5.
+    expect(html).toContain('<dd data-out="top">$56,000 at Step 5 (4 more steps)</dd>');
+    expect(html).toContain('<dd data-out="raise">+$1,500 at the next step</dd>');
   });
 });
 

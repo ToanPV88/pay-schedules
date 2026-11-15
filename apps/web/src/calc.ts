@@ -37,6 +37,11 @@ export interface Calculation {
   /** Chênh lệch với bậc kế tiếp cùng cột; null khi là bậc cuối hoặc thiếu số. */
   nextStepRaiseCents: number | null;
   isTopStep: boolean;
+  /** Bảng tính theo năm và ô có số: lương chia đều 12 tháng. */
+  perMonthCents: number | null;
+  /** Bậc cuối của cột có số (đỉnh của lane) và số tiền ở đó; null khi cột không có số nào. */
+  topStepIndex: number | null;
+  topCents: number | null;
 }
 
 function amountAt(schedule: Schedule, stepIndex: number, laneIndex: number): number | null {
@@ -45,6 +50,20 @@ function amountAt(schedule: Schedule, stepIndex: number, laneIndex: number): num
 
 export function laneCount(schedule: Schedule): number {
   return Math.max(schedule.lanes.length, 1);
+}
+
+/** Bậc cuối cùng của một cột có số; null khi cả cột trống. */
+export function laneTop(
+  schedule: Schedule,
+  laneIndex: number,
+): { stepIndex: number; cents: number } | null {
+  for (let i = schedule.steps.length - 1; i >= 0; i--) {
+    const amount = amountAt(schedule, i, laneIndex);
+    if (amount !== null) {
+      return { stepIndex: i, cents: amount };
+    }
+  }
+  return null;
 }
 
 /** Kết quả cho một ô; null khi chỉ số nằm ngoài bảng. */
@@ -68,6 +87,7 @@ export function calculate(
     amount !== null && days !== null && schedule.payBasis === "annual"
       ? Math.round(amount / days)
       : null;
+  const top = laneTop(schedule, laneIndex);
   return {
     laneIndex,
     stepIndex,
@@ -76,6 +96,10 @@ export function calculate(
     perDayCents: perDay,
     nextStepRaiseCents: amount !== null && next !== null ? next - amount : null,
     isTopStep,
+    perMonthCents:
+      amount !== null && schedule.payBasis === "annual" ? Math.round(amount / 12) : null,
+    topStepIndex: top?.stepIndex ?? null,
+    topCents: top?.cents ?? null,
   };
 }
 

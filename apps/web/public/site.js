@@ -26,18 +26,53 @@
     return Number(cell.dataset.cents);
   }
 
+  // Như stepLabel trong src/format.ts: nhãn chỉ là số thì thêm chữ "Step".
+  function stepLabel(row, index) {
+    const label = row?.cells[0]?.textContent.trim() ?? "";
+    if (label === "") {
+      return `Step ${index + 1}`;
+    }
+    return /^[0-9]+$/.test(label) ? `Step ${label}` : label;
+  }
+
+  // Như topText trong src/views/schedule.ts: bậc cuối có số của cột.
+  function topText(rows, laneIndex, stepIndex) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const amount = amountOf(rows[i], laneIndex);
+      if (amount === null) {
+        continue;
+      }
+      const more = i - stepIndex;
+      if (more <= 0) {
+        return "This is the top of the lane";
+      }
+      const steps = more === 1 ? "step" : "steps";
+      return `${formatCents(amount)} at ${stepLabel(rows[i], i)} (${more} more ${steps})`;
+    }
+    return "—";
+  }
+
   function calculate(table, laneIndex, stepIndex) {
     const rows = table.tBodies[0]?.rows ?? [];
     const row = rows[stepIndex];
     const amount = amountOf(row, laneIndex);
     const isTop = stepIndex === rows.length - 1;
+    const top = topText(rows, laneIndex, stepIndex);
     if (amount === null) {
       const raise = isTop ? "Top step of this schedule" : "—";
-      return { amount: "No amount listed for this step and lane", perDay: "—", raise };
+      return {
+        amount: "No amount listed for this step and lane",
+        perMonth: "—",
+        perDay: "—",
+        raise,
+        top,
+      };
     }
     const basis = table.dataset.basis;
     const days = table.dataset.days ? Number(table.dataset.days) : null;
-    const text = { amount: `${formatCents(amount)} ${BASIS_NOUNS[basis] ?? ""}`.trim() };
+    const text = { amount: `${formatCents(amount)} ${BASIS_NOUNS[basis] ?? ""}`.trim(), top };
+    text.perMonth =
+      basis === "annual" ? `${formatCents(Math.round(amount / 12))} (12 equal checks)` : "—";
     if (basis === "annual" && days) {
       text.perDay = `${formatCents(Math.round(amount / days))} (${days} contract days)`;
     } else if (basis === "annual") {
@@ -71,9 +106,19 @@
       const laneIndex = lane ? Number(lane.value) - 1 : 0;
       const stepIndex = step ? Number(step.value) - 1 : 0;
       const text = calculate(table, laneIndex, stepIndex);
-      result.querySelector('[data-out="amount"]').textContent = text.amount;
-      result.querySelector('[data-out="per-day"]').textContent = text.perDay;
-      result.querySelector('[data-out="raise"]').textContent = text.raise;
+      const outputs = {
+        amount: text.amount,
+        "per-month": text.perMonth,
+        "per-day": text.perDay,
+        raise: text.raise,
+        top: text.top,
+      };
+      for (const [key, value] of Object.entries(outputs)) {
+        const out = result.querySelector(`[data-out="${key}"]`);
+        if (out) {
+          out.textContent = value;
+        }
+      }
     };
     form.addEventListener("change", update);
     form.addEventListener("submit", (event) => {
