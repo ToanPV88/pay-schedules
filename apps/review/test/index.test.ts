@@ -191,6 +191,47 @@ describe("xem và duyệt", () => {
     expect(res.status).toBe(409);
   });
 
+  it("duyệt hết: publish mọi bảng draft còn chờ, theo bang nếu có", async () => {
+    let list = await (await req("/")).text();
+    expect(list).toContain('action="/approve-all"');
+    expect(
+      (await req("/approve-all", { method: "POST", origin: "https://evil.example.invalid" }))
+        .status,
+    ).toBe(403);
+    let res = await req("/approve-all", form({ state: "TX" }));
+    expect(await res.text()).toContain("Đã duyệt và publish 0 bảng (TX)");
+    let s = await db
+      .prepare("SELECT status FROM schedules WHERE id = 10")
+      .first<{ status: string }>();
+    expect(s?.status).toBe("draft");
+    res = await req("/approve-all", form({ state: "" }));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Đã duyệt và publish 1 bảng");
+    s = await db.prepare("SELECT status FROM schedules WHERE id = 10").first<{ status: string }>();
+    expect(s?.status).toBe("published");
+    const q = await db
+      .prepare("SELECT resolution FROM review_queue WHERE schedule_id = 10")
+      .first<{ resolution: string }>();
+    expect(q?.resolution).toBe("approved in bulk (0 cell edits)");
+    const sum = await db
+      .prepare("SELECT start_ba_cents FROM district_summary WHERE district_id = 1")
+      .first<{ start_ba_cents: number }>();
+    expect(sum?.start_ba_cents).toBe(4000000);
+    list = await (await req("/")).text();
+    expect(list).toContain("Hàng chờ xem tay: 0 bảng");
+    expect(list).not.toContain('action="/approve-all"');
+  });
+
+  it("duyệt hết bỏ qua bảng đã bị loại", async () => {
+    await req("/s/10/reject", form({ reason: "Sai học khu" }));
+    const res = await req("/approve-all", form({ state: "" }));
+    expect(await res.text()).toContain("Đã duyệt và publish 0 bảng");
+    const s = await db
+      .prepare("SELECT status FROM schedules WHERE id = 10")
+      .first<{ status: string }>();
+    expect(s?.status).toBe("draft");
+  });
+
   it("loại cần lý do", async () => {
     expect((await req("/s/10/reject", form({ reason: " " }))).status).toBe(400);
     expect((await req("/s/10/reject", form({ reason: "Không phải bảng giáo viên" }))).status).toBe(
