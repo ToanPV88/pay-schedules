@@ -7,6 +7,8 @@ export interface Site {
   env: Env;
   /** Gốc của URL đang phục vụ, ví dụ https://example.org. */
   origin: string;
+  /** Bang cho menu "States" (bang có dữ liệu, đông học sinh trước); thiếu thì dùng danh sách sẵn. */
+  menuStates?: { name: string; slug: string }[];
 }
 
 export interface PageMeta {
@@ -109,7 +111,7 @@ ${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <a class="site-name" href="/">${LOGO}<span>${SITE_NAME}</span></a>
 <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">${MENU_ICON}<span>Menu</span></button>
 <nav class="site-nav" id="site-nav" aria-label="Main">
-${statesMenu()}
+${statesMenu(site.menuStates)}
 <a href="/search">Search</a>
 <a href="/recently-updated">Recently updated</a>
 <a href="/compare">Compare</a>
@@ -139,6 +141,7 @@ ${body}
 }
 
 /** Tám bang đông học sinh nhất; danh sách đủ ở trang chủ. Slug theo tên bang như pipeline đặt. */
+/** Danh sách dự phòng khi chưa đọc được bang từ D1 (lỗi truy vấn, test không có dữ liệu). */
 const MENU_STATES = [
   ["California", "california"],
   ["Texas", "texas"],
@@ -151,8 +154,10 @@ const MENU_STATES = [
 ] as const;
 
 /** Menu "States" bằng <details>: mở được bằng bàn phím, không cần JavaScript. */
-function statesMenu(): Html {
-  const links = MENU_STATES.map(([name, slug]) => html`<li><a href="/${slug}">${name}</a></li>`);
+function statesMenu(states?: { name: string; slug: string }[]): Html {
+  const list =
+    states && states.length > 0 ? states : MENU_STATES.map(([name, slug]) => ({ name, slug }));
+  const links = list.map(({ name, slug }) => html`<li><a href="/${slug}">${name}</a></li>`);
   return html`<details class="states-menu">
 <summary>States</summary>
 <ul>

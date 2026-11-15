@@ -20,6 +20,7 @@ import {
   listAsReportedChecks,
   listDistrictsOfState,
   listLargestDistricts,
+  listMenuStates,
   listNeighbors,
   listPublishedSchedules,
   listRecentlyUpdated,
@@ -128,7 +129,30 @@ interface Caching {
   tags?: string[];
 }
 
-function page(
+/** Số bang trong menu "States" ở header. */
+export const MENU_STATE_LIMIT = 8;
+const MENU_TTL_MS = 10 * 60 * 1000;
+let menuCache: { at: number; value: Promise<{ name: string; slug: string }[]> } | null = null;
+
+/**
+ * Bang cho menu "States": đọc D1 một lần mỗi 10 phút trong isolate (header có ở mọi trang, không
+ * nên thêm một truy vấn cho mỗi lần dựng trang). Lỗi truy vấn thì trả rỗng để dùng danh sách sẵn.
+ */
+function menuStates(db: D1Database): Promise<{ name: string; slug: string }[]> {
+  const now = Date.now();
+  if (!menuCache || now - menuCache.at > MENU_TTL_MS) {
+    const value = listMenuStates(db, MENU_STATE_LIMIT).catch(() => []);
+    menuCache = { at: now, value };
+  }
+  return menuCache.value;
+}
+
+/** Chỉ dùng trong test: bỏ danh sách bang đã nhớ để đọc lại từ D1. */
+export function resetMenuCache(): void {
+  menuCache = null;
+}
+
+async function page(
   c: Context<AppEnv>,
   meta: PageMeta,
   body: Html,
@@ -139,7 +163,8 @@ function page(
   if (caching.tags) {
     c.header("Cache-Tag", cacheTags(...caching.tags));
   }
-  return c.html(renderPage(site(c), meta, body), status);
+  const states = await menuStates(c.env.DB);
+  return c.html(renderPage({ ...site(c), menuStates: states }, meta, body), status);
 }
 
 function notFound(c: Context<AppEnv>) {
