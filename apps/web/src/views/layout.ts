@@ -90,6 +90,7 @@ ${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <header class="site-header">
 <a class="site-name" href="/">${SITE_NAME}</a>
 <nav class="site-nav" aria-label="Main">
+${statesMenu()}
 <a href="/search">Search</a>
 <a href="/recently-updated">Recently updated</a>
 <a href="/compare">Compare</a>
@@ -112,6 +113,30 @@ ${body}
 </footer>
 </body>
 </html>`;
+}
+
+/** Tám bang đông học sinh nhất; danh sách đủ ở trang chủ. Slug theo tên bang như pipeline đặt. */
+const MENU_STATES = [
+  ["California", "california"],
+  ["Texas", "texas"],
+  ["Florida", "florida"],
+  ["New York", "new-york"],
+  ["Illinois", "illinois"],
+  ["Georgia", "georgia"],
+  ["Pennsylvania", "pennsylvania"],
+  ["Ohio", "ohio"],
+] as const;
+
+/** Menu "States" bằng <details>: mở được bằng bàn phím, không cần JavaScript. */
+function statesMenu(): Html {
+  const links = MENU_STATES.map(([name, slug]) => html`<li><a href="/${slug}">${name}</a></li>`);
+  return html`<details class="states-menu">
+<summary>States</summary>
+<ul>
+${links}
+<li><a href="/#states-heading">All states</a></li>
+</ul>
+</details>`;
 }
 
 /** Tiêu đề thẻ <title> của trang con: "Tên trang · Tên site". */
