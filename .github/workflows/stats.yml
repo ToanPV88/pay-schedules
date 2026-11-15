@@ -50,7 +50,7 @@ jobs:
             "SELECT (SELECT COUNT(DISTINCT schedule_id) FROM review_queue WHERE resolved_at IS NULL) AS open_review, (SELECT COUNT(*) FROM schedules WHERE status = 'published') AS published_schedules" \
             > "$GITHUB_WORKSPACE/totals.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT d.nces_id, d.state, d.name, d.enrollment, d.website, p.status, substr(p.detail, 1, 120) AS detail FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' AND NOT $pub ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT 400" \
+            "SELECT d.nces_id, d.state, d.name, d.enrollment, d.website, p.status, substr(p.detail, 1, 120) AS detail FROM districts d LEFT JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND d.employer_type = 'school_district' AND NOT $pub ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT 20000" \
             > "$GITHUB_WORKSPACE/missing.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT d.nces_id, d.state, d.name, COALESCE(d.enrollment, 0) AS enrollment, $pub AS pub, COALESCE(d.county, '') AS county, COALESCE(d.city, '') AS city FROM districts d WHERE d.active = 1 AND d.employer_type = 'school_district'" \
