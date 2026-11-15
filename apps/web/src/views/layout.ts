@@ -91,6 +91,7 @@ ${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <a class="site-name" href="/">${SITE_NAME}</a>
 <nav class="site-nav" aria-label="Main">
 <a href="/search">Search</a>
+<a href="/recently-updated">Recently updated</a>
 <a href="/compare">Compare</a>
 <a href="/calculator">Calculator</a>
 <a href="/methodology">Methodology</a>

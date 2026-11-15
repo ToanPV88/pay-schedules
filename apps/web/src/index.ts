@@ -7,8 +7,10 @@ import {
   DISTRICT_SORTS,
   type District,
   type DistrictSort,
+  getCoverage,
   getDistrictBySlug,
   getLatestSummary,
+  getPayOverview,
   getPublishedScheduleDistrict,
   getSchedule,
   getStateBySlug,
@@ -17,6 +19,7 @@ import {
   listDistrictsOfState,
   listNeighbors,
   listPublishedSchedules,
+  listRecentlyUpdated,
   listSitemapRows,
   listStates,
   listYearHistory,
@@ -66,8 +69,10 @@ import {
   type Selection,
 } from "./views/district";
 import { type Html, type PageMeta, pageTitle, renderPage, type Site } from "./views/layout";
+import { RECENT_PAGE_SIZE, recentPage, recentPath } from "./views/overview";
 import {
   errorPage,
+  HOME_RECENT,
   homePage,
   notFoundPage,
   SEARCH_LIMIT,
@@ -222,14 +227,45 @@ app.post("/internal/purge", async (c) => {
 // ---------------------------------------------------------------- trang chủ, tìm kiếm
 
 app.get("/", async (c) => {
-  const states = await listStates(c.env.DB);
+  const db = c.env.DB;
+  const [states, coverage, pay, recent] = await Promise.all([
+    listStates(db),
+    getCoverage(db),
+    getPayOverview(db),
+    listRecentlyUpdated(db, { limit: HOME_RECENT }),
+  ]);
   const meta = {
     title: `${SITE_NAME}: public school teacher salary schedules`,
     description:
       "Look up the teacher salary schedule of a US public school district, with a salary calculator, nearby-district comparison and a link to the source document.",
     canonicalPath: "/",
   };
-  return page(c, meta, homePage(states), { control: PAGE_CACHE, tags: [TAG_HOME] });
+  const body = homePage({ states, coverage, pay, recent });
+  return page(c, meta, body, { control: PAGE_CACHE, tags: [TAG_HOME] });
+});
+
+app.get("/recently-updated", async (c) => {
+  const db = c.env.DB;
+  const pageNo = Number(c.req.query("page") ?? "1");
+  if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 1000) {
+    return notFound(c);
+  }
+  const coverage = await getCoverage(db);
+  const pages = Math.max(1, Math.ceil(coverage.districts / RECENT_PAGE_SIZE));
+  if (pageNo > pages) {
+    return notFound(c);
+  }
+  const offset = (pageNo - 1) * RECENT_PAGE_SIZE;
+  const items = await listRecentlyUpdated(db, { limit: RECENT_PAGE_SIZE, offset });
+  const meta = {
+    title: pageTitle(pageNo > 1 ? `Recently updated, page ${pageNo}` : "Recently updated"),
+    description:
+      "School districts whose teacher salary schedule was most recently added or updated, with the school year of each schedule.",
+    canonicalPath: recentPath(pageNo),
+  };
+  const body = recentPage({ items, total: coverage.districts, page: pageNo });
+  // Danh sách đổi mỗi lần publish: dùng thẻ trang chủ để bị xóa cùng lúc (D-102).
+  return page(c, meta, body, { control: PAGE_CACHE, tags: [TAG_HOME] });
 });
 
 function queryParam(c: Context<AppEnv>, name: string): string {

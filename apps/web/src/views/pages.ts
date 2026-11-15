@@ -1,7 +1,10 @@
 /** Trang chủ, trang bang, trang tìm kiếm và các trang lỗi. */
 import type {
+  Coverage,
   DistrictListItem,
   DistrictSort,
+  PayOverview,
+  RecentDistrict,
   SearchHit,
   SortDirection,
   State,
@@ -10,11 +13,22 @@ import type {
 import { html } from "hono/html";
 import { plural, schoolYearLabel } from "../format";
 import { breadcrumbs, type Html } from "./layout";
+import { coverageLine, payOverview, recentList } from "./overview";
 import { districtPath, hitList, moneyCell, searchForm } from "./parts";
 
 // ---------------------------------------------------------------- trang chủ
 
-export function homePage(states: StateCount[]): Html {
+export interface HomePageData {
+  states: StateCount[];
+  coverage: Coverage;
+  pay: PayOverview;
+  recent: RecentDistrict[];
+}
+
+export const HOME_RECENT = 8;
+
+export function homePage(data: HomePageData): Html {
+  const { states, coverage } = data;
   const items: Html[] = [];
   for (const state of states) {
     const total = plural(state.districts, "district", "districts");
@@ -32,9 +46,23 @@ ${items}</ul>`;
     query: "",
     label: "Find a school district by name, city or county",
   });
+  const lede =
+    coverage.districts > 0
+      ? `${coverageLine(coverage)} Every table links to the document it came from.`
+      : "Look up the salary schedule a school district publishes, with a link to the source document for every table.";
+  let recent = html``;
+  if (data.recent.length > 0) {
+    recent = html`<section aria-labelledby="recent-heading">
+<h2 id="recent-heading">Recently updated</h2>
+${recentList(data.recent, true)}
+<p><a href="/recently-updated">All recently updated districts</a></p>
+</section>`;
+  }
   return html`<h1>Public school teacher salary schedules</h1>
-<p class="lede">Look up the salary schedule a school district publishes, with a link to the source document for every table.</p>
+<p class="lede">${lede}</p>
 ${form}
+${payOverview(data.pay, "across the site", true)}
+${recent}
 <section aria-labelledby="states-heading">
 <h2 id="states-heading">Browse by state</h2>
 ${stateList}
