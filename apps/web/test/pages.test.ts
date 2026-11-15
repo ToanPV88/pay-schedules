@@ -331,7 +331,9 @@ describe("tải CSV và câu hỏi thường gặp", () => {
     expect(lines[0]).toBe(header.join(","));
     // bậc đầu, lane đầu của bảng mẫu: 5_000_000 cent
     expect(lines[1]?.split(",")[1]).toBe("50000");
-    expect(lines.some((l) => l.includes("Source: https://test-valley.example.invalid/"))).toBe(true);
+    expect(lines.some((l) => l.includes("Source: https://test-valley.example.invalid/"))).toBe(
+      true,
+    );
     expect((await request(`/schedules/${c.scheduleId}.csv`)).status).toBe(404);
     expect((await request("/schedules/abc.csv")).status).toBe(404);
     expect((await request("/schedules/999999.csv")).status).toBe(404);
