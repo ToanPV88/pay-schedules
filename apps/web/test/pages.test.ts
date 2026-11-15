@@ -262,3 +262,38 @@ describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
     expect(html).toContain('data-ad-slot="below-summary"');
   });
 });
+
+describe("trang chủ và trang mới cập nhật", () => {
+  it("trang chủ có độ phủ, trung vị lương, học khu mới cập nhật", async () => {
+    await seed();
+    const html = await page("/");
+    expect(html).toContain("Salary schedules of 2 school districts in 1 state");
+    expect(html).toContain("Teacher pay across the site");
+    // trung vị khởi điểm chỉ có một học khu (Cañon Test không có BA bậc 1): $50,000
+    expect(html).toContain("<dd>$50,000</dd>");
+    // trung vị tối đa của $62,000 và $57,000
+    expect(html).toContain("<dd>$59,500</dd>");
+    expect(html).toContain('href="/recently-updated"');
+    expect(html).toContain('href="/test-state/test-valley-unified"');
+  });
+
+  it("CSDL trống: trang chủ vẫn hiện, không có số liệu", async () => {
+    const html = await page("/");
+    expect(html).not.toContain("Teacher pay across the site");
+    expect(html).toContain("Browse by state");
+  });
+
+  it("/recently-updated liệt kê học khu có bảng published, trang thừa thì 404", async () => {
+    await seed();
+    const res = await request("/recently-updated");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Tag")).toContain("home");
+    const html = await res.text();
+    expect(html).toContain("Test Valley Unified School District</a>");
+    expect(html).toContain("Cañon Test School District</a>");
+    expect(html).not.toContain("Test Ridge");
+    expect(html).toContain("updated November 12, 2026");
+    expect((await request("/recently-updated?page=2")).status).toBe(404);
+    expect((await request("/recently-updated?page=abc")).status).toBe(404);
+  });
+});
