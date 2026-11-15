@@ -66,4 +66,15 @@ describe("trang chủ và trang bang", () => {
     const html = await page("/about");
     expect(html).toContain('<li><a href="/california">California</a></li>');
   });
+
+  it("trang bang lần đầu: học khu đã có bảng lên trước, 'No schedule yet' xếp sau", async () => {
+    await seed();
+    const html = await page("/test-state");
+    const valley = html.indexOf(
+      '<tr data-group="0">\n<th scope="row" data-sort-value="test valley',
+    );
+    const ridge = html.indexOf('<tr data-group="1">');
+    expect(valley).toBeGreaterThan(-1);
+    expect(ridge).toBeGreaterThan(valley);
+  });
 });

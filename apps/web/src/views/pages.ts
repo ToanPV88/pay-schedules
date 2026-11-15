@@ -255,7 +255,8 @@ export function statePage(data: StatePageData): Html {
     const start = moneyCell(item.summary?.startBaCents ?? null);
     const ma10 = moneyCell(item.summary?.maStep10Cents ?? null);
     const max = moneyCell(item.summary?.maxSalaryCents ?? null);
-    const row = html`<tr>
+    // data-group: site.js giữ học khu đã có bảng ở trên khi sắp xếp lại theo tên.
+    const row = html`<tr data-group="${item.hasSchedule ? 0 : 1}">
 <th scope="row" data-sort-value="${sortName}"><a href="${href}">${item.name}</a>${flag}</th>
 <td>${item.city ?? ""}</td><td>${year}</td>${start}${ma10}${max}
 </tr>
