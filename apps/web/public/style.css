@@ -220,6 +220,11 @@ main {
   flex: none;
 }
 
+/* Chế độ tối: nền logo là hồng mận sáng, chữ PS đổi sang màu tối để đủ tương phản. */
+.site-name .logo-text {
+  fill: var(--accent-text);
+}
+
 .site-nav {
   display: flex;
   flex-wrap: wrap;
