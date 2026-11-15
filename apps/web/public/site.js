@@ -100,11 +100,33 @@
     if (!table || !result) {
       continue;
     }
+    const laneSelect = form.elements.namedItem("lane");
+    const stepSelect = form.elements.namedItem("step");
+    const selection = () => ({
+      laneIndex: laneSelect ? Number(laneSelect.value) - 1 : 0,
+      stepIndex: stepSelect ? Number(stepSelect.value) - 1 : 0,
+    });
+    // Ô đang chọn của máy tính được tô trong bảng.
+    const markSelected = () => {
+      const { laneIndex, stepIndex } = selection();
+      for (const cell of table.querySelectorAll("td.is-selected")) {
+        cell.classList.remove("is-selected");
+      }
+      table.tBodies[0]?.rows[stepIndex]
+        ?.querySelectorAll("td")
+        [laneIndex]?.classList.add("is-selected");
+    };
+    // Địa chỉ trang giữ lựa chọn (?s=&lane=&step=#calc-…) để gửi link là người nhận thấy đúng số.
+    const keepInUrl = () => {
+      const url = new URL(window.location.href);
+      for (const [key, value] of new FormData(form)) {
+        url.searchParams.set(key, String(value));
+      }
+      url.hash = result.id;
+      window.history.replaceState(null, "", url);
+    };
     const update = () => {
-      const lane = form.elements.namedItem("lane");
-      const step = form.elements.namedItem("step");
-      const laneIndex = lane ? Number(lane.value) - 1 : 0;
-      const stepIndex = step ? Number(step.value) - 1 : 0;
+      const { laneIndex, stepIndex } = selection();
       const text = calculate(table, laneIndex, stepIndex);
       const outputs = {
         amount: text.amount,
@@ -119,12 +141,40 @@
           out.textContent = value;
         }
       }
+      markSelected();
     };
-    form.addEventListener("change", update);
+    form.addEventListener("change", () => {
+      update();
+      keepInUrl();
+    });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       update();
+      keepInUrl();
     });
+    // Bấm một ô có số trong bảng: máy tính chọn đúng lane và bậc của ô đó.
+    table.classList.add("is-interactive");
+    table.addEventListener("click", (event) => {
+      const cell = event.target.closest("td[data-cents]");
+      if (!cell || !table.tBodies[0]?.contains(cell)) {
+        return;
+      }
+      const row = cell.parentElement;
+      const laneIndex = [...row.querySelectorAll("td")].indexOf(cell);
+      if (laneSelect) {
+        laneSelect.value = String(laneIndex + 1);
+      }
+      if (stepSelect) {
+        stepSelect.value = String(row.sectionRowIndex + 1);
+      }
+      update();
+      keepInUrl();
+    });
+    // Mở trang từ link có lựa chọn của bảng này: tô ô đã chọn.
+    const own = form.elements.namedItem("s");
+    if (own && new URL(window.location.href).searchParams.get("s") === own.value) {
+      markSelected();
+    }
     // Kết quả đã tự cập nhật khi đổi lựa chọn: nút Calculate chỉ cần khi không có JavaScript.
     const submit = form.querySelector('button[type="submit"]');
     if (submit) {
@@ -417,5 +467,38 @@
       }
     });
     input.addEventListener("blur", () => setTimeout(close, 100));
+  }
+
+  // Rê chuột hoặc chạm vào ô của bảng lương: tô cả hàng và cột để dò bảng lớn (vd. 24 lane × 30 bậc).
+  for (const table of document.querySelectorAll("table.schedule")) {
+    let marked = [];
+    const clear = () => {
+      for (const el of marked) {
+        el.classList.remove("hl-row", "hl-col", "hl-cell");
+      }
+      marked = [];
+    };
+    table.addEventListener("pointerover", (event) => {
+      const cell = event.target.closest("td, th");
+      if (!cell || !table.tBodies[0]?.contains(cell)) {
+        return;
+      }
+      clear();
+      const row = cell.parentElement;
+      row.classList.add("hl-row");
+      marked.push(row);
+      const col = cell.cellIndex;
+      if (col > 0) {
+        for (const r of table.rows) {
+          const c = r.cells[col];
+          if (c) {
+            c.classList.add("hl-col");
+            marked.push(c);
+          }
+        }
+        cell.classList.add("hl-cell");
+      }
+    });
+    table.addEventListener("pointerleave", clear);
   }
 })();

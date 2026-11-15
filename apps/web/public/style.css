@@ -798,6 +798,31 @@ td.empty {
   white-space: normal;
 }
 
+/* Bảng lương có JavaScript: tô hàng và cột dưới con trỏ, ô đang chọn của máy tính có viền. */
+.schedule tbody tr.hl-row > *,
+.schedule tbody tr.hl-row > th,
+.schedule .hl-col {
+  background: var(--row-hover);
+}
+
+.schedule thead th.hl-col {
+  color: var(--accent);
+}
+
+.schedule td.hl-cell {
+  background: var(--accent-soft);
+}
+
+.schedule.is-interactive td[data-cents] {
+  cursor: pointer;
+}
+
+.schedule td.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  font-weight: 700;
+}
+
 .self-row,
 .self-row:nth-child(even) {
   background: var(--accent-soft);
