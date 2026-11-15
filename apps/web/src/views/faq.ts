@@ -113,7 +113,8 @@ export function jsonForScript(value: unknown): string {
     .replaceAll(" ", "\\u2029");
 }
 
-export function faqSection(origin: string, data: FaqData): Html {
+/** `extra`: các nút JSON-LD khác của trang (vd. Dataset), gộp vào cùng một @graph. */
+export function faqSection(origin: string, data: FaqData, extra: object[] = []): Html {
   const faqs = districtFaqs(data);
   if (faqs.length === 0) {
     return html``;
@@ -151,7 +152,7 @@ export function faqSection(origin: string, data: FaqData): Html {
       ],
     },
   ];
-  const ld = jsonForScript({ "@context": "https://schema.org", "@graph": graph });
+  const ld = jsonForScript({ "@context": "https://schema.org", "@graph": [...graph, ...extra] });
   return html`<section aria-labelledby="faq-heading">
 <h2 id="faq-heading">Questions people ask</h2>
 ${items}</section>

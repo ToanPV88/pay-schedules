@@ -501,6 +501,16 @@ const SQL_SITEMAP = `
     JOIN districts d ON d.id = s.district_id
     JOIN states st ON st.code = d.state
    WHERE s.status = 'published' AND s.schedule_type = 'teacher'
+     -- Chỉ trang được index (PLAN Công đoạn 7): học khu có ít nhất một lân cận có số so sánh,
+     -- đúng điều kiện của listNeighbors.
+     AND EXISTS (
+       SELECT 1 FROM district_neighbors n
+         JOIN districts nd ON nd.id = n.neighbor_id AND nd.active = 1
+         JOIN district_summary ds ON ds.district_id = nd.id AND ds.school_year = (
+              SELECT MAX(x.school_year) FROM district_summary x
+                JOIN schedules sx ON sx.id = x.schedule_id
+               WHERE x.district_id = nd.id AND sx.status = 'published')
+        WHERE n.district_id = d.id)
    GROUP BY d.id, s.school_year
    ORDER BY st.slug, d.slug, s.school_year DESC
    LIMIT ?`;

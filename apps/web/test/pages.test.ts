@@ -1,7 +1,10 @@
 /** Nghiệm thu Công đoạn 6: các trang render đúng trên dữ liệu GIẢ LẬP. */
+
+import type { Schedule } from "@pay-schedules/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { standard } from "../../../packages/db/test/fixtures";
 import { formatCents } from "../src/format";
+import { type DistrictPageData, stateComparison } from "../src/views/district";
 import { db, page, request, reset, seed, tableRows, withoutScripts } from "./helpers";
 
 beforeEach(async () => {
@@ -351,6 +354,59 @@ describe("tải CSV và câu hỏi thường gặp", () => {
     const ld = /<script type="application\/ld\+json">(.*?)<\/script>/s.exec(html)?.[1] ?? "";
     expect(ld).not.toContain("<");
     const data = JSON.parse(ld) as { "@graph": { "@type": string }[] };
-    expect(data["@graph"].map((g) => g["@type"])).toEqual(["FAQPage", "BreadcrumbList"]);
+    expect(data["@graph"].map((g) => g["@type"])).toEqual(["FAQPage", "BreadcrumbList", "Dataset"]);
+    const dataset = data["@graph"][2] as unknown as Record<string, unknown>;
+    expect(dataset.temporalCoverage).toBe("2025-07-01/2026-06-30");
+    expect(JSON.stringify(dataset.distribution)).toMatch(/\/schedules\/\d+\.csv/);
+  });
+});
+
+describe("SEO (Công đoạn 7)", () => {
+  it("title có mã bang; trùng tên trong bang thì thêm thành phố", async () => {
+    const { a, b } = await seed();
+    let html = await page("/test-state/test-valley-unified");
+    expect(html).toContain(
+      "<title>Test Valley Unified School District, ZZ Teacher Salary Schedule 2025–26 · ",
+    );
+    await db
+      .prepare("UPDATE districts SET name = (SELECT name FROM districts WHERE id = ?) WHERE id = ?")
+      .bind(a.districtId, b.districtId)
+      .run();
+    html = await page("/test-state/test-valley-unified");
+    expect(html).toContain("<title>Test Valley Unified School District (Testville), ZZ Teacher");
+  });
+
+  it("câu so sánh với trung vị của bang khi bang đủ học khu", () => {
+    const pay = {
+      start: { cents: 4_800_000, districts: 12 },
+      maStep10: { cents: null, districts: 0 },
+      max: { cents: 6_500_000, districts: 12 },
+      lowestStart: null,
+      highestStart: null,
+      highestMax: null,
+    };
+    const schedule = { payBasis: "annual" } as Schedule;
+    const base = {
+      district: { name: "X", state: { name: "Test State", slug: "test-state", code: "ZZ" } },
+      year: "2025-26",
+      schedules: [schedule],
+      summary: {
+        schoolYear: "2025-26",
+        startBaCents: 5_000_000,
+        maStep10Cents: null,
+        maxSalaryCents: 6_200_000,
+      },
+      statePay: pay,
+    } as unknown as DistrictPageData;
+    expect(stateComparison(base)).toBe(
+      "Starting pay for a teacher with a bachelor’s degree is $50,000, $2,000 above the Test State median of $48,000; the top of the scale is $62,000, $3,000 below the state median of $65,000 (medians of 12 Test State districts on this site).",
+    );
+    const few = {
+      ...pay,
+      start: { cents: 4_800_000, districts: 3 },
+      max: { cents: 1, districts: 3 },
+    };
+    expect(stateComparison({ ...base, statePay: few })).toBeNull();
+    expect(stateComparison({ ...base, year: "2024-25" })).toBeNull();
   });
 });

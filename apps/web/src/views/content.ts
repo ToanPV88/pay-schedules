@@ -41,6 +41,16 @@ const methodology: ContentPage = {
 <p>Tables taken from a state's own data file (for example California's Form J-90) are an exception: they are what each district reported to the state. If the only problem is a value that looks unusual — pay that goes down from one step to the next, a lane with more education that pays less, or a large change from the previous year — the table is shown as reported, and the district page says which check flagged it. We do not change reported values.</p>
 <p>The same applies to tables read from a district's website when the only flag is that the table starts above step 1 (both of our readers agree on it) or that it is from an earlier school year (up to three years old; we show the year and say a newer schedule may exist). Older tables are not shown.</p>
 <p><strong>“Passed automated checks” does not mean a person has verified the table.</strong> Extraction can still be wrong. The source document always governs, and you can report an error from the district page.</p>
+<h2 id="accuracy">Known accuracy</h2>
+<p>We measure extraction against a reference set of 30 schedules from districts in several states, each entered by hand from the source document and checked against it cell by cell. In the latest measurement (November 12, 2026):</p>
+<ul>
+<li>23 of the 30 tables passed every check and would be published; every one of their 2,435 cells matched the source.</li>
+<li>7 tables failed a check and were held for review instead of being published.</li>
+<li>No table with a wrong value passed the checks.</li>
+</ul>
+<p>A reference set this size cannot prove that every table is right. Known weak spots are scanned documents (read with optical character recognition), pages with two schedules side by side, and long contracts where the salary table is one appendix among many; these are more often held for review. If you find a mistake, please use “Report an error” on the district page.</p>
+<h2 id="state-medians">State and site medians</h2>
+<p>Median figures on the home page, state pages and district pages use each district’s latest published teacher schedule that is stated as annual pay. Daily or hourly schedules are left out because they do not compare with annual salaries. A median says that half of the districts counted pay more and half pay less; it is not a state average and not a ranking.</p>
 <h2 id="comparisons">Comparisons</h2>
 <p>Nearby-district comparisons use three cells from each district’s latest published schedule: bachelor’s degree at step 1, master’s degree at step 10, and the highest amount on the schedule. When a schedule has no such cell, the comparison shows a dash. Districts define steps and lanes differently, so a comparison is a starting point, not an equivalence.</p>
 <h2 id="history">Earlier years</h2>
