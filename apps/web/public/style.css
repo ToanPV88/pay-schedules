@@ -1226,6 +1226,11 @@ button:hover,
   border-radius: var(--radius);
 }
 
+/* button có display riêng nên phải ẩn rõ khi mang thuộc tính hidden (nút Calculate khi có JS). */
+button[hidden] {
+  display: none;
+}
+
 .search-form {
   margin: 1rem 0;
 }

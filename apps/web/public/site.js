@@ -125,6 +125,11 @@
       event.preventDefault();
       update();
     });
+    // Kết quả đã tự cập nhật khi đổi lựa chọn: nút Calculate chỉ cần khi không có JavaScript.
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) {
+      submit.hidden = true;
+    }
   }
 
   // Lọc bảng học khu của trang bang theo tên hoặc thành phố (không dấu, không phân biệt hoa thường).
