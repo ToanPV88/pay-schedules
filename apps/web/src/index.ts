@@ -88,6 +88,7 @@ import {
   STATE_RECENT,
   searchPage,
   statePage,
+  TOP_LIMIT,
 } from "./views/pages";
 import { districtPath, placeLine } from "./views/parts";
 import { calculatorPage, comparePage, type ReportError, reportPage } from "./views/tools";
@@ -629,11 +630,31 @@ app.get("/:state", async (c) => {
     noindex: hasQuery(c) || totals.withSchedule === 0,
     script: true,
   };
-  const [pay, recent] = await Promise.all([
+  const top = (sortBy: "start" | "max") =>
+    listDistrictsOfState(c.env.DB, state.code, {
+      sort: sortBy,
+      dir: "desc",
+      limit: TOP_LIMIT,
+      offset: 0,
+    });
+  const [pay, recent, topStart, topMax] = await Promise.all([
     getPayOverview(c.env.DB, state.code),
     listRecentlyUpdated(c.env.DB, { limit: STATE_RECENT, stateCode: state.code }),
+    top("start"),
+    top("max"),
   ]);
-  const body = statePage({ state, pay, recent, items, totals, sort, dir, page: pageNumber });
+  const body = statePage({
+    state,
+    pay,
+    recent,
+    items,
+    totals,
+    sort,
+    dir,
+    page: pageNumber,
+    topStart,
+    topMax,
+  });
   return page(c, meta, body, { control: PAGE_CACHE, tags: [stateTag(state.code)] });
 });
 

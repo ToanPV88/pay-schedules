@@ -1191,6 +1191,58 @@ td.empty {
   }
 }
 
+/* Trang bang: hai bảng xếp hạng */
+.top-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem 1.5rem;
+}
+
+.top-lists h3 {
+  margin-top: 0.5rem;
+}
+
+.top-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rank;
+  border-top: 1px solid var(--line);
+}
+
+.top-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  max-width: none;
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+  counter-increment: rank;
+}
+
+.top-list li::before {
+  content: counter(rank);
+  min-width: 1.4rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-list a {
+  flex: 1;
+  font-weight: 600;
+}
+
+.top-list span {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history td {
+  text-align: right;
+}
+
 /* Biểu mẫu */
 
 .field {

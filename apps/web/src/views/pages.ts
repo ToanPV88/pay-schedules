@@ -12,7 +12,7 @@ import type {
   StateCount,
 } from "@pay-schedules/db";
 import { html } from "hono/html";
-import { plural, schoolYearLabel } from "../format";
+import { formatCents, plural, schoolYearLabel } from "../format";
 import { breadcrumbs, type Html } from "./layout";
 import { coverageLine, payOverview, recentList } from "./overview";
 import { benchmarkRow, districtPath, hitList, moneyCell, searchForm } from "./parts";
@@ -138,7 +138,13 @@ export interface StatePageData {
   pay: PayOverview;
   recent: RecentDistrict[];
   items: DistrictListItem[];
-  totals: { districts: number; withSchedule: number };
+  totals: {
+    districts: number;
+    withSchedule: number;
+  };
+  /** Học khu xếp theo lương khởi điểm và theo mức tối đa, giảm dần (cho hai bảng xếp hạng). */
+  topStart?: DistrictListItem[];
+  topMax?: DistrictListItem[];
   sort: DistrictSort;
   dir: SortDirection;
   /** Trang hiện tại, đếm từ 1. */
@@ -187,6 +193,55 @@ export function coverageMeter(totals: { districts: number; withSchedule: number 
 <div class="coverage-bar" role="img" aria-label="${percent}% of districts have a published schedule"><span style="width: ${percent}%"></span></div>
 <p class="muted">${percent}% of districts covered so far. We add districts as we find and check their documents.</p>
 </div>`;
+}
+
+/** Số học khu tối thiểu để một danh sách xếp hạng của bang đáng hiện. */
+export const TOP_MIN = 3;
+export const TOP_LIMIT = 10;
+
+function topList(
+  stateSlug: string,
+  items: DistrictListItem[],
+  amountOf: (item: DistrictListItem) => number | null,
+): Html | null {
+  const ranked = items
+    .map((item) => ({ item, cents: amountOf(item) }))
+    .filter((x): x is { item: DistrictListItem; cents: number } => x.cents !== null)
+    .slice(0, TOP_LIMIT);
+  if (ranked.length < TOP_MIN) {
+    return null;
+  }
+  const rows = ranked.map(
+    ({ item, cents }) =>
+      html`<li><a href="${districtPath(stateSlug, item.slug)}">${item.name}</a><span>${formatCents(cents)}</span></li>\n`,
+  );
+  return html`<ol class="top-list">
+${rows}</ol>`;
+}
+
+/** Hai bảng xếp hạng của bang: lương khởi điểm (BA, bậc 1) và mức tối đa cao nhất. */
+export function stateTopLists(
+  state: State,
+  topStart: DistrictListItem[],
+  topMax: DistrictListItem[],
+): Html {
+  const start = topList(state.slug, topStart, (i) => i.summary?.startBaCents ?? null);
+  const max = topList(state.slug, topMax, (i) => i.summary?.maxSalaryCents ?? null);
+  if (!start && !max) {
+    return html``;
+  }
+  const blocks: Html[] = [];
+  if (start) {
+    blocks.push(html`<div><h3>Highest starting salary (BA, step 1)</h3>${start}</div>`);
+  }
+  if (max) {
+    blocks.push(html`<div><h3>Highest top of the scale</h3>${max}</div>`);
+  }
+  return html`<section aria-labelledby="top-heading">
+<h2 id="top-heading">Highest-paying districts in ${state.name}</h2>
+<div class="top-lists">${blocks}</div>
+<p class="muted">From each district’s latest published teacher schedule. Districts without that figure are not ranked; amounts are not adjusted for cost of living.</p>
+</section>`;
 }
 
 export function statePage(data: StatePageData): Html {
@@ -263,6 +318,7 @@ ${recentList(data.recent, false)}
 <p class="lede">${withSchedule} of ${total} in ${state.name} have a published salary schedule on this site.</p>
 ${coverageMeter(totals)}
 ${payOverview(data.pay, `in ${state.name}`, false)}
+${stateTopLists(state, data.topStart ?? [], data.topMax ?? [])}
 ${listHeading}
 ${table}
 ${pagination}
