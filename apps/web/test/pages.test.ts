@@ -4,6 +4,7 @@ import type { Schedule } from "@pay-schedules/db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { standard } from "../../../packages/db/test/fixtures";
 import { formatCents } from "../src/format";
+import { resetMenuCache } from "../src/index";
 import { type DistrictPageData, stateComparison } from "../src/views/district";
 import { db, page, request, reset, seed, tableRows, withoutScripts } from "./helpers";
 
@@ -305,6 +306,7 @@ describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
 describe("trang chủ và trang mới cập nhật", () => {
   it("trang chủ có độ phủ, trung vị lương, học khu mới cập nhật", async () => {
     await seed();
+    resetMenuCache();
     const html = await page("/");
     expect(html).toContain("Salary schedules of 2 school districts in 1 state");
     expect(html).toContain("Teacher pay across the site");
@@ -314,7 +316,8 @@ describe("trang chủ và trang mới cập nhật", () => {
     expect(html).toContain("<dd>$59,500</dd>");
     expect(html).toContain('href="/recently-updated"');
     expect(html).toContain('<details class="states-menu">');
-    expect(html).toContain('<a href="/new-york">New York</a>');
+    // Menu States lấy bang đã có dữ liệu từ D1.
+    expect(html).toContain('<li><a href="/test-state">Test State</a></li>');
     expect(html).toContain('href="/test-state/test-valley-unified"');
   });
 

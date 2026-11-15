@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { resetMenuCache } from "../src/index";
 import { db, page, reset, seed } from "./helpers";
 
 beforeEach(async () => {
   await reset();
+  resetMenuCache();
 });
 
 describe("trang chủ và trang bang", () => {
@@ -46,5 +48,22 @@ describe("trang chủ và trang bang", () => {
     // 2 trong 3 học khu có bảng published (học khu thứ ba chỉ có bảng draft).
     expect(html).toContain('aria-label="67% of districts have a published schedule"');
     expect(html).toContain('<span style="width: 67%"></span>');
+  });
+
+  it("menu States chỉ có bang đã có bảng lương, xếp theo số học sinh", async () => {
+    await seed();
+    const html = await page("/about");
+    const menu = html.slice(
+      html.indexOf('<details class="states-menu">'),
+      html.indexOf("</details>"),
+    );
+    expect(menu).toContain('<li><a href="/test-state">Test State</a></li>');
+    expect(menu).not.toContain("California");
+    expect(menu).toContain('<a href="/#states-heading">All states</a>');
+  });
+
+  it("chưa có bang nào có dữ liệu thì menu dùng danh sách sẵn", async () => {
+    const html = await page("/about");
+    expect(html).toContain('<li><a href="/california">California</a></li>');
   });
 });

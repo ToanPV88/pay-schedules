@@ -159,6 +159,33 @@ export async function listStates(db: D1Database): Promise<StateCount[]> {
   }));
 }
 
+export interface MenuState {
+  name: string;
+  slug: string;
+  /** Tổng số học sinh của các học khu đã có bảng lương published. */
+  students: number;
+}
+
+const SQL_MENU_STATES = `
+  SELECT s.name, s.slug, COALESCE(SUM(d.enrollment), 0) AS students
+    FROM states s
+    JOIN districts d ON d.state = s.code AND d.active = 1
+   WHERE EXISTS (SELECT 1 FROM schedules p
+                  WHERE p.district_id = d.id AND p.status = 'published'
+                    AND p.schedule_type = 'teacher')
+   GROUP BY s.code
+   ORDER BY students DESC, s.name
+   LIMIT ?`;
+
+/**
+ * Bang cho menu "States" ở header: chỉ bang đã có bảng lương published, xếp theo số học sinh của
+ * các học khu đã có bảng (bang nhiều dữ liệu, nhiều người tìm lên trước).
+ */
+export async function listMenuStates(db: D1Database, limit: number): Promise<MenuState[]> {
+  const { results } = await db.prepare(SQL_MENU_STATES).bind(limit).all<MenuState>();
+  return results.map((r) => ({ name: r.name, slug: r.slug, students: r.students }));
+}
+
 export async function getStateBySlug(db: D1Database, slug: string): Promise<State | null> {
   const stmt = db.prepare("SELECT code, name, slug FROM states WHERE slug = ?").bind(slug);
   return await stmt.first<State>();
