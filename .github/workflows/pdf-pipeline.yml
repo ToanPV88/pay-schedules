@@ -224,6 +224,10 @@ jobs:
           tar -xf "$RUNNER_TEMP/files.tar" -C "$GITHUB_WORKSPACE/manual" --no-same-owner --no-same-permissions
       - name: Discover, fetch, classify
         working-directory: pipeline
+        env:
+          # Google Drive/Docs files go through the Drive API when this is set (robots.txt of
+          # drive.google.com disallows bots). Optional: without it those links stay unreachable.
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           manual=()
           if [ -n "$MANUAL_RELEASE" ]; then

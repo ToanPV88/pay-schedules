@@ -145,7 +145,10 @@ class PoliteFetcher:
                 raise RobotsDisallowedError(decision, current)
             body, response = self._send_with_retries(current, headers or {}, self.max_bytes)
             if response.status_code in REDIRECT_STATUSES and "location" in response.headers:
-                current = urljoin(current, response.headers["location"])
+                target = urljoin(current, response.headers["location"])
+                if urlsplit(target).hostname != urlsplit(current).hostname:
+                    headers = None  # credentials (an API key header) stay with their own host
+                current = target
                 redirects.append(current)
                 continue
             if response.status_code == 304:
