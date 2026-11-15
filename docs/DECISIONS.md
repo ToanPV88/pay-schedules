@@ -1015,5 +1015,7 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   Đây là kênh Google mở cho chương trình; `www.googleapis.com` không có robots.txt.
 - Key đi trong header `X-goog-api-key`, không nằm trong URL ghi vào báo cáo hay Release. Khi chuyển
   hướng sang host khác thì fetcher bỏ header. Không có key thì giữ cách cũ (link vẫn bị chặn).
+- Secret mới `GOOGLE_API_KEY` (key Google Cloud, chỉ bật Google Drive API) chỉ nằm ở `env` của bước
+  `pay-pipeline pdf-gather`; `test_repo_consistency.py` kiểm tra.
 - Chỉ áp dụng cho file công khai mà học khu đã đăng link. Link Docs dạng `/d/e/2PACX…` (bản
   "publish to web") không có id file nên chưa xử lý.
