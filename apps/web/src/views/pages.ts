@@ -3,6 +3,7 @@ import type {
   Coverage,
   DistrictListItem,
   DistrictSort,
+  LargeDistrict,
   PayOverview,
   RecentDistrict,
   SearchHit,
@@ -14,7 +15,7 @@ import { html } from "hono/html";
 import { plural, schoolYearLabel } from "../format";
 import { breadcrumbs, type Html } from "./layout";
 import { coverageLine, payOverview, recentList } from "./overview";
-import { districtPath, hitList, moneyCell, searchForm } from "./parts";
+import { benchmarkRow, districtPath, hitList, moneyCell, searchForm } from "./parts";
 
 // ---------------------------------------------------------------- trang chủ
 
@@ -34,9 +35,38 @@ export interface HomePageData {
   coverage: Coverage;
   pay: PayOverview;
   recent: RecentDistrict[];
+  /** Học khu đông học sinh nhất có số liệu: bảng mẫu ở trang chủ. */
+  largest?: LargeDistrict[];
 }
 
 export const HOME_RECENT = 8;
+export const HOME_LARGEST = 10;
+
+/** Bảng mẫu ở trang chủ: ba mốc lương của các học khu lớn nhất, cùng cột với bảng của trang bang. */
+export function largestTable(items: LargeDistrict[]): Html {
+  if (items.length === 0) {
+    return html``;
+  }
+  const rows = items.map((item) => {
+    const href = districtPath(item.stateSlug, item.slug);
+    const name = html`<a href="${href}">${item.name}</a> <span class="muted">${item.stateCode}</span>`;
+    return benchmarkRow(name, item.summary, false);
+  });
+  return html`<section aria-labelledby="largest-heading">
+<h2 id="largest-heading">The largest districts at a glance</h2>
+<p>Three points on each district’s latest schedule: where a new teacher with a bachelor’s degree starts, a master’s degree at step 10, and the top of the scale.</p>
+<div class="table-scroll" role="region" aria-label="Largest districts" tabindex="0">
+<table class="districts benchmarks">
+<caption>The ${items.length} largest school districts by enrollment whose latest schedule shows a starting salary for a bachelor’s degree. A dash means the schedule has no such cell.</caption>
+<thead>
+<tr><th scope="col">District</th><th scope="col">School year</th><th scope="col">BA, step 1</th><th scope="col">MA, step 10</th><th scope="col">Maximum</th></tr>
+</thead>
+<tbody>
+${rows}</tbody>
+</table>
+</div>
+</section>`;
+}
 
 export function homePage(data: HomePageData): Html {
   const { states, coverage } = data;
@@ -84,6 +114,7 @@ ${form}
 ${stats}
 </div>
 ${payOverview(data.pay, "across the site", true)}
+${largestTable(data.largest ?? [])}
 ${recent}
 <section aria-labelledby="states-heading">
 <h2 id="states-heading">Browse by state</h2>
@@ -144,6 +175,18 @@ function sortHeader(data: StatePageData, key: DistrictSort, label: string): Html
   }
   const aria = data.dir === "asc" ? "ascending" : "descending";
   return html`<th scope="col" aria-sort="${aria}"><a href="${href}" data-sort-first="${firstDirection}">${label}</a></th>`;
+}
+
+/** Thanh độ phủ của bang: bao nhiêu phần trăm học khu đã có bảng lương trên site. */
+export function coverageMeter(totals: { districts: number; withSchedule: number }): Html {
+  if (totals.districts === 0) {
+    return html``;
+  }
+  const percent = Math.round((totals.withSchedule / totals.districts) * 100);
+  return html`<div class="coverage">
+<div class="coverage-bar" role="img" aria-label="${percent}% of districts have a published schedule"><span style="width: ${percent}%"></span></div>
+<p class="muted">${percent}% of districts covered so far. We add districts as we find and check their documents.</p>
+</div>`;
 }
 
 export function statePage(data: StatePageData): Html {
@@ -218,6 +261,7 @@ ${recentList(data.recent, false)}
   return html`${crumbs}
 <h1>${state.name} teacher salary schedules</h1>
 <p class="lede">${withSchedule} of ${total} in ${state.name} have a published salary schedule on this site.</p>
+${coverageMeter(totals)}
 ${payOverview(data.pay, `in ${state.name}`, false)}
 ${listHeading}
 ${table}

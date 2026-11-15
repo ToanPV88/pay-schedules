@@ -425,6 +425,65 @@ export async function listNeighbors(
   return neighbors;
 }
 
+// ---------------------------------------------------------------- học khu lớn nhất
+
+export interface LargeDistrict {
+  id: number;
+  name: string;
+  slug: string;
+  stateSlug: string;
+  stateCode: string;
+  city: string | null;
+  summary: Summary;
+}
+
+const SQL_LARGEST = `
+  SELECT d.id, d.name, d.slug, d.city, st.slug AS state_slug, st.code AS state_code, ${SUMMARY_COLUMNS}
+    FROM districts d
+    JOIN states st ON st.code = d.state
+    JOIN district_summary ds ON ${LATEST_SUMMARY}
+   WHERE d.active = 1 AND d.enrollment IS NOT NULL
+     AND ds.start_ba_cents IS NOT NULL AND ds.max_salary_cents IS NOT NULL
+   ORDER BY d.enrollment DESC, d.name COLLATE NOCASE
+   LIMIT ?`;
+
+interface LargeRow extends SummaryColumns {
+  id: number;
+  name: string;
+  slug: string;
+  city: string | null;
+  state_slug: string;
+  state_code: string;
+}
+
+/**
+ * Học khu đông học sinh nhất có lương khởi điểm (BA, bậc 1) và mức tối đa trong năm mới nhất: bảng
+ * mẫu ở trang chủ. Chọn theo số học sinh (ổn định, dễ giải thích), không chọn ngẫu nhiên và không
+ * xếp hạng theo lương. Bỏ học khu thiếu lương khởi điểm để bảng mẫu không toàn dấu gạch.
+ */
+export async function listLargestDistricts(
+  db: D1Database,
+  limit: number,
+): Promise<LargeDistrict[]> {
+  const { results } = await db.prepare(SQL_LARGEST).bind(limit).all<LargeRow>();
+  const out: LargeDistrict[] = [];
+  for (const r of results) {
+    const summary = toSummary(r);
+    if (summary) {
+      out.push({
+        id: r.id,
+        name: displayName(r.name),
+        slug: r.slug,
+        stateSlug: r.state_slug,
+        stateCode: r.state_code,
+        city: displayNameOrNull(r.city),
+        summary,
+      });
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- tìm kiếm
 
 const MAX_SEARCH_TOKENS = 8;

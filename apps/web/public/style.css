@@ -1105,6 +1105,62 @@ td.empty {
   background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
+/* Bảng mẫu ở trang chủ: số liệu căn phải như bảng của trang bang. */
+.benchmarks thead th:nth-child(n + 3),
+.benchmarks td:nth-child(n + 3) {
+  text-align: right;
+}
+
+/* Thanh độ phủ của trang bang */
+.coverage {
+  max-width: 32rem;
+  margin: 0.25rem 0 1rem;
+}
+
+.coverage-bar {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.coverage-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.coverage p {
+  margin: 0.35rem 0 0;
+}
+
+.table-filter[hidden] {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .table-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+  }
+
+  .table-filter label {
+    margin-bottom: 0;
+  }
+
+  .table-filter input {
+    flex: 1 1 18rem;
+  }
+
+  .table-filter p {
+    flex-basis: 100%;
+  }
+}
+
 /* Biểu mẫu */
 
 .field {

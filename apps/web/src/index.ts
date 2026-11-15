@@ -19,6 +19,7 @@ import {
   insertErrorReport,
   listAsReportedChecks,
   listDistrictsOfState,
+  listLargestDistricts,
   listNeighbors,
   listPublishedSchedules,
   listRecentlyUpdated,
@@ -77,6 +78,7 @@ import { type Html, type PageMeta, pageTitle, renderPage, type Site } from "./vi
 import { RECENT_PAGE_SIZE, recentPage, recentPath } from "./views/overview";
 import {
   errorPage,
+  HOME_LARGEST,
   HOME_RECENT,
   homePage,
   notFoundPage,
@@ -237,11 +239,12 @@ app.post("/internal/purge", async (c) => {
 
 app.get("/", async (c) => {
   const db = c.env.DB;
-  const [states, coverage, pay, recent] = await Promise.all([
+  const [states, coverage, pay, recent, largest] = await Promise.all([
     listStates(db),
     getCoverage(db),
     getPayOverview(db),
     listRecentlyUpdated(db, { limit: HOME_RECENT }),
+    listLargestDistricts(db, HOME_LARGEST),
   ]);
   const meta = {
     title: `${SITE_NAME}: public school teacher salary schedules`,
@@ -250,7 +253,7 @@ app.get("/", async (c) => {
     canonicalPath: "/",
     script: true,
   };
-  const body = homePage({ states, coverage, pay, recent });
+  const body = homePage({ states, coverage, pay, recent, largest });
   return page(c, meta, body, { control: PAGE_CACHE, tags: [TAG_HOME] });
 });
 
