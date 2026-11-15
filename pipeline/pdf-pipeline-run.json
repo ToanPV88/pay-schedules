@@ -6,7 +6,7 @@
   "shards": 8,
   "deadline_minutes": 60,
   "seeded_only": false,
-  "ids_file": "pipeline/sources/dot-4-seeds.csv",
+  "ids_file": "pipeline/sources/dot-4-seeds-2.csv",
   "manual_release": "",
   "reread_drafts": false
 }
