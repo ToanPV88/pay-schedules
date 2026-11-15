@@ -23,6 +23,11 @@
   --shadow-lg: 0 10px 30px rgb(0 0 0 / 12%);
   --radius: 0.75rem;
   --radius-sm: 0.5rem;
+  /* Màu đường của biểu đồ: bảng màu tham chiếu dataviz, đã kiểm bằng validate_palette. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,6 +50,10 @@
     --row-hover: #2a1820;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
     --shadow-lg: 0 10px 30px rgb(0 0 0 / 50%);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
   }
 }
 
@@ -767,6 +776,190 @@ td.empty {
 .download a:hover {
   background: var(--accent-soft);
   border-color: var(--accent);
+}
+
+/* Biểu đồ lương theo bậc */
+
+.pay-chart {
+  position: relative;
+  max-width: 36rem;
+  margin: 0.75rem 0 1.5rem;
+  padding: 0.75rem 0.75rem 0.5rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.pay-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-size: 12px;
+  touch-action: pan-y;
+}
+
+/* Màn hẹp: SVG thu nhỏ theo chiều rộng nên tăng cỡ chữ (đơn vị của viewBox) để vẫn đọc được. */
+@media (max-width: 30rem) {
+  .pay-chart {
+    padding: 0.6rem 0.4rem 0.4rem;
+  }
+
+  .pay-chart svg {
+    font-size: 14px;
+  }
+}
+
+.pay-chart .grid line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.pay-chart text {
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pay-chart .end-label {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+.pay-chart .series path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.pay-chart .leader {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.pay-chart circle {
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+.pay-chart .crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  visibility: hidden;
+}
+
+.pay-chart path.s1 {
+  stroke: var(--series-1);
+}
+
+.pay-chart path.s2 {
+  stroke: var(--series-2);
+}
+
+.pay-chart path.s3 {
+  stroke: var(--series-3);
+}
+
+.pay-chart path.s4 {
+  stroke: var(--series-4);
+}
+
+.pay-chart circle.s1,
+.chart-legend .s1,
+.chart-tip .s1 {
+  fill: var(--series-1);
+  background: var(--series-1);
+}
+
+.pay-chart circle.s2,
+.chart-legend .s2,
+.chart-tip .s2 {
+  fill: var(--series-2);
+  background: var(--series-2);
+}
+
+.pay-chart circle.s3,
+.chart-legend .s3,
+.chart-tip .s3 {
+  fill: var(--series-3);
+  background: var(--series-3);
+}
+
+.pay-chart circle.s4,
+.chart-legend .s4,
+.chart-tip .s4 {
+  fill: var(--series-4);
+  background: var(--series-4);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-legend .key {
+  width: 0.9rem;
+  height: 0.25rem;
+  border-radius: 999px;
+}
+
+.pay-chart figcaption {
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.chart-tip {
+  position: absolute;
+  top: 2.25rem;
+  z-index: 2;
+  min-width: 9rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.8125rem;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.chart-tip strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.chart-tip .key {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.chart-tip div {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-tip div span:last-child {
+  margin-left: auto;
+  padding-left: 0.75rem;
+  font-weight: 600;
 }
 
 /* Biểu mẫu */
