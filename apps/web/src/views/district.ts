@@ -9,7 +9,9 @@ import type {
 } from "@pay-schedules/db";
 import { html } from "hono/html";
 import { scheduleRange } from "../calc";
+import { csvPath } from "../csv";
 import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel } from "../format";
+import { faqSection } from "./faq";
 import { adSlot, breadcrumbs, type Html, type Site } from "./layout";
 import { benchmarkRow, districtPath, placeLine } from "./parts";
 import {
@@ -141,9 +143,13 @@ function scheduleSections(data: DistrictPageData): Html {
       laneIndex: chosen?.laneIndex ?? 0,
       stepIndex: chosen?.stepIndex ?? 0,
     });
+    const download = data.demo
+      ? html``
+      : html`<p class="download"><a href="${csvPath(schedule.id)}" download rel="nofollow">Download this table (CSV)</a></p>`;
     const section = html`<section aria-labelledby="schedule-${schedule.id}-heading">
 <h2 id="schedule-${schedule.id}-heading">${heading}</h2>
 ${scheduleTable(schedule, caption)}
+${download}
 <h3>Salary calculator</h3>
 <p>Pick a lane and a step to read the amount from the table above.</p>
 ${calc}
@@ -278,6 +284,7 @@ ${adSlot(site, "before-comparison")}
 ${neighborSection(data)}
 ${detailSections(data)}
 ${historySection(data)}
+${faqSection(site.origin, { ...yearFacts(data.schedules), district, year: data.year, schedules: data.schedules, summary: data.summary })}
 ${adSlot(site, "page-end")}`;
 }
 
