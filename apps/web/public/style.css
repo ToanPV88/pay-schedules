@@ -577,7 +577,10 @@ main {
 
 /* Bảng */
 
+/* position: relative giữ các nhãn ẩn (visually-hidden, position: absolute) bên trong khung cuộn;
+   thiếu nó thì nhãn ẩn ở cột cuối đẩy cả trang rộng ra và trang cuộn ngang. */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
   margin: 0.75rem 0;
   background: var(--card);
@@ -1058,6 +1061,11 @@ td.empty {
 }
 
 /* Trang so sánh: mức cao nhất, thấp nhất và thanh tỉ lệ */
+
+.compare tbody th {
+  min-width: 12rem;
+  white-space: normal;
+}
 
 .amount-cell {
   min-width: 11rem;

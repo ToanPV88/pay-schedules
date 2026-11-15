@@ -206,7 +206,7 @@ ${benchmarks}</tbody>
 <p class="lede">Each row reads one cell from that district’s latest published schedule. Lanes are matched by education level; steps are matched by row position, so check each district’s own step label.</p>
 ${compareControls(data, keys)}
 <div class="table-scroll" role="region" aria-label="Comparison" tabindex="0">
-<table>
+<table class="compare">
 <thead>
 <tr><th scope="col">District</th><th scope="col">School year</th><th scope="col">Lane on schedule</th><th scope="col">Step on schedule</th><th scope="col">Salary</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr>
 </thead>
