@@ -65,6 +65,13 @@ jobs:
           done < links.txt
           echo "- Link nội bộ của trang chủ: $(wc -l < links.txt), hỏng ${bad}" | tee -a "$GITHUB_STEP_SUMMARY"
 
+          # Số trang trong sitemap theo bang (trang học khu năm mới nhất).
+          curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
+            | grep -E '^https?://[^/]+/[a-z-]+/[a-z0-9-]+$' > sitemap-districts.txt
+          echo "- Trang học khu trong sitemap: $(wc -l < sitemap-districts.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
+          sed -E 's#^https?://[^/]+/([a-z-]+)/.*#\1#' sitemap-districts.txt | sort | uniq -c | sort -rn \
+            | awk '{printf "%s %s, ", $2, $1} END {print ""}' | sed 's/^/- Theo bang: /' | tee -a "$GITHUB_STEP_SUMMARY"
+
           # 25 trang học khu ngẫu nhiên trong sitemap: bảng, FAQ, JSON-LD, CSV.
           curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
             | grep -E '^https?://[^/]+/[a-z-]+/[a-z0-9-]+$' | shuf -n 25 > districts.txt
