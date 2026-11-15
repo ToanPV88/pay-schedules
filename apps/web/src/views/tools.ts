@@ -69,15 +69,55 @@ ${laneField}
 </form>`;
 }
 
+export interface Extremes {
+  maxCents: number;
+  minCents: number;
+}
+
+/** Cao nhất và thấp nhất trong các ô có số; null khi chưa đủ hai số khác nhau để so. */
+export function extremesOf(amounts: (number | null)[]): Extremes | null {
+  const values = amounts.filter((a): a is number => a !== null);
+  if (values.length < 2) {
+    return null;
+  }
+  const maxCents = Math.max(...values);
+  const minCents = Math.min(...values);
+  return maxCents === minCents ? null : { maxCents, minCents };
+}
+
+/**
+ * Ô lương của một dòng so sánh: số tiền, nhãn "Highest"/"Lowest" (chữ, không chỉ màu), thanh dài
+ * theo tỉ lệ với mức cao nhất và khoảng cách tới mức cao nhất.
+ */
+function amountCell(amount: number, extremes: Extremes | null): Html {
+  if (!extremes) {
+    return html`<td class="amount-cell">${formatCents(amount)}</td>`;
+  }
+  const width = Math.round((amount / extremes.maxCents) * 100);
+  let badge = html``;
+  let gap = html``;
+  if (amount === extremes.maxCents) {
+    badge = html` <span class="badge badge-top">Highest</span>`;
+  } else {
+    if (amount === extremes.minCents) {
+      badge = html` <span class="badge">Lowest</span>`;
+    }
+    gap = html`<span class="gap">${formatCents(extremes.maxCents - amount)} below the highest</span>`;
+  }
+  return html`<td class="amount-cell"><span class="amount">${formatCents(amount)}</span>${badge}<span class="bar" style="width: ${width}%"></span>${gap}</td>`;
+}
+
 function compareRows(data: ComparePageData, keys: string[]): Html[] {
   const rows: Html[] = [];
-  for (const entry of data.entries) {
+  const cells = data.entries.map((entry) => compareCell(entry.schedule, data.lane, data.step));
+  const extremes = extremesOf(cells.map((cell) => cell.amountCents));
+  for (const [i, entry] of data.entries.entries()) {
     const { district, schedule } = entry;
     const key = keyOfDistrict(district);
     const href = districtPath(district.state.slug, district.slug);
     const others = keys.filter((k) => k !== key);
     const remove = comparePath(others, data.lane, data.step);
-    const cell = compareCell(schedule, data.lane, data.step);
+    const cell = cells[i] ?? compareCell(schedule, data.lane, data.step);
     const year = schedule ? schoolYearLabel(schedule.schoolYear) : "";
     let lane = cell.laneLabel ?? "";
     if (schedule && schedule.lanes.length === 0) {
@@ -86,9 +126,10 @@ function compareRows(data: ComparePageData, keys: string[]): Html[] {
     const amount =
       cell.amountCents === null
         ? html`<td class="empty">${cell.reason ?? "—"}</td>`
-        : html`<td>${formatCents(cell.amountCents)}</td>`;
+        : amountCell(cell.amountCents, extremes);
     const place = placeLine(district.city, null, district.state.code);
-    const row = html`<tr>
+    const top = extremes !== null && cell.amountCents === extremes.maxCents;
+    const row = html`<tr${top ? raw(' class="top-row"') : ""}>
 <th scope="row"><a href="${href}">${district.name}</a><br><span class="muted">${place}</span></th>
 <td>${year}</td><td>${lane}</td><td>${cell.stepLabel ?? ""}</td>${amount}
 <td><a href="${remove}" rel="nofollow">Remove<span class="visually-hidden"> ${district.name}</span></a></td>
@@ -165,7 +206,7 @@ ${benchmarks}</tbody>
 <p class="lede">Each row reads one cell from that district’s latest published schedule. Lanes are matched by education level; steps are matched by row position, so check each district’s own step label.</p>
 ${compareControls(data, keys)}
 <div class="table-scroll" role="region" aria-label="Comparison" tabindex="0">
-<table>
+<table class="compare">
 <thead>
 <tr><th scope="col">District</th><th scope="col">School year</th><th scope="col">Lane on schedule</th><th scope="col">Step on schedule</th><th scope="col">Salary</th><th scope="col"><span class="visually-hidden">Remove</span></th></tr>
 </thead>

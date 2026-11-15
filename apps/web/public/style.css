@@ -577,7 +577,10 @@ main {
 
 /* Bảng */
 
+/* position: relative giữ các nhãn ẩn (visually-hidden, position: absolute) bên trong khung cuộn;
+   thiếu nó thì nhãn ẩn ở cột cuối đẩy cả trang rộng ra và trang cuộn ngang. */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
   margin: 0.75rem 0;
   background: var(--card);
@@ -1055,6 +1058,51 @@ td.empty {
   margin-left: auto;
   padding-left: 0.75rem;
   font-weight: 600;
+}
+
+/* Trang so sánh: mức cao nhất, thấp nhất và thanh tỉ lệ */
+
+.compare tbody th {
+  min-width: 12rem;
+  white-space: normal;
+}
+
+.amount-cell {
+  min-width: 11rem;
+  white-space: normal;
+}
+
+.amount-cell .amount {
+  font-weight: 650;
+}
+
+.amount-cell .bar {
+  display: block;
+  height: 0.35rem;
+  margin: 0.3rem 0 0.15rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.top-row .amount-cell .bar {
+  background: var(--accent);
+}
+
+.amount-cell .gap {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.badge-top {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+}
+
+.top-row,
+.top-row:nth-child(even) {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
 /* Biểu mẫu */
