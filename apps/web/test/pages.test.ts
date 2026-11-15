@@ -36,8 +36,12 @@ describe("tắt JavaScript vẫn đọc được toàn bộ bảng lương (nghi
     const { b } = await seed();
     const html = withoutScripts(await page("/test-state/canon-test"));
     const rows = tableRows(html, `schedule-${b.scheduleId}`);
-    expect(rows[0]?.[4]).toBe("—1");
-    expect(html).toContain("No placement on this step for Column D");
+    // Ô trống chỉ hiện dấu gạch; ghi chú riêng nằm ở title và chữ cho trình đọc màn hình,
+    // không còn danh sách chú thích đánh số dưới bảng.
+    expect(rows[0]?.[4]).toBe("—");
+    expect(html).toContain('title="No placement on this step for Column D"');
+    expect(html).not.toContain('<ol class="notes">');
+    expect(html).toContain("A dash means the document shows no amount for that cell.");
   });
 
   it("máy tính chạy không cần JavaScript: form GET, server tính", async () => {

@@ -76,7 +76,10 @@ export function tableRows(html: string, id: string): string[][] {
   const body = table.slice(table.indexOf("<tbody>"), table.indexOf("</tbody>"));
   return [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((row) =>
     [...(row[1] ?? "").matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/g)].map((cell) =>
-      (cell[1] ?? "").replace(/<[^>]+>/g, "").trim(),
+      (cell[1] ?? "")
+        .replace(/<span class="visually-hidden">[\s\S]*?<\/span>/g, "")
+        .replace(/<[^>]+>/g, "")
+        .trim(),
     ),
   );
 }

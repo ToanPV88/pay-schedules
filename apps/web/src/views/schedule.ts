@@ -15,23 +15,25 @@ import type { Html } from "./layout";
 
 // ---------------------------------------------------------------- bảng
 
-function cellHtml(scheduleId: number, cell: Cell | null, footnotes: string[]): Html {
-  if (!cell) {
-    return html`<td class="empty"><span class="visually-hidden">Not in the source</span></td>`;
-  }
-  if (cell.amountCents === null) {
-    footnotes.push(cell.note ?? "");
-    const n = footnotes.length;
-    const href = `#s${scheduleId}-note-${n}`;
-    return html`<td class="empty">—<sup><a href="${href}" aria-label="Note ${n}">${n}</a></sup></td>`;
-  }
-  return html`<td data-cents="${cell.amountCents}">${formatCents(cell.amountCents)}</td>`;
-}
+/** Ghi chú chung của pipeline cho ô trống (pipeline/.../extract.py: BLANK_NOTE): không thêm thông tin. */
+const GENERIC_BLANK = /^(blank in the source( document)?|not in the source)\.?$/i;
 
 /**
- * Bảng lương đầy đủ bằng thẻ table thật: đọc được khi tắt JavaScript. Ô có số mang `data-cents`
- * để `site.js` tính tại chỗ; ô trống kèm chú thích đánh số bên dưới bảng.
+ * Ô trống chỉ hiện dấu gạch. Ghi chú riêng của tài liệu (vd. "No initial placement in this lane")
+ * nằm ở title (rê chuột) và trong chữ cho trình đọc màn hình; ghi chú chung "Blank in the source
+ * document" không hiện. CSV và Excel vẫn ghi đủ ghi chú.
  */
+function cellHtml(cell: Cell | null): Html {
+  if (cell?.amountCents !== null && cell?.amountCents !== undefined) {
+    return html`<td data-cents="${cell.amountCents}">${formatCents(cell.amountCents)}</td>`;
+  }
+  const note = cell?.note?.trim() ?? "";
+  if (note !== "" && !GENERIC_BLANK.test(note)) {
+    return html`<td class="empty" title="${note}">—<span class="visually-hidden"> ${note}</span></td>`;
+  }
+  return html`<td class="empty">—<span class="visually-hidden"> No amount in the source</span></td>`;
+}
+
 /**
  * Nút đổi cỡ chữ của bảng lương. Ẩn sẵn; site.js hiện ra và nhớ lựa chọn trong trình duyệt.
  * Không có JavaScript thì người xem dùng phím phóng to của trình duyệt.
@@ -43,8 +45,11 @@ const TEXT_SIZE_TOOL = raw(
 /** Bảng có nhiều bậc hơn số này được giữ trong khung cuộn có hàng tiêu đề dính. */
 export const LONG_SCHEDULE_ROWS = 12;
 
+/**
+ * Bảng lương đầy đủ bằng thẻ table thật: đọc được khi tắt JavaScript. Ô có số mang `data-cents`
+ * để `site.js` tính tại chỗ; ô trống là dấu gạch, chú thích bảng giải thích một lần.
+ */
 export function scheduleTable(schedule: Schedule, caption: string): Html {
-  const footnotes: string[] = [];
   const head: Html[] = [];
   if (schedule.lanes.length === 0) {
     head.push(html`<th scope="col">Salary</th>`);
@@ -56,15 +61,12 @@ export function scheduleTable(schedule: Schedule, caption: string): Html {
   for (const [i, step] of schedule.steps.entries()) {
     const cells: Html[] = [];
     for (const cell of schedule.cells[i] ?? []) {
-      cells.push(cellHtml(schedule.id, cell, footnotes));
+      cells.push(cellHtml(cell));
     }
     rows.push(html`<tr><th scope="row">${step.labelRaw}</th>${cells}</tr>\n`);
   }
-  const notes: Html[] = [];
-  for (const [k, note] of footnotes.entries()) {
-    notes.push(html`<li id="s${schedule.id}-note-${k + 1}">${note}</li>`);
-  }
-  const noteList = notes.length > 0 ? html`<ol class="notes">${notes}</ol>` : html``;
+  const hasEmpty = schedule.cells.some((row) => row.some((cell) => cell?.amountCents == null));
+  const dashNote = hasEmpty ? ". A dash means the document shows no amount for that cell." : "";
   const days = schedule.contractDays ?? "";
   // Bảng dài: khung cuộn có chiều cao giới hạn để hàng tiêu đề (tên lane) luôn nhìn thấy.
   const scrollClass =
@@ -72,15 +74,14 @@ export function scheduleTable(schedule: Schedule, caption: string): Html {
   return html`${TEXT_SIZE_TOOL}
 <div class="${scrollClass}" role="region" aria-label="${caption}" tabindex="0">
 <table class="schedule" id="schedule-${schedule.id}" data-days="${days}" data-basis="${schedule.payBasis}">
-<caption>${caption}</caption>
+<caption>${caption}${dashNote}</caption>
 <thead>
 <tr><th scope="col">Step</th>${head}</tr>
 </thead>
 <tbody>
 ${rows}</tbody>
 </table>
-</div>
-${noteList}`;
+</div>`;
 }
 
 // ---------------------------------------------------------------- máy tính
