@@ -52,7 +52,7 @@ jobs:
             ok="ok"
             if [ "$code" != 200 ]; then ok="HTTP $code"; fail "${path}: HTTP ${code}"; fi
             if [ -n "$want" ] && ! grep -qF "$want" page.html; then ok="thiếu '${want}'"; fail "${path}: thiếu '${want}'"; fi
-            echo "- \`${path}\`: ${ok}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`${path}\`: ${ok}" | tee -a "$GITHUB_STEP_SUMMARY"
           done
 
           # Mọi link nội bộ của trang chủ (menu bang, bang, học khu mới cập nhật) phải mở được.
@@ -63,7 +63,7 @@ jobs:
             code=$(curl -sS -o /dev/null -w '%{http_code}' "${BASE_URL}${path}")
             if [ "$code" != 200 ]; then bad=$((bad + 1)); fail "link trang chủ ${path}: HTTP ${code}"; fi
           done < links.txt
-          echo "- Link nội bộ của trang chủ: $(wc -l < links.txt), hỏng ${bad}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Link nội bộ của trang chủ: $(wc -l < links.txt), hỏng ${bad}" | tee -a "$GITHUB_STEP_SUMMARY"
 
           # 25 trang học khu ngẫu nhiên trong sitemap: bảng, FAQ, JSON-LD, CSV.
           curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
@@ -93,7 +93,7 @@ jobs:
             [ "$faq" = có ] || fail "${url}: thiếu FAQ"
             [ "$json" = "hợp lệ" ] || fail "${url}: JSON-LD lỗi"
             [ "$csvok" = ok ] || fail "${url}: CSV ${csvok}"
-            echo "| ${url#"$BASE_URL"} | ${code} | ${cells} | ${faq} | ${json} | ${csvok} |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| ${url#"$BASE_URL"} | ${code} | ${cells} | ${faq} | ${json} | ${csvok} |" | tee -a "$GITHUB_STEP_SUMMARY"
           done < districts.txt
           cp districts.txt "$RUNNER_TEMP/districts.txt"
           exit "$failed"
