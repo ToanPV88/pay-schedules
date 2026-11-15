@@ -680,6 +680,101 @@ td.empty {
   color: var(--muted);
 }
 
+/* Cỡ chữ bảng lương đổi theo nút A−/A+ (biến --table-scale do site.js đặt). */
+.schedule {
+  font-size: calc(1rem * var(--table-scale, 1));
+}
+
+.schedule thead th {
+  font-size: 0.75em;
+}
+
+.table-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0 -0.25rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.table-tools[hidden] {
+  display: none;
+}
+
+.table-tools span {
+  margin-right: 0.25rem;
+}
+
+.table-tools button {
+  min-width: 2.25rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.table-tools button:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.table-tools button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.schedule-picker {
+  margin: 1.5rem 0;
+}
+
+.schedule-picker h2 {
+  margin-top: 0;
+}
+
+.schedule-picker ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.6rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.schedule-picker li {
+  max-width: none;
+}
+
+.schedule-picker a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  height: 100%;
+  padding: 0.75rem 0.95rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+.schedule-picker a:hover {
+  background: var(--accent-soft);
+  box-shadow: var(--shadow);
+}
+
+.picker-title {
+  font-weight: 650;
+}
+
+.back-link {
+  font-size: 0.9rem;
+}
+
 .schedule td,
 .schedule thead th:not(:first-child) {
   text-align: right;

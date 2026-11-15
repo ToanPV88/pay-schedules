@@ -32,6 +32,14 @@ function cellHtml(scheduleId: number, cell: Cell | null, footnotes: string[]): H
  * Bảng lương đầy đủ bằng thẻ table thật: đọc được khi tắt JavaScript. Ô có số mang `data-cents`
  * để `site.js` tính tại chỗ; ô trống kèm chú thích đánh số bên dưới bảng.
  */
+/**
+ * Nút đổi cỡ chữ của bảng lương. Ẩn sẵn; site.js hiện ra và nhớ lựa chọn trong trình duyệt.
+ * Không có JavaScript thì người xem dùng phím phóng to của trình duyệt.
+ */
+const TEXT_SIZE_TOOL = raw(
+  '<div class="table-tools" data-text-size hidden><span>Text size</span><button type="button" data-size="-1" aria-label="Smaller table text">A−</button><button type="button" data-size="1" aria-label="Larger table text">A+</button></div>',
+);
+
 /** Bảng có nhiều bậc hơn số này được giữ trong khung cuộn có hàng tiêu đề dính. */
 export const LONG_SCHEDULE_ROWS = 12;
 
@@ -61,7 +69,8 @@ export function scheduleTable(schedule: Schedule, caption: string): Html {
   // Bảng dài: khung cuộn có chiều cao giới hạn để hàng tiêu đề (tên lane) luôn nhìn thấy.
   const scrollClass =
     schedule.steps.length > LONG_SCHEDULE_ROWS ? "table-scroll tall" : "table-scroll";
-  return html`<div class="${scrollClass}" role="region" aria-label="${caption}" tabindex="0">
+  return html`${TEXT_SIZE_TOOL}
+<div class="${scrollClass}" role="region" aria-label="${caption}" tabindex="0">
 <table class="schedule" id="schedule-${schedule.id}" data-days="${days}" data-basis="${schedule.payBasis}">
 <caption>${caption}</caption>
 <thead>

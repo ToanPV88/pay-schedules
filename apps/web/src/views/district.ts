@@ -209,6 +209,50 @@ function scheduleHeading(schedule: Schedule, many: boolean): string {
   return many ? `Salary schedule ${schedule.id}` : "Salary schedule";
 }
 
+/** "16 steps × 9 lanes" của một bảng. */
+function shapeText(schedule: Schedule): string {
+  const steps = `${schedule.steps.length} ${schedule.steps.length === 1 ? "step" : "steps"}`;
+  const lanes = schedule.lanes.length;
+  if (lanes === 0) {
+    return steps;
+  }
+  return `${steps} × ${lanes} ${lanes === 1 ? "lane" : "lanes"}`;
+}
+
+/**
+ * Học khu có nhiều bảng lương trong năm: danh sách đầu trang để nhảy thẳng tới bảng cần xem,
+ * mỗi thẻ ghi khoảng lương và kích thước bảng. Một bảng thì không cần.
+ */
+export function schedulePicker(schedules: Schedule[], year: string): Html {
+  if (schedules.length < 2) {
+    return html``;
+  }
+  const items: Html[] = [];
+  for (const schedule of schedules) {
+    const range = scheduleRange(schedule);
+    let money = "";
+    if (range) {
+      const noun = payBasisNoun(schedule.payBasis);
+      money =
+        range.minCents === range.maxCents
+          ? `${formatCents(range.minCents)} ${noun}`
+          : `${formatCents(range.minCents)}–${formatCents(range.maxCents)} ${noun}`;
+    }
+    const meta = [money, shapeText(schedule)].filter(Boolean).join(" · ");
+    items.push(
+      html`<li><a href="#schedule-${schedule.id}-heading"><span class="picker-title">${scheduleHeading(schedule, true)}</span><span class="muted">${meta}</span></a></li>
+`,
+    );
+  }
+  const label = schoolYearLabel(year);
+  return html`<nav class="schedule-picker" aria-labelledby="picker-heading">
+<h2 id="picker-heading">Salary schedules for ${label}</h2>
+<p>This district publishes ${schedules.length} salary schedules for ${label}. Pick one to jump to it.</p>
+<ul>
+${items}</ul>
+</nav>`;
+}
+
 function chartBlock(schedule: Schedule): Html {
   const chart = payChart(schedule);
   return chart
@@ -241,6 +285,7 @@ ${chartBlock(schedule)}
 <h3>Salary calculator</h3>
 <p>${calcHint(schedule)}</p>
 ${calc}
+${many ? html`<p class="back-link"><a href="#picker-heading">↑ All salary schedules</a></p>` : html``}
 </section>
 `;
     sections.push(section);
@@ -429,6 +474,7 @@ export function districtPage(site: Site, data: DistrictPageData): Html {
 ${notice}
 ${summaryFacts(data.schedules)}
 ${comparisonLine(data)}
+${schedulePicker(data.schedules, data.year)}
 ${adSlot(site, "below-summary")}
 ${scheduleSections(data)}
 ${adSlot(site, "before-comparison")}
