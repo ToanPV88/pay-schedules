@@ -225,6 +225,12 @@ app.get("/", async (c) => {
       html`<h1>Hàng chờ xem tay: ${total?.n ?? 0} bảng</h1>
 <form method="get"><label>Bang <input name="state" value="${state}" size="3"></label> <button>Lọc</button></form>
 <p>Chờ xóa cache web: ${purge?.n ?? 0} học khu${purge?.errors ? ` (${purge.errors} lỗi; gần nhất: ${purge.last})` : ""}${c.env.WEB && c.env.PURGE_TOKEN ? "" : " · chưa cấu hình xóa cache (WEB hoặc PURGE_TOKEN)"}</p>
+${
+  total?.n
+    ? html`<form method="post" action="/approve-all" onsubmit="return confirm('Duyệt và publish mọi bảng đang chờ${state ? ` của ${state}` : ""}?')">
+<input type="hidden" name="state" value="${state}"><button>Duyệt hết${state ? ` (${state})` : ""}</button></form>`
+    : ""
+}
 <table><tr><th class="l">Học khu</th><th>Bang</th><th>Năm học</th><th class="l">Nguồn</th><th class="l">Lý do</th></tr>${rows}</table>
 <p><a href="/?state=${state}&offset=${offset + PAGE_SIZE}">Trang sau</a></p>`,
     ),
@@ -600,6 +606,50 @@ app.post("/s/:id{[0-9]+}/approve", async (c) => {
   );
   c.executionCtx.waitUntil(drainPurgeQueue(c.env, 1));
   return c.redirect(`/s/${id}`, 303);
+});
+
+/** Bảng publish trong một lần gọi db.batch của "Duyệt hết": giữ mỗi batch nhỏ. */
+const APPROVE_ALL_CHUNK = 40;
+
+/** Duyệt mọi bảng draft còn trong hàng chờ (lọc theo bang nếu có), như bấm "Duyệt" từng bảng. */
+app.post("/approve-all", async (c) => {
+  const form = await c.req.parseBody();
+  const raw = typeof form.state === "string" ? form.state.trim().toUpperCase() : "";
+  const state = /^[A-Z]{2}$/.test(raw) ? raw : "";
+  const { results } = await c.env.DB.prepare(
+    `SELECT s.id, s.district_id, s.school_year, s.schedule_type, s.title,
+            (SELECT COUNT(*) FROM review_edits e WHERE e.schedule_id = s.id) AS edits
+       FROM schedules s JOIN districts d ON d.id = s.district_id
+      WHERE s.status = 'draft' ${state ? "AND d.state = ?1" : "AND ?1 = ?1"}
+        AND EXISTS (SELECT 1 FROM review_queue r WHERE r.schedule_id = s.id AND r.resolved_at IS NULL)
+      ORDER BY s.id`,
+  )
+    .bind(state)
+    .all<DraftKey & { edits: number }>();
+  const stamp = nowIso();
+  for (let i = 0; i < results.length; i += APPROVE_ALL_CHUNK) {
+    const statements = results
+      .slice(i, i + APPROVE_ALL_CHUNK)
+      .flatMap((s) =>
+        publishStatements(
+          c.env.DB,
+          s,
+          stamp,
+          `approved in bulk (${s.edits} cell edits)`,
+          `Duyệt tay ${s.school_year}`,
+        ),
+      );
+    await c.env.DB.batch(statements);
+  }
+  c.executionCtx.waitUntil(drainPurgeQueue(c.env));
+  return c.html(
+    page(
+      c.env,
+      "Duyệt hết",
+      html`<h1>Đã duyệt và publish ${results.length} bảng${state ? ` (${state})` : ""}</h1>
+<p>Cache website được xóa dần qua hàng chờ (D-023).</p><p><a href="/">Về hàng chờ</a></p>`,
+    ),
+  );
 });
 
 app.post("/s/:id{[0-9]+}/reject", async (c) => {
