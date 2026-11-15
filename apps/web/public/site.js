@@ -369,6 +369,9 @@
     input.setAttribute("aria-expanded", "false");
     input.setAttribute("aria-controls", list.id);
 
+    // Ô của /calculator và /compare dẫn vào luồng của chính trang đó ("{key}" = bang/học khu).
+    const targetOf = (hit) =>
+      input.dataset.suggestHref ? input.dataset.suggestHref.replace("{key}", hit.key) : hit.href;
     let items = [];
     let active = -1;
     let timer = 0;
@@ -410,7 +413,7 @@
         // mousedown thay cho click để chọn trước khi ô nhập mất tiêu điểm và danh sách đóng.
         li.addEventListener("mousedown", (event) => {
           event.preventDefault();
-          window.location.href = hit.href;
+          window.location.href = targetOf(hit);
         });
         li.addEventListener("mousemove", () => highlight(i));
         list.append(li);
@@ -461,7 +464,7 @@
         highlight(active <= 0 ? items.length - 1 : active - 1);
       } else if (event.key === "Enter" && active >= 0) {
         event.preventDefault();
-        window.location.href = items[active].href;
+        window.location.href = targetOf(items[active]);
       } else if (event.key === "Escape") {
         close();
       }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { page, request, reset, seed } from "./helpers";
+import { db, page, request, reset, seed } from "./helpers";
 
 beforeEach(async () => {
   await reset();
@@ -7,7 +7,7 @@ beforeEach(async () => {
 
 interface SuggestBody {
   q: string;
-  hits: { name: string; place: string; href: string; hasSchedule: boolean }[];
+  hits: { name: string; place: string; href: string; key: string; hasSchedule: boolean }[];
 }
 
 describe("gợi ý học khu khi gõ", () => {
@@ -23,6 +23,7 @@ describe("gợi ý học khu khi gõ", () => {
       name: "Test Valley Unified School District",
       place: "Testville, Test County, Test State",
       href: "/test-state/test-valley-unified",
+      key: "test-state/test-valley-unified",
       hasSchedule: true,
     });
   });
@@ -39,12 +40,34 @@ describe("gợi ý học khu khi gõ", () => {
     expect(home).toContain('data-suggest="/api/suggest"');
     expect(home).toContain('<script src="/site.js" defer></script>');
     expect(await page("/search?q=test")).toContain('data-suggest="/api/suggest"');
-    // Ô chọn học khu của /compare dẫn vào luồng riêng, không gợi ý.
-    expect(await page("/compare")).not.toContain("data-suggest");
+    // Ô của /compare và /calculator gợi ý nhưng dẫn vào luồng của chính trang đó.
+    expect(await page("/compare")).toContain('data-suggest-href="/compare?d={key}"');
+    expect(await page("/calculator")).toContain('data-suggest-href="/calculator?d={key}"');
   });
 
   it("robots.txt chặn /api/", async () => {
     const res = await request("/robots.txt", {}, { INDEXABLE: "true" });
     expect(await res.text()).toContain("Disallow: /api/");
+  });
+
+  it("trang 404 có ô tìm kiếm (có gợi ý) và liên kết đi tiếp", async () => {
+    const res = await request("/khong-co-trang-nay");
+    expect(res.status).toBe(404);
+    const html = await res.text();
+    expect(html).toContain('data-suggest="/api/suggest"');
+    expect(html).toContain('<a href="/#states-heading">Browse by state</a>');
+  });
+
+  it("/calculator và /compare chưa chọn học khu: gợi ý sẵn học khu lớn", async () => {
+    const { a, b } = await seed();
+    await db
+      .prepare("UPDATE districts SET enrollment = 1000 WHERE id IN (?, ?)")
+      .bind(a.districtId, b.districtId)
+      .run();
+    const calc = await page("/calculator");
+    expect(calc).toContain('<h2 id="popular-heading">Popular districts</h2>');
+    expect(calc).toContain('href="/calculator?d=test-state/test-valley-unified"');
+    const compare = await page("/compare");
+    expect(compare).toContain('href="/compare?d=test-state/test-valley-unified"');
   });
 });

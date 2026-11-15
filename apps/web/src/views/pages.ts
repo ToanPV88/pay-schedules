@@ -351,9 +351,21 @@ ${results}`;
 // ---------------------------------------------------------------- lỗi
 
 export function notFoundPage(): Html {
+  const form = searchForm({
+    action: "/search",
+    query: "",
+    label: "Find a school district by name, city or county",
+  });
   return html`<h1>Page not found</h1>
-<p>The address may be mistyped, or the page may have moved.</p>
-<p><a href="/">Home</a> · <a href="/search">Search school districts</a></p>`;
+<p class="lede">The address may be mistyped, or the page may have moved. Try finding the district instead.</p>
+${form}
+<ul class="chip-list">
+<li><a href="/#states-heading">Browse by state</a></li>
+<li><a href="/recently-updated">Recently updated</a></li>
+<li><a href="/compare">Compare districts</a></li>
+<li><a href="/calculator">Salary calculator</a></li>
+<li><a href="/">Home</a></li>
+</ul>`;
 }
 
 export function errorPage(): Html {
