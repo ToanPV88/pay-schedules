@@ -117,7 +117,7 @@ describe("trang học khu", () => {
       "<h1>Test Valley Unified School District Teacher Salary Schedule 2025–26</h1>",
       "Lowest salary on schedule",
       '<table class="schedule"',
-      "<h3>Salary calculator</h3>",
+      ">Salary calculator</h3>",
       '<h2 id="nearby-heading">Nearby districts</h2>',
       '<h2 id="notes-heading">Stipends and notes</h2>',
       '<h2 id="source-heading">Source</h2>',

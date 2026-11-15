@@ -282,7 +282,7 @@ function scheduleSections(data: DistrictPageData): Html {
 ${scheduleTable(schedule, caption)}
 ${download}
 ${chartBlock(schedule)}
-<h3>Salary calculator</h3>
+<h3 id="calc-heading-${schedule.id}">Salary calculator</h3>
 <p>${calcHint(schedule)}</p>
 ${calc}
 ${many ? html`<p class="back-link"><a href="#picker-heading">↑ All salary schedules</a></p>` : html``}
@@ -484,6 +484,33 @@ function comparisonLine(data: DistrictPageData): Html {
   return html`<p class="comparison">${text} <a href="/${state.slug}">Compare ${state.name} districts</a>.</p>`;
 }
 
+/**
+ * Mục lục "On this page" dưới phần tóm tắt: trang học khu dài (bảng, máy tính, lân cận, nguồn,
+ * các năm, câu hỏi), mục lục giúp nhảy thẳng tới phần cần xem.
+ */
+export function onThisPage(data: DistrictPageData): Html {
+  const first = data.schedules[0];
+  const many = data.schedules.length > 1;
+  const links: Html[] = [];
+  if (first) {
+    const tableTarget = many ? "picker-heading" : `schedule-${first.id}-heading`;
+    links.push(
+      html`<a href="#${tableTarget}">${many ? "Salary schedules" : "Salary schedule"}</a>`,
+    );
+    links.push(html`<a href="#calc-heading-${first.id}">Calculator</a>`);
+  }
+  links.push(html`<a href="#nearby-heading">Nearby districts</a>`);
+  if (data.schedules.some(hasStipendsOrNotes)) {
+    links.push(html`<a href="#notes-heading">Stipends</a>`);
+  }
+  links.push(html`<a href="#source-heading">Source</a>`);
+  links.push(
+    html`<a href="#years-heading">${data.history.length > 1 ? "Past years" : "Other years"}</a>`,
+  );
+  links.push(html`<a href="#faq-heading">Questions</a>`);
+  return html`<nav class="on-page" aria-label="On this page"><span>On this page</span>${links}</nav>`;
+}
+
 export function districtPage(site: Site, data: DistrictPageData): Html {
   const { district } = data;
   const crumbs = breadcrumbs([
@@ -505,6 +532,7 @@ export function districtPage(site: Site, data: DistrictPageData): Html {
 ${notice}
 ${summaryFacts(data.schedules)}
 ${comparisonLine(data)}
+${onThisPage(data)}
 ${schedulePicker(data.schedules, data.year)}
 ${adSlot(site, "below-summary")}
 ${scheduleSections(data)}
