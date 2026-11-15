@@ -8,7 +8,7 @@ import type {
   Summary,
   YearHistory,
 } from "@pay-schedules/db";
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import { scheduleRange } from "../calc";
 import { csvPath } from "../csv";
 import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel, sourceLanding } from "../format";
@@ -364,30 +364,61 @@ ${sources}
 </section>`;
 }
 
-function historySection(data: DistrictPageData): Html {
-  const base = districtPath(data.district.state.slug, data.district.slug);
-  const items: Html[] = [];
-  for (const entry of data.history) {
-    if (entry.schoolYear === data.year) {
-      continue;
-    }
-    const href = entry.schoolYear === data.latestYear ? base : `${base}/${entry.schoolYear}`;
-    let range = "";
-    if (entry.minCents !== null && entry.maxCents === entry.minCents) {
-      range = `: ${formatCents(entry.minCents)}`;
-    } else if (entry.minCents !== null && entry.maxCents !== null) {
-      range = `: ${formatCents(entry.minCents)} to ${formatCents(entry.maxCents)}`;
-    }
-    items.push(html`<li><a href="${href}">${schoolYearLabel(entry.schoolYear)}</a>${range}</li>\n`);
+/** "+$1,860 (+2.1%)" khi cả hai năm có mức tối đa; "—" khi thiếu. */
+export function changeText(previous: number | null, current: number | null): string {
+  if (previous === null || current === null || previous === 0) {
+    return "—";
   }
-  let list = html`<p>No other school years have been published for this district yet.</p>`;
-  if (items.length > 0) {
-    list = html`<ul>
-${items}</ul>`;
+  const diff = current - previous;
+  const percent = (diff / previous) * 100;
+  const sign = diff >= 0 ? "+" : "−";
+  const pct = `${sign}${Math.abs(percent).toFixed(1)}%`;
+  return `${sign}${formatCents(Math.abs(diff))} (${pct})`;
+}
+
+/**
+ * Các năm học của học khu. Từ hai năm trở lên: bảng lương thấp nhất, cao nhất của từng năm và mức
+ * tối đa tăng bao nhiêu so với năm trước, để thấy lương tăng thế nào qua các năm.
+ */
+export function historySection(data: DistrictPageData): Html {
+  const base = districtPath(data.district.state.slug, data.district.slug);
+  const years = [...data.history].sort((a, b) => a.schoolYear.localeCompare(b.schoolYear));
+  if (years.length < 2) {
+    return html`<section aria-labelledby="years-heading">
+<h2 id="years-heading">Other school years</h2>
+<p>No other school years have been published for this district yet.</p>
+</section>`;
+  }
+  const rows: Html[] = [];
+  let previous: number | null = null;
+  for (const entry of years) {
+    const href = entry.schoolYear === data.latestYear ? base : `${base}/${entry.schoolYear}`;
+    const label = schoolYearLabel(entry.schoolYear);
+    const name =
+      entry.schoolYear === data.year
+        ? html`${label} <span class="muted">(this page)</span>`
+        : html`<a href="${href}">${label}</a>`;
+    const low = entry.minCents === null ? "—" : formatCents(entry.minCents);
+    const high = entry.maxCents === null ? "—" : formatCents(entry.maxCents);
+    const change = rows.length === 0 ? "—" : changeText(previous, entry.maxCents);
+    const own = entry.schoolYear === data.year ? raw(' class="self-row"') : "";
+    rows.push(
+      html`<tr${own}><th scope="row">${name}</th><td>${low}</td><td>${high}</td><td>${change}</td></tr>\n`,
+    );
+    previous = entry.maxCents;
   }
   return html`<section aria-labelledby="years-heading">
-<h2 id="years-heading">Other school years</h2>
-${list}
+<h2 id="years-heading">Pay over the years</h2>
+<div class="table-scroll" role="region" aria-label="Pay over the years" tabindex="0">
+<table class="history">
+<caption>Lowest and highest amounts on each year’s published teacher schedules, and how the top of the scale changed from the year before. A dash means the figure is not available or the schedule is not annual.</caption>
+<thead>
+<tr><th scope="col">School year</th><th scope="col">Lowest</th><th scope="col">Highest</th><th scope="col">Top of scale vs. year before</th></tr>
+</thead>
+<tbody>
+${rows}</tbody>
+</table>
+</div>
 </section>`;
 }
 
