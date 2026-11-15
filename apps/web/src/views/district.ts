@@ -13,6 +13,7 @@ import { scheduleRange } from "../calc";
 import { csvPath } from "../csv";
 import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel, sourceLanding } from "../format";
 import { XLSX_TYPE, xlsxPath } from "../xlsx";
+import { payChart } from "./chart";
 import { faqSection } from "./faq";
 import { adSlot, breadcrumbs, type Html, type Site } from "./layout";
 import { benchmarkRow, districtPath, placeLine } from "./parts";
@@ -208,6 +209,14 @@ function scheduleHeading(schedule: Schedule, many: boolean): string {
   return many ? `Salary schedule ${schedule.id}` : "Salary schedule";
 }
 
+function chartBlock(schedule: Schedule): Html {
+  const chart = payChart(schedule);
+  return chart
+    ? html`<h3>How pay grows with each step</h3>
+${chart}`
+    : html``;
+}
+
 function scheduleSections(data: DistrictPageData): Html {
   const many = data.schedules.length > 1;
   const sections: Html[] = [];
@@ -228,6 +237,7 @@ function scheduleSections(data: DistrictPageData): Html {
 <h2 id="schedule-${schedule.id}-heading">${heading}</h2>
 ${scheduleTable(schedule, caption)}
 ${download}
+${chartBlock(schedule)}
 <h3>Salary calculator</h3>
 <p>${calcHint(schedule)}</p>
 ${calc}

@@ -196,4 +196,65 @@
       });
     }
   }
+
+  // Biểu đồ lương theo bậc: đường dóng và chú thích theo bậc gần con trỏ nhất. Biểu đồ vẫn đọc
+  // được khi không có JavaScript; số đầy đủ nằm ở bảng ngay phía trên.
+  for (const figure of document.querySelectorAll("figure.pay-chart[data-chart]")) {
+    let data;
+    try {
+      data = JSON.parse(figure.dataset.chart);
+    } catch {
+      continue;
+    }
+    const svg = figure.querySelector("svg");
+    const line = svg?.querySelector(".crosshair");
+    const tip = figure.querySelector(".chart-tip");
+    if (!svg || !line || !tip || !data.steps?.length) {
+      continue;
+    }
+    const last = data.steps.length - 1;
+    const hide = () => {
+      line.style.visibility = "hidden";
+      tip.hidden = true;
+    };
+    const show = (event) => {
+      const matrix = svg.getScreenCTM();
+      if (!matrix) {
+        return;
+      }
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+      const raw = data.dx > 0 ? Math.round((point.x - data.x0) / data.dx) : 0;
+      const i = Math.min(last, Math.max(0, raw));
+      const x = data.x0 + i * data.dx;
+      line.setAttribute("x1", String(x));
+      line.setAttribute("x2", String(x));
+      line.style.visibility = "visible";
+      const title = document.createElement("strong");
+      title.textContent = data.steps[i];
+      const rows = data.series.map((series, k) => {
+        const row = document.createElement("div");
+        const key = document.createElement("span");
+        key.className = `key s${k + 1}`;
+        const name = document.createElement("span");
+        name.textContent = series.label;
+        const value = document.createElement("span");
+        const cents = series.cents[i];
+        value.textContent = cents === null || cents === undefined ? "—" : formatCents(cents);
+        row.append(key, name, value);
+        return row;
+      });
+      tip.replaceChildren(title, ...rows);
+      tip.hidden = false;
+      // Vị trí theo phần trăm chiều rộng SVG, giữ chú thích trong khung biểu đồ.
+      const box = svg.getBoundingClientRect();
+      const frame = figure.getBoundingClientRect();
+      const left = box.left - frame.left + (x / data.w) * box.width;
+      const half = tip.offsetWidth / 2;
+      const clamped = Math.min(frame.width - half - 4, Math.max(half + 4, left));
+      tip.style.left = `${clamped}px`;
+    };
+    svg.addEventListener("pointermove", show);
+    svg.addEventListener("pointerdown", show);
+    svg.addEventListener("pointerleave", hide);
+  }
 })();
