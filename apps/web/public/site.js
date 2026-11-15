@@ -511,4 +511,58 @@
     });
     table.addEventListener("pointerleave", clear);
   }
+
+  // "Districts near you" ở /calculator và /compare: hỏi /api/nearby (vị trí gần đúng theo IP do
+  // Cloudflare cung cấp, không lưu). Không biết vị trí thì giữ danh sách học khu lớn có sẵn.
+  const nearbySection = document.querySelector("[data-nearby]");
+  if (nearbySection) {
+    const params = new URLSearchParams(window.location.search);
+    const near = params.get("near");
+    const api = near ? `/api/nearby?near=${encodeURIComponent(near)}` : "/api/nearby";
+    fetch(api)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.basis !== "location" || !data.hits?.length) {
+          return;
+        }
+        const template = nearbySection.dataset.nearby;
+        const heading = nearbySection.querySelector("h2");
+        if (heading) {
+          heading.textContent = "Districts near you";
+        }
+        const note = document.createElement("p");
+        note.className = "muted";
+        note.append(`Based on your approximate location (${data.label}). `);
+        const pick = document.createElement("a");
+        pick.href = "/#states-heading";
+        pick.textContent = "Not right? Pick a state";
+        note.append(pick);
+        const list = document.createElement("ul");
+        list.className = "chip-list";
+        for (const hit of data.hits) {
+          const li = document.createElement("li");
+          const a = document.createElement("a");
+          a.href = template.replace("{key}", hit.key);
+          a.append(`${hit.name} `);
+          const meta = document.createElement("span");
+          meta.className = "muted";
+          meta.textContent = `${hit.miles} mi`;
+          a.append(meta);
+          li.append(a);
+          list.append(li);
+        }
+        nearbySection.querySelector(".chip-list")?.replaceWith(list);
+        heading?.after(note);
+        const button = nearbySection.querySelector("[data-nearby-button]");
+        const compare = nearbySection.dataset.nearbyCompare;
+        if (button && compare && data.hits.length >= 2) {
+          const keys = data.hits.slice(0, 3).map((hit) => hit.key);
+          button.href = compare.replace("{keys}", keys.join(","));
+          button.textContent = `Compare the ${keys.length} nearest districts`;
+        }
+      })
+      .catch(() => {
+        // Lỗi mạng: giữ danh sách có sẵn.
+      });
+  }
 })();

@@ -512,6 +512,89 @@ export async function listLargestDistricts(
   return out;
 }
 
+// ---------------------------------------------------------------- học khu gần người xem
+
+export interface NearbyDistrict {
+  name: string;
+  slug: string;
+  stateSlug: string;
+  stateCode: string;
+  stateName: string;
+  city: string | null;
+  lat: number;
+  lng: number;
+}
+
+const SQL_NEARBY = `
+  SELECT d.name, d.slug, d.city, d.lat, d.lng,
+         st.slug AS state_slug, st.code AS state_code, st.name AS state_name
+    FROM districts d
+    JOIN states st ON st.code = d.state
+   WHERE d.active = 1 AND d.lat BETWEEN ? AND ? AND d.lng BETWEEN ? AND ?
+     AND ${HAS_SCHEDULE}
+   ORDER BY ((d.lat - ?) * (d.lat - ?)) + ((d.lng - ?) * ?) * ((d.lng - ?) * ?)
+   LIMIT ?`;
+
+interface NearbyRow {
+  name: string;
+  slug: string;
+  city: string | null;
+  lat: number;
+  lng: number;
+  state_slug: string;
+  state_code: string;
+  state_name: string;
+}
+
+/**
+ * Học khu đã có bảng lương published gần một toạ độ nhất. Lọc trước bằng khung ±`boxDeg` độ (để D1
+ * không phải xét mọi học khu), rồi xếp theo khoảng cách phẳng có hiệu chỉnh kinh độ theo vĩ độ.
+ */
+export async function listNearbyDistricts(
+  db: D1Database,
+  lat: number,
+  lng: number,
+  limit: number,
+  boxDeg: number,
+): Promise<NearbyDistrict[]> {
+  const k = Math.cos((lat * Math.PI) / 180);
+  const lngBox = boxDeg / Math.max(k, 0.2);
+  const stmt = db
+    .prepare(SQL_NEARBY)
+    .bind(lat - boxDeg, lat + boxDeg, lng - lngBox, lng + lngBox, lat, lat, lng, k, lng, k, limit);
+  const { results } = await stmt.all<NearbyRow>();
+  return results.map((r) => ({
+    name: displayName(r.name),
+    slug: r.slug,
+    stateSlug: r.state_slug,
+    stateCode: r.state_code,
+    stateName: r.state_name,
+    city: displayNameOrNull(r.city),
+    lat: r.lat,
+    lng: r.lng,
+  }));
+}
+
+/** Tâm gần đúng của một bang: trung bình toạ độ các học khu đã có bảng (chỉ dùng để thử ở preview). */
+export async function stateCentroid(
+  db: D1Database,
+  stateCode: string,
+): Promise<{ lat: number; lng: number; name: string } | null> {
+  const row = await db
+    .prepare(
+      `SELECT AVG(d.lat) AS lat, AVG(d.lng) AS lng, st.name AS name
+         FROM districts d JOIN states st ON st.code = d.state
+        WHERE d.state = ? AND d.active = 1 AND d.lat IS NOT NULL AND d.lng IS NOT NULL
+          AND ${HAS_SCHEDULE}`,
+    )
+    .bind(stateCode)
+    .first<{ lat: number | null; lng: number | null; name: string | null }>();
+  if (!row || row.lat === null || row.lng === null || row.name === null) {
+    return null;
+  }
+  return { lat: row.lat, lng: row.lng, name: row.name };
+}
+
 // ---------------------------------------------------------------- tìm kiếm
 
 const MAX_SEARCH_TOKENS = 8;

@@ -64,6 +64,13 @@ import { csvFileName, scheduleCsv } from "./csv";
 import { DEMO_DISTRICT, DEMO_HISTORY, DEMO_NEIGHBORS, DEMO_SCHEDULE, DEMO_SUMMARY } from "./demo";
 import { type AppEnv, isIndexable, isProduction, reportsEnabled, SITE_NAME } from "./env";
 import { escapeXml, isSchoolYear } from "./format";
+import {
+  type ApproxLocation,
+  type CfLocation,
+  locationFromCf,
+  locationFromParam,
+  nearbyHits,
+} from "./nearby";
 import { verifyTurnstile } from "./turnstile";
 import { CONTENT_PAGES } from "./views/content";
 import {
@@ -396,6 +403,31 @@ async function latestSchedules(db: D1Database, district: District): Promise<Sche
 }
 
 // ---------------------------------------------------------------- so sánh, máy tính
+
+/**
+ * Học khu gần người xem (site.js gọi sau khi /calculator hoặc /compare tải). Bản production chỉ dùng
+ * vị trí gần đúng Cloudflare gắn vào request; bản preview nhận thêm ?near=TX để thử từ ngoài Mỹ.
+ * Không lưu IP hay vị trí; phản hồi chỉ cache ở trình duyệt người xem.
+ */
+app.get("/api/nearby", async (c) => {
+  c.header("Cache-Control", "private, max-age=600");
+  c.header("X-Robots-Tag", "noindex");
+  const near = c.req.query("near");
+  let loc: ApproxLocation | null = null;
+  if (near && !isProduction(c.env)) {
+    loc = await locationFromParam(c.env.DB, near);
+  } else {
+    loc = locationFromCf(c.req.raw.cf as CfLocation | undefined);
+  }
+  if (!loc) {
+    return c.json({ basis: "none", hits: [] });
+  }
+  const hits = await nearbyHits(c.env.DB, loc);
+  if (hits.length === 0) {
+    return c.json({ basis: "none", hits: [] });
+  }
+  return c.json({ basis: "location", label: loc.label, hits });
+});
 
 /** Số học khu gợi ý sẵn ở trang /calculator và /compare khi chưa chọn học khu nào. */
 const POPULAR_LIMIT = 8;
