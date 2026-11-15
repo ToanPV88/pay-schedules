@@ -66,9 +66,9 @@ jobs:
             "SELECT d.nces_id, d.state, d.name, COALESCE(d.enrollment, 0) AS enrollment, d.website FROM districts d JOIN district_pipeline p ON p.district_id = d.id WHERE d.active = 1 AND NOT $pub AND (p.detail LIKE '%robots.txt (lỗi mạng)%' OR p.status = 'unreachable')" > "$GITHUB_WORKSPACE/dead.json"
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=d[0]["results"]; [print("DEAD\t"+"\t".join(str(x.get(k)) for k in ("nces_id","state","name","enrollment","website"))) for x in r]' "$GITHUB_WORKSPACE/dead.json"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT combo, COUNT(*) AS n FROM (SELECT schedule_id, group_concat(DISTINCT substr(reason, 1, instr(reason, ']'))) AS combo FROM review_queue WHERE resolved_at IS NULL GROUP BY schedule_id) GROUP BY combo ORDER BY n DESC LIMIT 25" | grep -E '"combo"|"n"'
+            "SELECT combo, COUNT(*) AS n FROM (SELECT schedule_id, group_concat(DISTINCT substr(reason, 1, instr(reason, ']'))) AS combo FROM review_queue WHERE resolved_at IS NULL GROUP BY schedule_id) GROUP BY combo ORDER BY n DESC LIMIT 25" | { grep -E '"combo"|"n"' || echo 'hàng chờ review rỗng'; }
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT substr(reason, 1, instr(reason, ']')) AS code, substr(reason, 1, 170) AS sample FROM review_queue WHERE resolved_at IS NULL GROUP BY code" | grep -E '"code"|"sample"'
+            "SELECT substr(reason, 1, instr(reason, ']')) AS code, substr(reason, 1, 170) AS sample FROM review_queue WHERE resolved_at IS NULL GROUP BY code" | { grep -E '"code"|"sample"' || true; }
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT r.reason FROM review_queue r WHERE r.resolved_at IS NULL" > "$GITHUB_WORKSPACE/rev.json"
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); [print("REV\t"+x["reason"].replace("\n"," || ")[:600]) for x in d[0]["results"]]' "$GITHUB_WORKSPACE/rev.json"
