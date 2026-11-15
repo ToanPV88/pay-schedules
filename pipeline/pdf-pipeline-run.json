@@ -3,10 +3,10 @@
   "limit": 200,
   "state": "",
   "rerun": [],
-  "shards": 8,
+  "shards": 12,
   "deadline_minutes": 60,
   "seeded_only": false,
-  "ids_file": "pipeline/sources/dot-4-seeds-2.csv",
+  "ids_file": "pipeline/sources/dot-5-seeds.csv",
   "manual_release": "",
   "reread_drafts": false
 }
