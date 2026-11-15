@@ -108,7 +108,7 @@ jobs:
           tag="docs-${TARGET}-$(date -u +%Y%m%d)-${RUN_ID}"
           { echo "tag=$tag"; echo "deadline=$DEADLINE"; echo "manual=${MANUAL_RELEASE:-}"; } >> "$GITHUB_OUTPUT"
           [[ "${SEEDED_ONLY:-False}" =~ ^(True|False)$ ]] || { echo "::error::seeded_only sai"; exit 1; }
-          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; echo "IDS_FILE=${IDS_FILE:-}"; echo "REREAD_DRAFTS=${REREAD_DRAFTS:-False}"; } >> "$GITHUB_ENV"
+          { echo "LIMIT=$LIMIT"; echo "RERUN=$RERUN"; echo "ONLY_STATE=$ONLY_STATE"; echo "SHARDS=$SHARDS"; echo "SEEDED_ONLY=${SEEDED_ONLY:-False}"; echo "IDS_FILE=${IDS_FILE:-}"; echo "REREAD_DRAFTS=${REREAD_DRAFTS:-False}"; echo "MANUAL_RELEASE=${MANUAL_RELEASE:-}"; } >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -145,6 +145,10 @@ jobs:
             rerun="SELECT status FROM district_pipeline"
           fi
           drafts="SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.status = 'draft'"
+          if [ -n "${MANUAL_RELEASE:-}" ]; then
+            # File tải tay là tài liệu mới: đọc cả học khu đang có bảng nháp chờ duyệt (D-051).
+            drafts="SELECT 1 WHERE 0"
+          fi
           if [ "$REREAD_DRAFTS" = True ]; then
             # Học khu chỉ có bảng nháp do bộ đọc PDF đời cũ đọc: đọc lại bằng bộ đọc hiện tại (D-053).
             models=$(cd ../../pipeline && uv run --no-dev python -c 'from pay_pipeline.pdf_pipeline.ocr import READERS as O; from pay_pipeline.pdf_pipeline.read import READERS as R; print(",".join(sorted(chr(39) + m + chr(39) for m in R | O)))')

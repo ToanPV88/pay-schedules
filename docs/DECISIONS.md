@@ -927,6 +927,8 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Chạy: đặt `manual_release` trong `pdf-pipeline-run.json`. Lượt chỉ lấy các học khu trong
   danh sách; `pdf-gather --manual` đọc file từ đĩa, không tải mạng, rồi phân loại, đọc bảng và
   kiểm tra như mọi tài liệu khác. Đường dẫn ra ngoài thư mục file bị bỏ.
+- Bổ sung 2026-11-15: lượt tải tay lấy cả học khu đang có bảng nháp chờ duyệt (trước đó bị bỏ
+  khỏi hàng đợi, nên 7 học khu của đợt 2 không được đọc). Bảng nháp cũ vẫn nằm trong hàng chờ.
 
 ## D-052: Hợp đồng nhiều năm lấy bảng năm muộn nhất
 
