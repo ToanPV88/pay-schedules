@@ -63,9 +63,21 @@ describe("bang và học khu", () => {
       limit: 50,
       offset: 0,
     });
-    expect(byName.map((d) => d.slug)).toEqual(["canon-test", "test-ridge", "test-valley-unified"]);
-    expect(byName.map((d) => d.hasSchedule)).toEqual([true, false, true]);
-    expect(byName[2]?.summary?.startBaCents).toBe(5_000_000);
+    // Học khu đã có bảng lên trước, theo tên; học khu chưa có bảng (Test Ridge) xếp cuối.
+    expect(byName.map((d) => d.slug)).toEqual(["canon-test", "test-valley-unified", "test-ridge"]);
+    expect(byName.map((d) => d.hasSchedule)).toEqual([true, true, false]);
+    expect(byName[1]?.summary?.startBaCents).toBe(5_000_000);
+    const byNameDesc = await listDistrictsOfState(db, "ZZ", {
+      sort: "name",
+      dir: "desc",
+      limit: 50,
+      offset: 0,
+    });
+    expect(byNameDesc.map((d) => d.slug)).toEqual([
+      "test-valley-unified",
+      "canon-test",
+      "test-ridge",
+    ]);
     for (const dir of ["asc", "desc"] as const) {
       const byStart = await listDistrictsOfState(db, "ZZ", {
         sort: "start",

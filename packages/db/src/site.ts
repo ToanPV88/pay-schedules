@@ -254,7 +254,8 @@ const SORT_COLUMNS: Record<Exclude<DistrictSort, "name">, string> = {
 function districtOrder(sort: DistrictSort, dir: SortDirection): string {
   const direction = dir === "desc" ? "DESC" : "ASC";
   if (sort === "name") {
-    return `d.name COLLATE NOCASE ${direction}, d.id`;
+    // Học khu đã có bảng lương lên trước, "No schedule yet" xếp sau; mỗi nhóm theo tên.
+    return `has_schedule DESC, d.name COLLATE NOCASE ${direction}, d.id`;
   }
   // Học khu chưa có số liệu luôn xếp cuối, dù tăng hay giảm.
   const column = SORT_COLUMNS[sort];

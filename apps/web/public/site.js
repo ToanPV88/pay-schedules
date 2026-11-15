@@ -234,6 +234,13 @@
         const rows = [...body.rows];
         const sortValueOf = (row) => row.cells[index]?.dataset.sortValue ?? "";
         rows.sort((a, b) => {
+          // Cột tên: học khu đã có bảng luôn ở trên, "No schedule yet" ở dưới (như server).
+          if (index === 0) {
+            const group = Number(a.dataset.group ?? 0) - Number(b.dataset.group ?? 0);
+            if (group !== 0) {
+              return group;
+            }
+          }
           const x = sortValueOf(a);
           const y = sortValueOf(b);
           // Dòng thiếu số luôn xếp cuối, dù tăng hay giảm.
