@@ -32,6 +32,9 @@ function cellHtml(scheduleId: number, cell: Cell | null, footnotes: string[]): H
  * Bảng lương đầy đủ bằng thẻ table thật: đọc được khi tắt JavaScript. Ô có số mang `data-cents`
  * để `site.js` tính tại chỗ; ô trống kèm chú thích đánh số bên dưới bảng.
  */
+/** Bảng có nhiều bậc hơn số này được giữ trong khung cuộn có hàng tiêu đề dính. */
+export const LONG_SCHEDULE_ROWS = 12;
+
 export function scheduleTable(schedule: Schedule, caption: string): Html {
   const footnotes: string[] = [];
   const head: Html[] = [];
@@ -55,7 +58,10 @@ export function scheduleTable(schedule: Schedule, caption: string): Html {
   }
   const noteList = notes.length > 0 ? html`<ol class="notes">${notes}</ol>` : html``;
   const days = schedule.contractDays ?? "";
-  return html`<div class="table-scroll" role="region" aria-label="${caption}" tabindex="0">
+  // Bảng dài: khung cuộn có chiều cao giới hạn để hàng tiêu đề (tên lane) luôn nhìn thấy.
+  const scrollClass =
+    schedule.steps.length > LONG_SCHEDULE_ROWS ? "table-scroll tall" : "table-scroll";
+  return html`<div class="${scrollClass}" role="region" aria-label="${caption}" tabindex="0">
 <table class="schedule" id="schedule-${schedule.id}" data-days="${days}" data-basis="${schedule.payBasis}">
 <caption>${caption}</caption>
 <thead>
