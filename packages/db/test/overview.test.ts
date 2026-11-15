@@ -1,6 +1,12 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getCoverage, getPayOverview, listRecentlyUpdated, median } from "../src";
+import {
+  countSameNameInState,
+  getCoverage,
+  getPayOverview,
+  listRecentlyUpdated,
+  median,
+} from "../src";
 import { oddLanes, standard, stepsOnly } from "./fixtures";
 import { insertFixture, resetData } from "./insert";
 
@@ -87,5 +93,15 @@ describe("số liệu tổng hợp", () => {
       "test-valley-unified",
     ]);
     expect(await listRecentlyUpdated(db, { limit: 10, stateCode: "CA" })).toEqual([]);
+  });
+
+  it("đếm học khu cùng tên trong cùng bang", async () => {
+    const { a, b } = await seed();
+    expect(await countSameNameInState(db, a.districtId)).toBe(1);
+    await db
+      .prepare("UPDATE districts SET name = (SELECT name FROM districts WHERE id = ?) WHERE id = ?")
+      .bind(a.districtId, b.districtId)
+      .run();
+    expect(await countSameNameInState(db, a.districtId)).toBe(2);
   });
 });

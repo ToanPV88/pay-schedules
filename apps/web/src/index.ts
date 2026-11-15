@@ -4,6 +4,7 @@
  */
 import {
   countDistrictsOfState,
+  countSameNameInState,
   DISTRICT_SORTS,
   type District,
   type DistrictSort,
@@ -24,6 +25,7 @@ import {
   listSitemapRows,
   listStates,
   listYearHistory,
+  type PayOverview,
   REPORT_MAX_LENGTH,
   REPORT_MIN_LENGTH,
   type Schedule,
@@ -65,6 +67,7 @@ import { CONTENT_PAGES } from "./views/content";
 import {
   type DistrictPageData,
   districtDescription,
+  districtDocumentTitle,
   districtPage,
   districtTitle,
   missingSchedulePage,
@@ -575,6 +578,26 @@ app.get("/:state", async (c) => {
   return page(c, meta, body, { control: PAGE_CACHE, tags: [stateTag(state.code)] });
 });
 
+/**
+ * Trung vị của bang cho câu so sánh trên trang học khu. Truy vấn đọc mọi học khu của bang, nên giữ
+ * trong bộ nhớ của isolate 10 phút: trang học khu nào chưa có trong cache edge cũng không phải đọc
+ * lại cả bang (giới hạn số dòng đọc của D1).
+ */
+const STATE_PAY_TTL_MS = 10 * 60 * 1000;
+const statePayCache = new Map<string, { at: number; value: Promise<PayOverview> }>();
+
+function statePayOverview(db: D1Database, stateCode: string): Promise<PayOverview> {
+  const now = Date.now();
+  const hit = statePayCache.get(stateCode);
+  if (hit && now - hit.at < STATE_PAY_TTL_MS) {
+    return hit.value;
+  }
+  const value = getPayOverview(db, stateCode);
+  statePayCache.set(stateCode, { at: now, value });
+  value.catch(() => statePayCache.delete(stateCode));
+  return value;
+}
+
 async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
   const district = await getDistrictBySlug(
     c.env.DB,
@@ -604,11 +627,13 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     return c.redirect(base, 301);
   }
   const year = yearParam ?? latestYear;
-  const [schedules, history, summary, neighbors] = await Promise.all([
+  const [schedules, history, summary, neighbors, statePay, sameName] = await Promise.all([
     schedulesOfYear(c.env.DB, district.id, year),
     listYearHistory(c.env.DB, district.id),
     getLatestSummary(c.env.DB, district.id),
     listNeighbors(c.env.DB, district.id, NEIGHBOR_LIMIT),
+    statePayOverview(c.env.DB, district.state.code),
+    countSameNameInState(c.env.DB, district.id),
   ]);
   if (schedules.length === 0) {
     return notFound(c);
@@ -629,9 +654,11 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     asReported,
     path,
     demo: false,
+    statePay,
+    sameNameInState: sameName > 1,
   };
   const meta = {
-    title: pageTitle(districtTitle(district, year)),
+    title: pageTitle(districtDocumentTitle(district, year, sameName > 1)),
     description: districtDescription(data),
     canonicalPath: path,
     // PLAN Công đoạn 7: chỉ index trang có phần so sánh lân cận. Áp dụng sẵn ở đây.

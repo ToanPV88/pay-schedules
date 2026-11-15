@@ -46,7 +46,7 @@ export function payOverview(pay: PayOverview, scope: string, withState: boolean)
 <div><dt>Median top of scale</dt><dd>${money(pay.max.cents)}</dd></div>
 </dl>
 ${list}
-<p class="muted">Medians of the latest published teacher schedule of ${plural(n, "district", "districts")}: half of the districts pay more, half pay less. Only schedules stated as annual salaries are counted, since daily or hourly rates do not compare. Each figure comes from the district’s own document; see <a href="/methodology">methodology</a>.</p>
+<p class="muted">Medians of the latest published teacher schedule of ${plural(n, "district", "districts")}: half of the districts pay more, half pay less. Only schedules stated as annual salaries are counted, since daily or hourly rates do not compare. Each figure comes from the district’s own document; see <a href="/methodology#state-medians">methodology</a>.</p>
 </section>`;
 }
 

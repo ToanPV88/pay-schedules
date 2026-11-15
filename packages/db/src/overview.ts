@@ -203,3 +203,15 @@ export async function listRecentlyUpdated(
     updatedAt: r.updated_at,
   }));
 }
+
+/** Số học khu đang hoạt động cùng bang, cùng tên (kể cả chính nó): >1 thì tiêu đề cần thêm nơi. */
+export async function countSameNameInState(db: D1Database, districtId: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM districts x JOIN districts d ON d.id = ?
+        WHERE x.state = d.state AND x.name = d.name AND x.active = 1`,
+    )
+    .bind(districtId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}

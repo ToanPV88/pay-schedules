@@ -96,8 +96,27 @@ describe("chỉ dữ liệu published ra ngoài", () => {
     expect(await listYearHistory(db, c.districtId)).toEqual([]);
     expect(await getPublishedScheduleDistrict(db, c.scheduleId)).toBeNull();
     expect(await getPublishedScheduleDistrict(db, a.scheduleId)).toBe(a.districtId);
+    // canon-test không có lân cận (trang noindex) nên không nằm trong sitemap; c chỉ có draft.
     const sitemap = await listSitemapRows(db);
-    expect(sitemap.map((r) => r.districtSlug)).toEqual(["canon-test", "test-valley-unified"]);
+    expect(sitemap.map((r) => r.districtSlug)).toEqual(["test-valley-unified"]);
+  });
+
+  it("sitemap chỉ gồm trang được index: lân cận phải có số so sánh của bảng published", async () => {
+    const { a, b } = await seed();
+    await db
+      .prepare("INSERT INTO district_neighbors VALUES (?, ?, 12.5)")
+      .bind(b.districtId, a.districtId)
+      .run();
+    expect((await listSitemapRows(db)).map((r) => r.districtSlug)).toEqual([
+      "canon-test",
+      "test-valley-unified",
+    ]);
+    // lân cận duy nhất của a là b (và c chỉ có draft): b không còn bảng published thì a rớt
+    await db
+      .prepare("DELETE FROM district_neighbors WHERE district_id = ? AND neighbor_id = ?")
+      .bind(a.districtId, b.districtId)
+      .run();
+    expect((await listSitemapRows(db)).map((r) => r.districtSlug)).toEqual(["canon-test"]);
   });
 
   it("lịch sử năm học có ô thấp nhất và cao nhất", async () => {

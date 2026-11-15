@@ -3,6 +3,7 @@ import type {
   District,
   Neighbor,
   PayBasis,
+  PayOverview,
   Schedule,
   Summary,
   YearHistory,
@@ -10,7 +11,7 @@ import type {
 import { html } from "hono/html";
 import { scheduleRange } from "../calc";
 import { csvPath } from "../csv";
-import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel } from "../format";
+import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel, sourceLanding } from "../format";
 import { faqSection } from "./faq";
 import { adSlot, breadcrumbs, type Html, type Site } from "./layout";
 import { benchmarkRow, districtPath, placeLine } from "./parts";
@@ -48,10 +49,73 @@ export interface DistrictPageData {
   path: string;
   /** Trang mẫu với dữ liệu giả lập (chỉ ở bản xem trước). */
   demo: boolean;
+  /** Trung vị của bang để so sánh trong câu mô tả; null khi không có. */
+  statePay?: PayOverview | null;
+  /** Có học khu khác cùng tên trong bang: tiêu đề thêm thành phố. */
+  sameNameInState?: boolean;
 }
+
+/** Số học khu tối thiểu để trung vị của bang đủ nghĩa khi so sánh. */
+export const MIN_STATE_DISTRICTS = 5;
 
 export function districtTitle(district: District, year: string): string {
   return `${district.name} Teacher Salary Schedule ${schoolYearLabel(year)}`;
+}
+
+/**
+ * Thẻ <title>: thêm mã bang (nhiều bang có học khu trùng tên) và thành phố khi trong bang có học
+ * khu khác cùng tên, để không có hai trang trùng title (PLAN Công đoạn 7, nghiệm thu).
+ */
+export function districtDocumentTitle(
+  district: District,
+  year: string,
+  sameNameInState: boolean,
+): string {
+  const where = sameNameInState && district.city ? ` (${district.city})` : "";
+  return `${district.name}${where}, ${district.state.code} Teacher Salary Schedule ${schoolYearLabel(year)}`;
+}
+
+function gap(own: number, median: number): string {
+  const diff = own - median;
+  if (Math.abs(diff) < 100) {
+    return "about the same as";
+  }
+  return `${formatCents(Math.abs(diff))} ${diff > 0 ? "above" : "below"}`;
+}
+
+/**
+ * Câu so sánh với trung vị của bang, sinh từ số liệu (PLAN Công đoạn 7: không dùng đoạn văn
+ * chung lặp lại giữa các trang). Null khi thiếu số hoặc bang có quá ít học khu để so.
+ */
+export function stateComparison(data: DistrictPageData): string | null {
+  const pay = data.statePay;
+  const summary = data.summary;
+  if (!pay || !summary || summary.schoolYear !== data.year) {
+    return null;
+  }
+  if (!data.schedules.every((s) => s.payBasis === "annual")) {
+    return null;
+  }
+  const state = data.district.state.name;
+  const parts: string[] = [];
+  const start = summary.startBaCents;
+  if (start !== null && pay.start.cents !== null && pay.start.districts >= MIN_STATE_DISTRICTS) {
+    parts.push(
+      `Starting pay for a teacher with a bachelor’s degree is ${formatCents(start)}, ${gap(start, pay.start.cents)} the ${state} median of ${formatCents(pay.start.cents)}`,
+    );
+  }
+  const max = summary.maxSalaryCents;
+  if (max !== null && pay.max.cents !== null && pay.max.districts >= MIN_STATE_DISTRICTS) {
+    const lead = parts.length > 0 ? "the top of the scale is" : "The top of the scale is";
+    parts.push(
+      `${lead} ${formatCents(max)}, ${gap(max, pay.max.cents)} the state median of ${formatCents(pay.max.cents)}`,
+    );
+  }
+  if (parts.length === 0) {
+    return null;
+  }
+  const n = Math.max(pay.start.districts, pay.max.districts);
+  return `${parts.join("; ")} (medians of ${n.toLocaleString("en-US")} ${state} districts on this site).`;
 }
 
 interface YearFacts {
@@ -97,6 +161,10 @@ export function districtDescription(data: DistrictPageData): string {
   let range = "";
   if (facts.minCents !== null && facts.maxCents !== null && facts.basis === "annual") {
     range = `, from ${formatCents(facts.minCents)} to ${formatCents(facts.maxCents)}`;
+  }
+  const comparison = stateComparison(data);
+  if (comparison) {
+    return `${district.name} (${place}) teacher salary schedule for ${year}${range}. ${comparison}`;
   }
   return `${district.name} (${place}) teacher salary schedule for ${year}${range}. Full step and lane table, salary calculator and a link to the source document.`;
 }
@@ -258,6 +326,61 @@ ${list}
 </section>`;
 }
 
+/** "2025-26" → "2025-07-01/2026-06-30": năm học Mỹ thường từ tháng 7 tới tháng 6. */
+export function schoolYearInterval(year: string): string {
+  const start = Number(year.slice(0, 4));
+  return `${start}-07-01/${start + 1}-06-30`;
+}
+
+/**
+ * Nút JSON-LD `Dataset` (PLAN Công đoạn 7): bảng lương là một tập dữ liệu nhỏ, có bản CSV tải
+ * được và dựa trên tài liệu gốc của học khu.
+ */
+export function datasetNode(origin: string, data: DistrictPageData): object {
+  const { district } = data;
+  const path =
+    data.year === data.latestYear
+      ? districtPath(district.state.slug, district.slug)
+      : `${districtPath(district.state.slug, district.slug)}/${data.year}`;
+  const sources = data.schedules
+    .map((s) => sourceLanding(s.source.url)?.href ?? safeHttpUrl(s.source.url))
+    .filter((u): u is string => u !== null);
+  return {
+    "@type": "Dataset",
+    name: districtTitle(district, data.year),
+    description: districtDescription(data),
+    url: `${origin}${path}`,
+    temporalCoverage: schoolYearInterval(data.year),
+    spatialCoverage: {
+      "@type": "Place",
+      name: placeLine(district.city, district.county, district.state.name),
+    },
+    creator: { "@type": "Organization", name: district.name },
+    isBasedOn: [...new Set(sources)],
+    variableMeasured: "Teacher salary by step and lane",
+    keywords: [
+      "teacher salary schedule",
+      `${district.state.name} teacher pay`,
+      `${district.name} salary`,
+    ],
+    isAccessibleForFree: true,
+    distribution: data.schedules.map((s) => ({
+      "@type": "DataDownload",
+      encodingFormat: "text/csv",
+      contentUrl: `${origin}${csvPath(s.id)}`,
+    })),
+  };
+}
+
+function comparisonLine(data: DistrictPageData): Html {
+  const text = stateComparison(data);
+  if (!text) {
+    return html``;
+  }
+  const state = data.district.state;
+  return html`<p class="comparison">${text} <a href="/${state.slug}">Compare ${state.name} districts</a>.</p>`;
+}
+
 export function districtPage(site: Site, data: DistrictPageData): Html {
   const { district } = data;
   const crumbs = breadcrumbs([
@@ -278,13 +401,14 @@ export function districtPage(site: Site, data: DistrictPageData): Html {
 <p class="lede">${place}</p>
 ${notice}
 ${summaryFacts(data.schedules)}
+${comparisonLine(data)}
 ${adSlot(site, "below-summary")}
 ${scheduleSections(data)}
 ${adSlot(site, "before-comparison")}
 ${neighborSection(data)}
 ${detailSections(data)}
 ${historySection(data)}
-${faqSection(site.origin, { ...yearFacts(data.schedules), district, year: data.year, schedules: data.schedules, summary: data.summary })}
+${faqSection(site.origin, { ...yearFacts(data.schedules), district, year: data.year, schedules: data.schedules, summary: data.summary }, data.demo ? [] : [datasetNode(site.origin, data)])}
 ${adSlot(site, "page-end")}`;
 }
 
