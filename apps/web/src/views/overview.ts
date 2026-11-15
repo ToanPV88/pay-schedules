@@ -37,7 +37,7 @@ export function payOverview(pay: PayOverview, scope: string, withState: boolean)
       html`<li>Highest top of scale: ${formatCents(pay.highestMax.cents)} at ${districtLink(pay.highestMax, withState)}</li>`,
     );
   }
-  const list = extremes.length > 0 ? html`<ul>${extremes}</ul>` : html``;
+  const list = extremes.length > 0 ? html`<ul class="extremes">${extremes}</ul>` : html``;
   return html`<section aria-labelledby="pay-heading">
 <h2 id="pay-heading">Teacher pay ${scope}</h2>
 <dl class="facts">
