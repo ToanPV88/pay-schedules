@@ -344,6 +344,36 @@ button,
   margin-bottom: 0.5rem;
 }
 
+.table-filter {
+  margin: 0.5rem 0;
+}
+
+.table-filter label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.table-filter input {
+  width: 100%;
+  max-width: 24rem;
+  padding: 0.5rem;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.table-filter p {
+  margin: 0.25rem 0 0;
+  min-height: 1.3em;
+}
+
+.recent-list {
+  padding-left: 1.25rem;
+}
+
 .pagination {
   display: flex;
   gap: 1rem;

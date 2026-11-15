@@ -77,6 +77,7 @@ import {
   notFoundPage,
   SEARCH_LIMIT,
   STATE_PAGE_SIZE,
+  STATE_RECENT,
   searchPage,
   statePage,
 } from "./views/pages";
@@ -542,7 +543,11 @@ app.get("/:state", async (c) => {
     noindex: hasQuery(c) || totals.withSchedule === 0,
     script: true,
   };
-  const body = statePage({ state, items, totals, sort, dir, page: pageNumber });
+  const [pay, recent] = await Promise.all([
+    getPayOverview(c.env.DB, state.code),
+    listRecentlyUpdated(c.env.DB, { limit: STATE_RECENT, stateCode: state.code }),
+  ]);
+  const body = statePage({ state, pay, recent, items, totals, sort, dir, page: pageNumber });
   return page(c, meta, body, { control: PAGE_CACHE, tags: [stateTag(state.code)] });
 });
 

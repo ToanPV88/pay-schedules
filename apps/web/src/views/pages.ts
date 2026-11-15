@@ -78,9 +78,12 @@ ${stateList}
 // ---------------------------------------------------------------- trang bang
 
 export const STATE_PAGE_SIZE = 200;
+export const STATE_RECENT = 6;
 
 export interface StatePageData {
   state: State;
+  pay: PayOverview;
+  recent: RecentDistrict[];
   items: DistrictListItem[];
   totals: { districts: number; withSchedule: number };
   sort: DistrictSort;
@@ -162,8 +165,15 @@ export function statePage(data: StatePageData): Html {
   const withSchedule = totals.withSchedule.toLocaleString("en-US");
   let table = html`<p>No districts have been loaded for this state yet.</p>`;
   if (rows.length > 0) {
-    table = html`<div class="table-scroll" role="region" aria-label="Districts in ${state.name}" tabindex="0">
-<table class="districts" data-sortable="${sortable}">
+    // Ô lọc chỉ hiện khi có JavaScript (site.js bỏ `hidden`); không có JavaScript thì dùng tìm kiếm.
+    const scope = pages > 1 ? " on this page" : "";
+    table = html`<div class="table-filter" hidden>
+<label for="district-filter">Filter districts${scope} by name or city</label>
+<input id="district-filter" type="search" autocomplete="off" data-filter-table="districts-table">
+<p class="muted" data-filter-count aria-live="polite"></p>
+</div>
+<div class="table-scroll" role="region" aria-label="Districts in ${state.name}" tabindex="0">
+<table class="districts" id="districts-table" data-sortable="${sortable}">
 <caption>Benchmarks come from each district’s latest published schedule. Select a column heading to sort.</caption>
 <thead>
 <tr>${sortHeader(data, "name", "District")}<th scope="col">City</th><th scope="col">School year</th>${sortHeader(data, "start", "BA, step 1")}${sortHeader(data, "ma10", "MA, step 10")}${sortHeader(data, "max", "Maximum")}</tr>
@@ -174,11 +184,23 @@ ${rows}</tbody>
 </div>`;
   }
   const crumbs = breadcrumbs([{ label: "Home", href: "/" }, { label: state.name }]);
+  let recent = html``;
+  if (data.recent.length > 0) {
+    recent = html`<section aria-labelledby="recent-heading">
+<h2 id="recent-heading">Recently updated in ${state.name}</h2>
+${recentList(data.recent, false)}
+</section>`;
+  }
+  const listHeading =
+    rows.length > 0 ? html`<h2 id="districts-heading">Districts in ${state.name}</h2>` : html``;
   return html`${crumbs}
 <h1>${state.name} teacher salary schedules</h1>
 <p class="lede">${withSchedule} of ${total} in ${state.name} have a published salary schedule on this site.</p>
+${payOverview(data.pay, `in ${state.name}`, false)}
+${listHeading}
 ${table}
-${pagination}`;
+${pagination}
+${recent}`;
 }
 
 // ---------------------------------------------------------------- tìm kiếm

@@ -215,6 +215,17 @@ describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
     expect((await request("/khong-co-bang")).status).toBe(404);
   });
 
+  it("trang bang có tóm tắt lương của bang, ô lọc và học khu mới cập nhật", async () => {
+    await seed();
+    const html = await page("/test-state");
+    expect(html).toContain("Teacher pay in Test State");
+    expect(html).toContain("Recently updated in Test State");
+    // ô lọc ẩn khi không có JavaScript
+    expect(html).toMatch(/<div class="table-filter" hidden>/);
+    expect(html).toContain('data-filter-table="districts-table"');
+    expect(html).toContain('id="districts-table"');
+  });
+
   it("tìm kiếm theo tên, không dấu; escape chuỗi người dùng gõ", async () => {
     await seed();
     expect(await page("/search?q=canon")).toContain('href="/test-state/canon-test"');

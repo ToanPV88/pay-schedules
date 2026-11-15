@@ -82,6 +82,38 @@
     });
   }
 
+  // Lọc bảng học khu của trang bang theo tên hoặc thành phố (không dấu, không phân biệt hoa thường).
+  const fold = (text) =>
+    text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  for (const input of document.querySelectorAll("input[data-filter-table]")) {
+    const table = document.getElementById(input.dataset.filterTable);
+    const box = input.closest(".table-filter");
+    if (!table || !box) {
+      continue;
+    }
+    box.hidden = false;
+    const count = box.querySelector("[data-filter-count]");
+    const rows = [...table.tBodies[0].rows];
+    const texts = rows.map((row) =>
+      fold(`${row.cells[0]?.textContent ?? ""} ${row.cells[1]?.textContent ?? ""}`),
+    );
+    input.addEventListener("input", () => {
+      const words = fold(input.value).split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const [i, row] of rows.entries()) {
+        const match = words.every((word) => texts[i].includes(word));
+        row.hidden = !match;
+        shown += Number(match);
+      }
+      if (count) {
+        count.textContent = words.length === 0 ? "" : `${shown} of ${rows.length} districts shown`;
+      }
+    });
+  }
+
   // Sắp xếp bảng học khu của trang bang khi mọi dòng nằm trên một trang.
   for (const table of document.querySelectorAll('table[data-sortable="true"]')) {
     const headers = [...table.tHead.rows[0].cells];
