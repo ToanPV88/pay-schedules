@@ -32,3 +32,22 @@ describe("chọn nhanh bảng lương và cỡ chữ bảng", () => {
     expect(html).not.toContain('id="picker-heading"');
   });
 });
+
+describe("ô trống của bảng lương", () => {
+  it("ghi chú chung 'Blank in the source document' chỉ còn dấu gạch, không title", async () => {
+    const { scheduleTable } = await import("../src/views/schedule");
+    const cells = DEMO_SCHEDULE.cells.map((row, i) =>
+      row.map((cell, j) =>
+        i === 1 && j === 2 ? { amountCents: null, note: "Blank in the source document" } : cell,
+      ),
+    );
+    const html = String(scheduleTable({ ...DEMO_SCHEDULE, cells }, "Demo"));
+    expect(html).toContain(
+      '<td class="empty">—<span class="visually-hidden"> No amount in the source</span></td>',
+    );
+    expect(html).not.toContain('title="Blank in the source document"');
+    // Ghi chú riêng của tài liệu vẫn có ở title.
+    expect(html).toContain('title="No initial placement in this lane"');
+    expect(html).toContain("<caption>Demo. A dash means the document shows no amount");
+  });
+});
