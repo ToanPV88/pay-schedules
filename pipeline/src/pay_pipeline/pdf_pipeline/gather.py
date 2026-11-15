@@ -19,6 +19,7 @@ import csv
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 import threading
 import time
@@ -27,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
@@ -126,22 +127,52 @@ def choose(docs: list[DocWork]) -> DocWork | None:
     )
 
 
-_DRIVE_FILE = re.compile(r"^https://drive\.google\.com/file/d/([\w-]{10,})")
+_DRIVE_FILE = re.compile(
+    r"^https://drive\.google\.com/(?:file/d/|open\?(?:[^#]*&)?id=|uc\?(?:[^#]*&)?id=)([\w-]{10,})"
+)
 _DOCS = re.compile(
     r"^https://docs\.google\.com/(spreadsheets|document|presentation)/d/([\w-]{10,})"
 )
+DRIVE_API = "https://www.googleapis.com/drive/v3/files"
+_EXPORT_MIME = {
+    "spreadsheets": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "presentation": "application/pdf",
+}
+
+
+def _drive_api_key() -> str | None:
+    return os.environ.get("GOOGLE_API_KEY") or None
 
 
 def export_url(url: str) -> str:
-    """Google Drive / Docs links point at viewers; ask for the file itself."""
+    """Google Drive / Docs links point at viewers; ask for the file itself.
+
+    drive.google.com and docs.google.com disallow bots in robots.txt, so when a Google API key is
+    configured the file goes through the Drive API (www.googleapis.com), Google's own channel for
+    programs; the key travels in a header (``fetch_headers``), never in the URL that is logged.
+    """
     m = _DRIVE_FILE.match(url)
     if m:
+        if _drive_api_key():
+            return f"{DRIVE_API}/{m.group(1)}?alt=media&supportsAllDrives=true"
         return f"https://drive.google.com/uc?export=download&id={m.group(1)}"
     m = _DOCS.match(url)
     if m:
+        if _drive_api_key():
+            mime = quote(_EXPORT_MIME[m.group(1)], safe="")
+            return f"{DRIVE_API}/{m.group(2)}/export?mimeType={mime}"
         fmt = {"spreadsheets": "xlsx", "document": "docx", "presentation": "pdf"}[m.group(1)]
         return f"https://docs.google.com/{m.group(1)}/d/{m.group(2)}/export?format={fmt}"
     return url
+
+
+def fetch_headers(url: str) -> dict[str, str] | None:
+    """The Drive API key, only for Drive API requests."""
+    key = _drive_api_key()
+    if key and url.startswith(DRIVE_API + "/"):
+        return {"X-goog-api-key": key}
+    return None
 
 
 def _looks_html(content_type: str, data: bytes) -> bool:
@@ -373,7 +404,7 @@ def gather_one(
         cand = pending.pop(0)
         url = export_url(cand.url)
         try:
-            response = fetcher.get(url)
+            response = fetcher.get(url, headers=fetch_headers(url))
             data = response.content
             kind = detect_kind(data)
             if kind == "html" or (
@@ -415,7 +446,8 @@ def gather_one(
                 # best file link on it, one hop only.
                 inner = landing_target(data, response.final_url, cand.anchor_text)
                 if inner is not None:
-                    response = fetcher.get(export_url(inner))
+                    inner_url = export_url(inner)
+                    response = fetcher.get(inner_url, headers=fetch_headers(inner_url))
                     data = response.content
                     kind = detect_kind(data)
                 elif folder_budget > 0:

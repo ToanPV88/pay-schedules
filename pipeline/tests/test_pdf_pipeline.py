@@ -209,6 +209,29 @@ class TestDiscoverUnits:
             "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjK/edit#gid=0"
         ).endswith("/spreadsheets/d/1AbCdEfGhIjK/export?format=xlsx")
 
+    def test_google_links_through_drive_api_with_a_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # drive.google.com / docs.google.com disallow bots; the Drive API is Google's channel for
+        # programs. The key goes in a header, never in the logged URL.
+        from pay_pipeline.pdf_pipeline.gather import export_url, fetch_headers
+
+        monkeypatch.setenv("GOOGLE_API_KEY", "k-123")
+        api = "https://www.googleapis.com/drive/v3/files"
+        for link in (
+            "https://drive.google.com/file/d/1AbCdEfGhIjK/view?usp=sharing",
+            "https://drive.google.com/open?id=1AbCdEfGhIjK&usp=drive_copy",
+            "https://drive.google.com/uc?export=download&id=1AbCdEfGhIjK",
+        ):
+            assert export_url(link) == f"{api}/1AbCdEfGhIjK?alt=media&supportsAllDrives=true"
+        doc = export_url("https://docs.google.com/document/d/1AbCdEfGhIjK/edit")
+        assert doc.startswith(f"{api}/1AbCdEfGhIjK/export?mimeType=application%2Fvnd.openxml")
+        assert "k-123" not in doc
+        assert fetch_headers(doc) == {"X-goog-api-key": "k-123"}
+        assert fetch_headers("https://www.district.example.invalid/a.pdf") is None
+        monkeypatch.delenv("GOOGLE_API_KEY")
+        assert fetch_headers(doc) is None
+
     def test_sitemap_pages_and_one_level_deeper_for_salary_pages(self) -> None:
         # D-027: the salary page is only in the sitemap (index -> page sitemap), and another one
         # sits three links below the home page.

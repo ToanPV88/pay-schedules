@@ -220,6 +220,32 @@ class TestPoliteFetcher:
             r = f.get(f"{HOST}/a")
         assert r.final_url == f"{HOST}/b" and r.redirects == (f"{HOST}/b",)
 
+    def test_credential_header_dropped_on_redirect_to_another_host(self) -> None:
+        other = "https://cdn.example.invalid"
+        seen: dict[str, str | None] = {}
+
+        def capture(name: str, response: httpx.Response):  # type: ignore[no-untyped-def]
+            def handler(request: httpx.Request) -> httpx.Response:
+                seen[name] = request.headers.get("x-goog-api-key")
+                return response
+
+            return handler
+
+        web = FakeWeb(
+            {
+                f"{HOST}/robots.txt": httpx.Response(200, text=ALLOW_ALL),
+                f"{HOST}/a": capture("a", httpx.Response(302, headers={"Location": f"{HOST}/b"})),
+                f"{HOST}/b": capture(
+                    "b", httpx.Response(302, headers={"Location": f"{other}/c.pdf"})
+                ),
+                f"{other}/robots.txt": httpx.Response(200, text=ALLOW_ALL),
+                f"{other}/c.pdf": capture("c", httpx.Response(200, content=b"%PDF")),
+            }
+        )
+        with make_fetcher(web) as f:
+            f.get(f"{HOST}/a", headers={"X-goog-api-key": "k"})
+        assert seen == {"a": "k", "b": "k", "c": None}
+
     def test_too_many_redirects(self) -> None:
         web = FakeWeb(
             {

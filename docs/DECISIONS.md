@@ -1005,3 +1005,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   đều xa hơn thì vẫn lấy năm mới nhất, và kiểm tra năm học giữ bảng lại như cũ.
 - Bộ đọc văn bản lên @10, rồi đọc lại các bảng nháp (D-053). Bộ chuẩn không đổi: 24 publish,
   2.560/2.560 ô đúng.
+
+## D-059: File trên Google Drive/Docs tải qua Google Drive API
+
+- Ngày: 2026-11-15. robots.txt của `drive.google.com` và `docs.google.com` chặn bot, nên link
+  bảng lương các học khu để trên Drive/Docs không tải được (41 học khu ở đợt 4–5). Không vượt
+  robots.txt. Thay vào đó, khi có secret `GOOGLE_API_KEY` thì pipeline tải qua Drive API v3
+  (`www.googleapis.com/drive/v3/files/<id>?alt=media`, Google Docs/Sheets/Slides qua `/export`).
+  Đây là kênh Google mở cho chương trình; `www.googleapis.com` không có robots.txt.
+- Key đi trong header `X-goog-api-key`, không nằm trong URL ghi vào báo cáo hay Release. Khi chuyển
+  hướng sang host khác thì fetcher bỏ header. Không có key thì giữ cách cũ (link vẫn bị chặn).
+- Secret mới `GOOGLE_API_KEY` (key Google Cloud, chỉ bật Google Drive API) chỉ nằm ở `env` của bước
+  `pay-pipeline pdf-gather`; `test_repo_consistency.py` kiểm tra.
+- Chỉ áp dụng cho file công khai mà học khu đã đăng link. Link Docs dạng `/d/e/2PACX…` (bản
+  "publish to web") không có id file nên chưa xử lý.

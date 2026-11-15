@@ -33,7 +33,8 @@ Khung tệp này lấy từ travienphi (`docs/REUSE_AUDIT.md` §8).
 
 - Không đưa token, mật khẩu, khóa riêng vào mã, tài liệu, test, log hay commit message.
 - Bí mật của Worker đặt bằng `wrangler secret put`; bí mật của CI đặt trong GitHub Actions secrets.
-  Hiện có `CLOUDFLARE_API_TOKEN`, `REVIEW_PASSWORD` (D-021) và `PURGE_TOKEN` (D-023); thêm secret
+  Hiện có `CLOUDFLARE_API_TOKEN`, `REVIEW_PASSWORD` (D-021), `PURGE_TOKEN` (D-023) và
+  `GOOGLE_API_KEY` (D-059, chỉ ở bước `pay-pipeline pdf-gather`); thêm secret
   mới phải ghi vào `docs/DECISIONS.md`. Không dùng API AI trả phí (D-022).
 - Trong workflow, secret chỉ nằm ở `env` của đúng bước dùng nó: `CLOUDFLARE_API_TOKEN` ở bước gọi
   wrangler, `REVIEW_PASSWORD`/`PURGE_TOKEN` ở bước `wrangler secret put` cùng tên; không `set -x`.
