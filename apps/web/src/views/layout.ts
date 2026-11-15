@@ -1,4 +1,4 @@
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import { adSlotsEnabled, type Env, isIndexable, SITE_NAME } from "../env";
 
 export type Html = ReturnType<typeof html>;
@@ -41,6 +41,11 @@ export function adSlot(site: Site, position: string): Html {
   }
   return html`<aside class="ad-slot" aria-label="Advertisement" data-ad-slot="${position}"></aside>`;
 }
+
+/** Logo cạnh tên site, vẽ thẳng trong HTML (không thêm request), cùng hình với favicon. */
+const LOGO = raw(
+  '<svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22h16M8 16h16M8 10h16M14 7v18" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
+);
 
 export interface Crumb {
   label: string;
@@ -88,7 +93,8 @@ ${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">
-<a class="site-name" href="/">${SITE_NAME}</a>
+<div class="wrap header-inner">
+<a class="site-name" href="/">${LOGO}<span>${SITE_NAME}</span></a>
 <nav class="site-nav" aria-label="Main">
 ${statesMenu()}
 <a href="/search">Search</a>
@@ -97,11 +103,13 @@ ${statesMenu()}
 <a href="/calculator">Calculator</a>
 <a href="/methodology">Methodology</a>
 </nav>
+</div>
 </header>
 <main id="main">
 ${body}
 </main>
 <footer class="site-footer">
+<div class="wrap">
 <p>Figures are for reference only. They are extracted automatically from public documents and may contain errors; the linked source document governs. Actual pay is set by each district. This site is not affiliated with any school district or government agency.</p>
 <nav aria-label="Footer">
 <a href="/about">About</a>
@@ -110,6 +118,7 @@ ${body}
 <a href="/terms">Terms</a>
 <a href="/contact">Contact</a>
 </nav>
+</div>
 </footer>
 </body>
 </html>`;

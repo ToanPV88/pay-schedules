@@ -18,6 +18,17 @@ import { districtPath, hitList, moneyCell, searchForm } from "./parts";
 
 // ---------------------------------------------------------------- trang chủ
 
+/** "19.1M", "850K", "640": số học sinh gọn cho ô thống kê ở trang chủ. */
+export function studentsShort(students: number): string {
+  if (students >= 1_000_000) {
+    return `${(students / 1_000_000).toFixed(1)}M`;
+  }
+  if (students >= 10_000) {
+    return `${Math.round(students / 1000)}K`;
+  }
+  return students.toLocaleString("en-US");
+}
+
 export interface HomePageData {
   states: StateCount[];
   coverage: Coverage;
@@ -58,9 +69,20 @@ ${recentList(data.recent, true)}
 <p><a href="/recently-updated">All recently updated districts</a></p>
 </section>`;
   }
-  return html`<h1>Public school teacher salary schedules</h1>
+  let stats = html``;
+  if (coverage.districts > 0) {
+    stats = html`<dl class="stats">
+<div><dt>School districts</dt><dd>${coverage.districts.toLocaleString("en-US")}</dd></div>
+<div><dt>States</dt><dd>${coverage.states.toLocaleString("en-US")}</dd></div>
+<div><dt>Students covered</dt><dd>${studentsShort(coverage.students)}</dd></div>
+</dl>`;
+  }
+  return html`<div class="hero">
+<h1>Public school teacher salary schedules</h1>
 <p class="lede">${lede}</p>
 ${form}
+${stats}
+</div>
 ${payOverview(data.pay, "across the site", true)}
 ${recent}
 <section aria-labelledby="states-heading">
