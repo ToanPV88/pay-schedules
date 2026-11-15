@@ -198,9 +198,10 @@ ${results}
       const sample = popular.slice(0, 3).map((p) => `${p.stateSlug}/${p.slug}`);
       const quick =
         sample.length >= 2
-          ? html`<p><a class="button" href="${comparePath(sample, null, 1)}">Compare the ${sample.length} largest districts</a></p>`
+          ? html`<p><a class="button" data-nearby-button href="${comparePath(sample, null, 1)}">Compare the ${sample.length} largest districts</a></p>`
           : html``;
-      start = html`<section aria-labelledby="popular-heading">
+      // site.js thay bằng học khu gần người xem khi biết vị trí gần đúng (data-nearby).
+      start = html`<section aria-labelledby="popular-heading" data-nearby="/compare?d={key}" data-nearby-compare="/compare?d={keys}">
 <h2 id="popular-heading">Or start from a large district</h2>
 ${quick}
 ${popularList(popular, (key) => comparePath([key], null, 1))}
@@ -280,7 +281,8 @@ export function calculatorPage(data: CalculatorPageData): Html {
     const popular = data.popular ?? [];
     let start = html``;
     if (popular.length > 0) {
-      start = html`<section aria-labelledby="popular-heading">
+      // site.js thay bằng học khu gần người xem khi biết vị trí gần đúng (data-nearby).
+      start = html`<section aria-labelledby="popular-heading" data-nearby="/calculator?d={key}">
 <h2 id="popular-heading">Popular districts</h2>
 ${popularList(popular, (key) => `/calculator?d=${key}`)}
 </section>`;

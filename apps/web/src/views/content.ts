@@ -62,6 +62,8 @@ const privacy: ContentPage = {
   description: `What ${SITE_NAME} collects from visitors.`,
   body: () => html`<h1>Privacy</h1>
 <p class="lede">This site does not use accounts and does not set cookies of its own.</p>
+<h2>Approximate location</h2>
+<p>On the calculator and compare pages, the site may suggest districts near you. It uses the approximate location (city and state) that our hosting provider, Cloudflare, derives from your connection for each request. This location is not stored and is not linked to you. Suggestions are only shown for visitors in the United States.</p>
 <h2>Error reports</h2>
 <p>If you send an error report, we store the text you write and the page it refers to. We do not store your name, email address or IP address with the report. Please do not include personal information in the message.</p>
 <p>The report form uses Cloudflare Turnstile to block spam. Turnstile runs a check in your browser and is covered by <a href="https://www.cloudflare.com/turnstile-privacy-policy/" rel="noopener">Cloudflare’s Turnstile privacy addendum</a>.</p>
