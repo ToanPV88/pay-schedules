@@ -119,8 +119,12 @@ export function faqSection(origin: string, data: FaqData, extra: object[] = []):
   if (faqs.length === 0) {
     return html``;
   }
+  // Câu hỏi thu gọn được (<details>): câu đầu mở sẵn, nội dung vẫn nằm trong HTML cho máy tìm kiếm.
   const items = faqs.map(
-    (f) => html`<div class="faq"><h3>${f.question}</h3><p>${f.answer}</p></div>
+    (
+      f,
+      i,
+    ) => html`<details class="faq"${i === 0 ? raw(" open") : ""}><summary><h3>${f.question}</h3></summary><p>${f.answer}</p></details>
 `,
   );
   const { district } = data;

@@ -1625,18 +1625,83 @@ button[hidden] {
 }
 
 .faq {
-  padding: 0.25rem 0 0.5rem;
   border-top: 1px solid var(--line);
 }
 
+.faq:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+
+.faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.25rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::after {
+  content: "+";
+  flex: none;
+  color: var(--accent);
+  font-size: 1.3rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.faq[open] summary::after {
+  content: "−";
+}
+
+.faq summary:hover h3 {
+  color: var(--accent);
+}
+
 .faq h3 {
-  margin-top: 0.85rem;
+  margin: 0;
   font-size: 1rem;
 }
 
 .faq p {
-  margin-top: 0.25rem;
+  margin: 0 0 0.9rem;
+  padding: 0 0.25rem;
   color: var(--muted);
+}
+
+/* Mục lục "On this page" của trang học khu */
+.on-page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin: 1rem 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.on-page span {
+  margin-right: 0.25rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.on-page a {
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.on-page a:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 /* Chỗ chừa cho quảng cáo (Công đoạn 8): kích thước cố định để bố cục không xô lệch. */
