@@ -7,6 +7,6 @@
   "deadline_minutes": 60,
   "seeded_only": false,
   "ids_file": "pipeline/sources/dot-3-seeds.csv",
-  "manual_release": "manual-20261115-tai-tay-2",
+  "manual_release": "",
   "reread_drafts": false
 }
