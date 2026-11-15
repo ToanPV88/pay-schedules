@@ -286,6 +286,8 @@ describe("trang chủ và trang mới cập nhật", () => {
     // trung vị tối đa của $62,000 và $57,000
     expect(html).toContain("<dd>$59,500</dd>");
     expect(html).toContain('href="/recently-updated"');
+    expect(html).toContain('<details class="states-menu">');
+    expect(html).toContain('<a href="/new-york">New York</a>');
     expect(html).toContain('href="/test-state/test-valley-unified"');
   });
 
