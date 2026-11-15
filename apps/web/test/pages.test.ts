@@ -257,8 +257,14 @@ describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
     const html = await page(
       "/compare?d=test-state/test-valley-unified,test-state/canon-test&lane=MA&step=2",
     );
-    expect(html).toContain("<td>MA</td><td>2</td><td>$55,500</td>");
-    expect(html).toContain("<td>Class III (MA)</td><td>Step B</td><td>$53,000</td>");
+    // Mức cao nhất có nhãn "Highest"; mức thấp hơn ghi khoảng cách và thanh theo tỉ lệ.
+    expect(html).toContain(
+      '<td>MA</td><td>2</td><td class="amount-cell"><span class="amount">$55,500</span> <span class="badge badge-top">Highest</span><span class="bar" style="width: 100%"></span></td>',
+    );
+    expect(html).toContain(
+      '<td>Class III (MA)</td><td>Step B</td><td class="amount-cell"><span class="amount">$53,000</span> <span class="badge">Lowest</span><span class="bar" style="width: 95%"></span><span class="gap">$2,500 below the highest</span></td>',
+    );
+    expect(html).toContain('<tr class="top-row">');
   });
 
   it("trang /calculator chọn học khu rồi tính", async () => {

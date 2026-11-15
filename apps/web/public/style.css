@@ -1057,6 +1057,46 @@ td.empty {
   font-weight: 600;
 }
 
+/* Trang so sánh: mức cao nhất, thấp nhất và thanh tỉ lệ */
+
+.amount-cell {
+  min-width: 11rem;
+  white-space: normal;
+}
+
+.amount-cell .amount {
+  font-weight: 650;
+}
+
+.amount-cell .bar {
+  display: block;
+  height: 0.35rem;
+  margin: 0.3rem 0 0.15rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.top-row .amount-cell .bar {
+  background: var(--accent);
+}
+
+.amount-cell .gap {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.badge-top {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+}
+
+.top-row,
+.top-row:nth-child(even) {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
 /* Biểu mẫu */
 
 .field {
