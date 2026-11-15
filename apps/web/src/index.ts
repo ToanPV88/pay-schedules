@@ -88,6 +88,7 @@ import {
 } from "./views/pages";
 import { districtPath } from "./views/parts";
 import { calculatorPage, comparePage, type ReportError, reportPage } from "./views/tools";
+import { scheduleXlsx, XLSX_TYPE, xlsxFileName } from "./xlsx";
 
 export type { Env } from "./env";
 export { isIndexable, SITE_NAME } from "./env";
@@ -526,7 +527,7 @@ function directionOf(value: string | undefined): SortDirection {
 }
 
 app.get("/schedules/:file", async (c) => {
-  const match = /^([0-9]{1,9})\.csv$/.exec(c.req.param("file"));
+  const match = /^([0-9]{1,9})\.(csv|xlsx)$/.exec(c.req.param("file"));
   if (!match) {
     return notFound(c);
   }
@@ -540,8 +541,12 @@ app.get("/schedules/:file", async (c) => {
   }
   c.header("Cache-Control", PAGE_CACHE);
   c.header("Cache-Tag", cacheTags(districtTag(district.id)));
-  c.header("Content-Disposition", `attachment; filename="${csvFileName(district, schedule)}"`);
   c.header("X-Robots-Tag", "noindex");
+  if (match[2] === "xlsx") {
+    c.header("Content-Disposition", `attachment; filename="${xlsxFileName(district, schedule)}"`);
+    return c.body(scheduleXlsx(district, schedule), 200, { "Content-Type": XLSX_TYPE });
+  }
+  c.header("Content-Disposition", `attachment; filename="${csvFileName(district, schedule)}"`);
   return c.body(scheduleCsv(district, schedule), 200, {
     "Content-Type": "text/csv; charset=utf-8",
   });

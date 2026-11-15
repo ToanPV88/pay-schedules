@@ -12,6 +12,7 @@ import { html } from "hono/html";
 import { scheduleRange } from "../calc";
 import { csvPath } from "../csv";
 import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel, sourceLanding } from "../format";
+import { XLSX_TYPE, xlsxPath } from "../xlsx";
 import { faqSection } from "./faq";
 import { adSlot, breadcrumbs, type Html, type Site } from "./layout";
 import { benchmarkRow, districtPath, placeLine } from "./parts";
@@ -222,7 +223,7 @@ function scheduleSections(data: DistrictPageData): Html {
     });
     const download = data.demo
       ? html``
-      : html`<p class="download"><a href="${csvPath(schedule.id)}" download rel="nofollow">Download this table (CSV)</a></p>`;
+      : html`<p class="download"><span>Download this table:</span> <a href="${xlsxPath(schedule.id)}" download rel="nofollow">Excel (.xlsx)</a> <a href="${csvPath(schedule.id)}" download rel="nofollow">CSV</a></p>`;
     const section = html`<section aria-labelledby="schedule-${schedule.id}-heading">
 <h2 id="schedule-${schedule.id}-heading">${heading}</h2>
 ${scheduleTable(schedule, caption)}
@@ -373,11 +374,18 @@ export function datasetNode(origin: string, data: DistrictPageData): object {
       `${district.name} salary`,
     ],
     isAccessibleForFree: true,
-    distribution: data.schedules.map((s) => ({
-      "@type": "DataDownload",
-      encodingFormat: "text/csv",
-      contentUrl: `${origin}${csvPath(s.id)}`,
-    })),
+    distribution: data.schedules.flatMap((s) => [
+      {
+        "@type": "DataDownload",
+        encodingFormat: "text/csv",
+        contentUrl: `${origin}${csvPath(s.id)}`,
+      },
+      {
+        "@type": "DataDownload",
+        encodingFormat: XLSX_TYPE,
+        contentUrl: `${origin}${xlsxPath(s.id)}`,
+      },
+    ]),
   };
 }
 
