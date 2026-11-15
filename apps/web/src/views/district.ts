@@ -20,6 +20,7 @@ import {
   hasStipendsOrNotes,
   scheduleTable,
   sourceBlock,
+  stepsHaveYears,
   stipendsAndNotes,
 } from "./schedule";
 
@@ -57,6 +58,14 @@ export interface DistrictPageData {
 
 /** Số học khu tối thiểu để trung vị của bang đủ nghĩa khi so sánh. */
 export const MIN_STATE_DISTRICTS = 5;
+
+/** Câu hướng dẫn của máy tính: hỏi số năm khi bảng ghi số năm cho mọi bậc. */
+function calcHint(schedule: Schedule): string {
+  if (stepsHaveYears(schedule)) {
+    return "Pick a lane and your years of experience to read the amount from the table above.";
+  }
+  return "Pick a lane and a step to read the amount from the table above.";
+}
 
 export function districtTitle(district: District, year: string): string {
   return `${district.name} Teacher Salary Schedule ${schoolYearLabel(year)}`;
@@ -219,7 +228,7 @@ function scheduleSections(data: DistrictPageData): Html {
 ${scheduleTable(schedule, caption)}
 ${download}
 <h3>Salary calculator</h3>
-<p>Pick a lane and a step to read the amount from the table above.</p>
+<p>${calcHint(schedule)}</p>
 ${calc}
 </section>
 `;
