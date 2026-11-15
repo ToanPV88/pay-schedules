@@ -72,15 +72,18 @@ jobs:
             echo
             echo "### Trang học khu mẫu ($(wc -l < districts.txt) trang ngẫu nhiên trong sitemap)"
             echo
-            echo "| Trang | HTTP | Ô có tiền | FAQ | JSON-LD | CSV |"
-            echo "| --- | ---: | ---: | --- | --- | --- |"
+            echo "| Trang | HTTP | Ô có tiền | Lân cận | FAQ | JSON-LD | CSV |"
+            echo "| --- | ---: | ---: | --- | --- | --- | --- |"
           } >> "$GITHUB_STEP_SUMMARY"
           while read -r url; do
             code=$(get "$url")
             cells=$(grep -c '<td data-cents=' page.html || true)
             faq=$(grep -q 'id="faq-heading"' page.html && echo có || echo không)
+            # Trang trong sitemap phải là trang được index: có học khu lân cận (PLAN Công đoạn 7).
+            near=$(grep -q 'Compare these districts at the same step and lane' page.html && echo có || echo không)
+            grep -oE '<title>[^<]*</title>' page.html >> titles.txt
             ld=$(grep -oP '(?<=<script type="application/ld\+json">).*?(?=</script>)' page.html | head -1)
-            if [ -n "$ld" ] && echo "$ld" | jq -e '."@graph"[0]."@type" == "FAQPage"' > /dev/null; then json="hợp lệ"; else json="lỗi"; fi
+            if [ -n "$ld" ] && echo "$ld" | jq -e '[."@graph"[]."@type"] == ["FAQPage", "BreadcrumbList", "Dataset"]' > /dev/null; then json="hợp lệ"; else json="lỗi"; fi
             csv=$(grep -oE 'href="/schedules/[0-9]+\.csv"' page.html | head -1 | sed -E 's/^href="//; s/"$//')
             csvok="không có link"
             if [ -n "$csv" ]; then
@@ -91,10 +94,14 @@ jobs:
             [ "$code" = 200 ] || fail "${url}: HTTP ${code}"
             [ "$cells" -gt 0 ] || fail "${url}: không có ô tiền"
             [ "$faq" = có ] || fail "${url}: thiếu FAQ"
+            [ "$near" = có ] || fail "${url}: trong sitemap nhưng không có lân cận (trang noindex)"
             [ "$json" = "hợp lệ" ] || fail "${url}: JSON-LD lỗi"
             [ "$csvok" = ok ] || fail "${url}: CSV ${csvok}"
-            echo "| ${url#"$BASE_URL"} | ${code} | ${cells} | ${faq} | ${json} | ${csvok} |" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "| ${url#"$BASE_URL"} | ${code} | ${cells} | ${near} | ${faq} | ${json} | ${csvok} |" | tee -a "$GITHUB_STEP_SUMMARY"
           done < districts.txt
+          dups=$(sort titles.txt | uniq -d | wc -l)
+          echo "- Title trùng trong mẫu: ${dups}" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$dups" = 0 ] || fail "title trùng: $(sort titles.txt | uniq -d | head -3 | tr '\n' ' ')"
           cp districts.txt "$RUNNER_TEMP/districts.txt"
           exit "$failed"
       - name: Lighthouse mobile
