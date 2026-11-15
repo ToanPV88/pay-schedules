@@ -152,6 +152,12 @@ export interface StatePageData {
 }
 
 /** Đường dẫn trang bang với cách sắp xếp và số trang; tham số mặc định thì bỏ khỏi URL. */
+/**
+ * Neo tới bảng học khu. Bang nhiều trang thì sắp xếp và chuyển trang tải lại trang: link có neo này
+ * để trình duyệt cuộn thẳng tới bảng thay vì về đầu trang.
+ */
+export const DISTRICTS_ANCHOR = "#districts-heading";
+
 export function statePath(
   slug: string,
   sort: DistrictSort,
@@ -175,7 +181,7 @@ function sortHeader(data: StatePageData, key: DistrictSort, label: string): Html
   if (active) {
     next = data.dir === "asc" ? "desc" : "asc";
   }
-  const href = statePath(data.state.slug, key, next, 1);
+  const href = `${statePath(data.state.slug, key, next, 1)}${DISTRICTS_ANCHOR}`;
   if (!active) {
     return html`<th scope="col"><a href="${href}" data-sort-first="${firstDirection}">${label}</a></th>`;
   }
@@ -268,14 +274,14 @@ export function statePage(data: StatePageData): Html {
   const sortable = pages === 1 ? "true" : "false";
   const pager: Html[] = [];
   if (data.page > 1) {
-    const prev = statePath(state.slug, data.sort, data.dir, data.page - 1);
+    const prev = `${statePath(state.slug, data.sort, data.dir, data.page - 1)}${DISTRICTS_ANCHOR}`;
     pager.push(html`<a href="${prev}" rel="prev">Previous</a>`);
   }
   if (pages > 1) {
     pager.push(html`<span>Page ${data.page} of ${pages}</span>`);
   }
   if (data.page < pages) {
-    const next = statePath(state.slug, data.sort, data.dir, data.page + 1);
+    const next = `${statePath(state.slug, data.sort, data.dir, data.page + 1)}${DISTRICTS_ANCHOR}`;
     pager.push(html`<a href="${next}" rel="next">Next</a>`);
   }
   let pagination = html``;

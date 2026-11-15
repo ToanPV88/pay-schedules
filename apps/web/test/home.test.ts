@@ -77,4 +77,11 @@ describe("trang chủ và trang bang", () => {
     expect(valley).toBeGreaterThan(-1);
     expect(ridge).toBeGreaterThan(valley);
   });
+
+  it("link sắp xếp của bảng học khu trỏ tới bảng, không về đầu trang", async () => {
+    await seed();
+    const html = await page("/test-state");
+    expect(html).toContain('href="/test-state?sort=start&amp;dir=desc#districts-heading"');
+    expect(html).toContain('<h2 id="districts-heading">');
+  });
 });
