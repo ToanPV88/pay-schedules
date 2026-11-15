@@ -296,4 +296,121 @@
     }
     apply();
   }
+
+  // Gợi ý học khu khi gõ (combobox theo mẫu ARIA). Không có JavaScript thì form gửi /search như cũ.
+  for (const input of document.querySelectorAll("input[data-suggest]")) {
+    const row = input.closest(".search-row");
+    if (!row) {
+      continue;
+    }
+    const list = document.createElement("ul");
+    list.id = `${input.id}-suggest`;
+    list.className = "suggest";
+    list.setAttribute("role", "listbox");
+    list.hidden = true;
+    row.append(list);
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-controls", list.id);
+
+    let items = [];
+    let active = -1;
+    let timer = 0;
+    let controller = null;
+
+    const close = () => {
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+      active = -1;
+    };
+    const highlight = (index) => {
+      active = index;
+      for (const [i, li] of [...list.children].entries()) {
+        li.setAttribute("aria-selected", String(i === index));
+      }
+      if (index >= 0) {
+        input.setAttribute("aria-activedescendant", `${list.id}-${index}`);
+        list.children[index]?.scrollIntoView({ block: "nearest" });
+      } else {
+        input.removeAttribute("aria-activedescendant");
+      }
+    };
+    const render = (hits) => {
+      items = hits;
+      list.replaceChildren();
+      for (const [i, hit] of hits.entries()) {
+        const li = document.createElement("li");
+        li.id = `${list.id}-${i}`;
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", "false");
+        const name = document.createElement("span");
+        name.className = "suggest-name";
+        name.textContent = hit.name;
+        const place = document.createElement("span");
+        place.className = "suggest-place";
+        place.textContent = hit.hasSchedule ? hit.place : `${hit.place} · No schedule yet`;
+        li.append(name, place);
+        // mousedown thay cho click để chọn trước khi ô nhập mất tiêu điểm và danh sách đóng.
+        li.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          window.location.href = hit.href;
+        });
+        li.addEventListener("mousemove", () => highlight(i));
+        list.append(li);
+      }
+      if (hits.length === 0) {
+        close();
+        return;
+      }
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      highlight(-1);
+    };
+    const fetchHits = async () => {
+      const query = input.value.trim();
+      if (query.length < 2) {
+        render([]);
+        return;
+      }
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const url = `${input.dataset.suggest}?q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        if (data.q === input.value.trim().slice(0, 80)) {
+          render(data.hits ?? []);
+        }
+      } catch {
+        // Bị hủy vì người dùng gõ tiếp, hoặc lỗi mạng: giữ nguyên form tìm kiếm thường.
+      }
+    };
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(fetchHits, 150);
+    });
+    input.addEventListener("keydown", (event) => {
+      if (list.hidden || items.length === 0) {
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        highlight((active + 1) % items.length);
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        highlight(active <= 0 ? items.length - 1 : active - 1);
+      } else if (event.key === "Enter" && active >= 0) {
+        event.preventDefault();
+        window.location.href = items[active].href;
+      } else if (event.key === "Escape") {
+        close();
+      }
+    });
+    input.addEventListener("blur", () => setTimeout(close, 100));
+  }
 })();

@@ -1137,6 +1137,51 @@ button:hover,
   min-width: 0;
 }
 
+.search-row {
+  position: relative;
+}
+
+/* Danh sách gợi ý dưới ô tìm kiếm (site.js). */
+.suggest {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 22rem;
+  margin: 0;
+  padding: 0.35rem;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+.suggest li {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.suggest li[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.suggest-name {
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.suggest-place {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .report-form {
   display: flex;
   flex-direction: column;
