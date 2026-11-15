@@ -1,0 +1,14 @@
+{
+  "name": "Pay Schedules",
+  "short_name": "Pay Schedules",
+  "description": "Public school teacher salary schedules, with the source document for every table.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#9f224e",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}

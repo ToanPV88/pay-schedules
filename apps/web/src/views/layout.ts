@@ -81,6 +81,9 @@ export function breadcrumbs(crumbs: Crumb[]): Html {
   return html`<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>${items}</ol></nav>`;
 }
 
+/** Ảnh xem trước khi chia sẻ link (1200×630), nằm trong public/. */
+export const OG_IMAGE = "/og-image.png";
+
 export function renderPage(site: Site, meta: PageMeta, body: Html): Html {
   const head: Html[] = [];
   if (meta.description) {
@@ -97,6 +100,24 @@ export function renderPage(site: Site, meta: PageMeta, body: Html): Html {
     head.push(html`<script src="${TURNSTILE_SCRIPT}" async defer></script>\n`);
   }
   const robots = robotsContent(site.env, meta);
+  // Thẻ chia sẻ (Facebook, Zalo, X, Slack…): tiêu đề và mô tả của trang, một ảnh chung của site.
+  const share: Html[] = [
+    html`<meta property="og:type" content="website">\n`,
+    html`<meta property="og:site_name" content="${SITE_NAME}">\n`,
+    html`<meta property="og:title" content="${meta.title}">\n`,
+    html`<meta property="og:image" content="${site.origin}${OG_IMAGE}">\n`,
+    html`<meta property="og:image:width" content="1200">\n`,
+    html`<meta property="og:image:height" content="630">\n`,
+    html`<meta property="og:image:alt" content="${SITE_NAME}: public school teacher salary schedules">\n`,
+    html`<meta name="twitter:card" content="summary_large_image">\n`,
+  ];
+  if (meta.description) {
+    share.push(html`<meta property="og:description" content="${meta.description}">\n`);
+  }
+  // Trang có tham số (tìm kiếm, máy tính) không có địa chỉ chuẩn: để mạng xã hội dùng chính link đó.
+  if (meta.canonicalPath) {
+    share.push(html`<meta property="og:url" content="${site.origin}${meta.canonicalPath}">\n`);
+  }
   return html`<!doctype html>
 <html lang="en">
 <head>
@@ -104,8 +125,10 @@ export function renderPage(site: Site, meta: PageMeta, body: Html): Html {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="${robots}">
 <title>${meta.title}</title>
-${head}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+${head}${share}<meta name="theme-color" content="#9f224e">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
