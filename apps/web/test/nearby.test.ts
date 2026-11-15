@@ -85,6 +85,9 @@ describe("học khu gần người xem", () => {
       .bind(a.districtId)
       .run();
     expect(await page("/calculator")).toContain('data-nearby="/calculator?d={key}"');
-    expect(await page("/compare")).toContain('data-nearby="/compare?d={key}"');
+    const compare = await page("/compare");
+    expect(compare).toContain('data-nearby="/compare?d={key}"');
+    // Trang Compare phải nạp site.js thì gợi ý khi gõ và học khu gần mới chạy.
+    expect(compare).toContain('<script src="/site.js" defer></script>');
   });
 });

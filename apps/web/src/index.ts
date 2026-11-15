@@ -457,6 +457,8 @@ app.get("/compare", async (c) => {
     description: "Compare teacher salary schedules of up to four school districts side by side.",
     canonicalPath: "/compare",
     noindex: hasQuery(c),
+    // site.js: gợi ý khi gõ và "Districts near you".
+    script: true,
   };
   const tags = [TAG_COMPARE, ...entries.map((e) => districtTag(e.district.id))];
   const popular = entries.length === 0 ? await listLargestDistricts(c.env.DB, POPULAR_LIMIT) : [];
