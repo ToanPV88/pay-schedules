@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { axisMoney, chartLanes, niceStep, spreadLabels } from "../src/views/chart";
+import { axisMoney, chartLanes, niceStep, spreadLabels, xTickIndexes } from "../src/views/chart";
 import { page, reset, seed } from "./helpers";
 
 beforeEach(async () => {
@@ -19,6 +19,13 @@ describe("biểu đồ lương theo bậc", () => {
     expect(axisMoney(4_500_000)).toBe("$45k");
     expect(axisMoney(5_250_000)).toBe("$52.5k");
     expect(axisMoney(2_550)).toBe("$25.50");
+  });
+
+  it("nhãn trục x cách đều, không dính vào nhãn bậc cuối", () => {
+    expect(xTickIndexes(5)).toEqual([0, 1, 2, 3, 4]);
+    // 16 bậc (0-15): mỗi 2 bậc một nhãn, bỏ bậc 14 vì sát bậc cuối.
+    expect(xTickIndexes(16)).toEqual([0, 2, 4, 6, 8, 10, 12, 15]);
+    expect(xTickIndexes(41)).toEqual([0, 6, 12, 18, 24, 30, 40]);
   });
 
   it("nhãn cuối đường không chồng nhau và nằm trong khung", () => {
