@@ -442,7 +442,8 @@ const SQL_LARGEST = `
     FROM districts d
     JOIN states st ON st.code = d.state
     JOIN district_summary ds ON ${LATEST_SUMMARY}
-   WHERE d.active = 1 AND d.enrollment IS NOT NULL AND ds.max_salary_cents IS NOT NULL
+   WHERE d.active = 1 AND d.enrollment IS NOT NULL
+     AND ds.start_ba_cents IS NOT NULL AND ds.max_salary_cents IS NOT NULL
    ORDER BY d.enrollment DESC, d.name COLLATE NOCASE
    LIMIT ?`;
 
@@ -456,8 +457,9 @@ interface LargeRow extends SummaryColumns {
 }
 
 /**
- * Học khu đông học sinh nhất có số liệu của năm mới nhất: bảng mẫu ở trang chủ. Chọn theo số học
- * sinh (ổn định, dễ giải thích), không chọn ngẫu nhiên và không xếp hạng theo lương.
+ * Học khu đông học sinh nhất có lương khởi điểm (BA, bậc 1) và mức tối đa trong năm mới nhất: bảng
+ * mẫu ở trang chủ. Chọn theo số học sinh (ổn định, dễ giải thích), không chọn ngẫu nhiên và không
+ * xếp hạng theo lương. Bỏ học khu thiếu lương khởi điểm để bảng mẫu không toàn dấu gạch.
  */
 export async function listLargestDistricts(
   db: D1Database,

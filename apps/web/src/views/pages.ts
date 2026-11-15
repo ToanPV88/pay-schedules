@@ -57,7 +57,7 @@ export function largestTable(items: LargeDistrict[]): Html {
 <p>Three points on each district’s latest schedule: where a new teacher with a bachelor’s degree starts, a master’s degree at step 10, and the top of the scale.</p>
 <div class="table-scroll" role="region" aria-label="Largest districts" tabindex="0">
 <table class="districts benchmarks">
-<caption>The ${items.length} largest school districts by enrollment that have a published schedule. A dash means the schedule has no such cell.</caption>
+<caption>The ${items.length} largest school districts by enrollment whose latest schedule shows a starting salary for a bachelor’s degree. A dash means the schedule has no such cell.</caption>
 <thead>
 <tr><th scope="col">District</th><th scope="col">School year</th><th scope="col">BA, step 1</th><th scope="col">MA, step 10</th><th scope="col">Maximum</th></tr>
 </thead>

@@ -6,23 +6,33 @@ beforeEach(async () => {
 });
 
 describe("trang chủ và trang bang", () => {
-  it("trang chủ có bảng mẫu các học khu lớn nhất, theo số học sinh", async () => {
+  it("trang chủ có bảng mẫu các học khu lớn nhất có lương khởi điểm, theo số học sinh", async () => {
     const { a, b } = await seed();
     await db
       .prepare("UPDATE districts SET enrollment = CASE id WHEN ? THEN 5000 WHEN ? THEN 9000 END")
       .bind(a.districtId, b.districtId)
       .run();
-    const html = await page("/");
+    let html = await page("/");
     expect(html).toContain('<h2 id="largest-heading">The largest districts at a glance</h2>');
-    expect(html).toContain("The 2 largest school districts by enrollment");
-    // Cañon Test đông hơn nên đứng trước; dòng có mã bang và ba mốc lương.
-    const start = html.indexOf('id="largest-heading"');
-    const section = html.slice(start, html.indexOf("</section>", start));
+    // Cañon Test đông hơn nhưng không có lương khởi điểm BA nên không vào bảng mẫu.
+    expect(html).toContain("The 1 largest school districts by enrollment");
+    let start = html.indexOf('id="largest-heading"');
+    let section = html.slice(start, html.indexOf("</section>", start));
+    expect(section).toContain('href="/test-state/test-valley-unified"');
+    expect(section).not.toContain('href="/test-state/canon-test"');
+    expect(section).toContain('<span class="muted">ZZ</span>');
+    // Có lương khởi điểm thì vào, xếp theo số học sinh.
+    await db
+      .prepare("UPDATE district_summary SET start_ba_cents = 4900000 WHERE district_id = ?")
+      .bind(b.districtId)
+      .run();
+    html = await page("/");
+    start = html.indexOf('id="largest-heading"');
+    section = html.slice(start, html.indexOf("</section>", start));
     const canon = section.indexOf('href="/test-state/canon-test"');
     const valley = section.indexOf('href="/test-state/test-valley-unified"');
     expect(canon).toBeGreaterThan(-1);
     expect(valley).toBeGreaterThan(canon);
-    expect(section).toContain('<span class="muted">ZZ</span>');
   });
 
   it("học khu không có số học sinh thì không vào bảng mẫu", async () => {
