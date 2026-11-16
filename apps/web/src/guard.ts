@@ -115,6 +115,15 @@ export function resetLocalLimits(): void {
   windows.clear();
 }
 
+/** Mã ngẫu nhiên của isolate, tạo ở request đầu (Workers không cho sinh số ngẫu nhiên ở global scope). */
+let isolateId = "";
+function isolateTag(): string {
+  if (isolateId === "") {
+    isolateId = crypto.randomUUID().slice(0, 8);
+  }
+  return isolateId;
+}
+
 export type LimitResult = "ok" | "blocked" | "local-blocked" | "no-ip" | "no-binding" | "error";
 
 /** Không có IP (chạy local, test) thì cho qua; không có binding hoặc binding lỗi thì chỉ đếm local. */
@@ -149,7 +158,9 @@ export async function guard(c: Context<AppEnv>, next: Next): Promise<Response | 
   const result = await checkLimit(c.env, kind, c.req.header("cf-connecting-ip"));
   if (!isProduction(c.env)) {
     // Chỉ bản xem trước: để kiểm binding có chạy thật không.
-    c.header("X-Rate-Limit", `${kind} ${result}`);
+    const ip = c.req.header("cf-connecting-ip") ?? "";
+    const count = windows.get(`${kind}:${ip}`)?.count ?? 0;
+    c.header("X-Rate-Limit", `${kind} ${result} n=${count} isolate=${isolateTag()}`);
   }
   if (result === "blocked" || result === "local-blocked") {
     c.header("Retry-After", "60");
