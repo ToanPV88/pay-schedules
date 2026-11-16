@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@12"
-WORDS = "pdfplumber-words@12"
-XLSX = "xlsx-cells@12"
-DOCX = "docx-cells@12"
-HTML = "html-cells@12"
+LAYOUT = "layout-text@13"
+WORDS = "pdfplumber-words@13"
+XLSX = "xlsx-cells@13"
+DOCX = "docx-cells@13"
+HTML = "html-cells@13"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -64,6 +64,8 @@ _LABEL = re.compile(
 )
 # Steps named by letters (Florida, Maryland): "C", "N", "AA", "T&U" (two steps paid the same).
 _LETTER = re.compile(r"^([A-Z])\1?(?:&[A-Z]{1,2})?$")
+_MONTHLY = re.compile(r"^\$?\d{3,4}(?:\.\d{2})?$")
+_RATE_CODE = re.compile(r"^[A-Z]\d{2}$")
 _PLACEMENT = re.compile(r"^[\d,\-–+]+$")
 _CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
 _NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,5}\)?\**$")
@@ -227,6 +229,16 @@ def parse_row(line: Line, index: int) -> Row | None:
         # a daily/hourly/semi-monthly figure ("$2,521") or an increase ("$0") before the first
         # annual amount (D-054)
         head = head[:-1]
+    # "0   4800   340   300   640   5,440   54,400": monthly pay components before the annual
+    # total (Winston-Salem/Forsyth, NC) (D-062)
+    rest = head
+    while len(rest) > 1 and _MONTHLY.match(rest[-1].text):
+        rest = rest[:-1]
+    if rest is not head and len(rest) == 1 and _LABEL.match(rest[0].text):
+        head = rest
+    # "A00", "M12": North Carolina state rate codes, lane letter then step (D-062)
+    if len(head) == 1 and _RATE_CODE.match(head[0].text):
+        head = [Word(str(int(head[0].text[1:])), head[0].x0, head[0].x1)]
     label = " ".join(w.text for w in head).strip()
     # "0,1,2   1   $27,175": a placement column (years of experience) before the step
     if (
@@ -937,9 +949,110 @@ def read_pages(pages: list[list[Line]], prefer: list[int], reader: str) -> dict[
     for p in order[:12]:
         tables += find_tables(pages[p - 1], p)
     tables = _join_pages(tables)
+    tables = _join_component_pages(tables)
     table = pick_table(tables)
     text = "\n".join(ln.text for ln in pages[table.page - 1]) if table else ""
     return to_answer(table, text, reader)
+
+
+_TOTAL_LANE = re.compile(r"\btotal\b", re.I)
+_PART_LANE = re.compile(
+    r"\b(?:state|base|supp\w*|local|monthly|mthly|allotment|county|low\s+wealth|art\.?\s*46)\b",
+    re.I,
+)
+_DEGREE_LANE = re.compile(r"\b(?:bachelor|master|advanced|doctor|specialist|ba|ma|phd)\b", re.I)
+_LANE_TITLE = re.compile(
+    r"\b(?:bachelor|master|advanced|doctor|specialist|six[- ]year)\w*|\"[A-Z]\"\s+schedule",
+    re.I,
+)
+
+
+def _component_column(t: Table) -> int | None:
+    """The total column of a one-lane page printed as pay components (D-062).
+
+    North Carolina districts print one page per lane ("Bachelor's "A" Schedule"): state base,
+    local supplement, total. The annual total is the salary; a 10-month total wins over 11/12.
+    """
+    if t.transposed or any(_DEGREE_LANE.search(x) for x in t.lanes):
+        return None
+    totals = [j for j, x in enumerate(t.lanes) if _TOTAL_LANE.search(x)]
+    if not totals:
+        return None
+    if len(t.lanes) > 1 and not any(_PART_LANE.search(x) for x in t.lanes):
+        return None
+    ten = [j for j in totals if re.search(r"\b10\b", t.lanes[j])]
+    annual = [j for j in totals if re.search(r"annual|pay", t.lanes[j], re.I)]
+    return (ten or annual or totals)[0]
+
+
+def _lane_title(t: Table) -> str | None:
+    lines = t.context.splitlines()[-8:]
+    for i in range(len(lines) - 1, -1, -1):
+        line = lines[i]
+        if _LANE_TITLE.search(line) and len(line.split()) <= 10:
+            title = " ".join(line.split())
+            # "2026 - 2027 NBPTS TEACHER SALARY SCHEDULE" above "Masters "M" Schedule"
+            above = " ".join(lines[max(0, i - 2) : i])
+            if _BOARD.search(above) and not _BOARD.search(title):
+                title = f"National Board {title}"
+            return title
+    return None
+
+
+# Pages for other certified staff printed after the teacher pages (Winston-Salem: counselors).
+_OTHER_STAFF = re.compile(
+    r"counsel|psych|speech|spch|audio|nurse|social\s+worker|media\s+coord|instructional\s+support",
+    re.I,
+)
+_BOARD = re.compile(r"\bnbpts\b|national\s+board", re.I)
+
+
+def _join_component_pages(tables: list[Table]) -> list[Table]:
+    """One-lane component pages become one table with a lane per page (D-062)."""
+    parts: list[tuple[Table, int, str]] = []
+    dropped: set[int] = set()
+    for t in tables:
+        j = _component_column(t)
+        title = _lane_title(t) if j is not None else None
+        other_staff = _OTHER_STAFF.search("\n".join(t.context.splitlines()[-8:]))
+        if j is not None and other_staff:
+            dropped.add(id(t))  # pay components of another job, never a teacher grid
+        if (
+            j is not None
+            and title is not None
+            and not other_staff
+            and all(p[2] != title for p in parts)
+        ):
+            parts.append((t, j, title))
+    if not parts:
+        return [t for t in tables if id(t) not in dropped]
+    by_page = sorted(parts, key=lambda p: p[0].page)
+    labels: list[str] = []
+    for t, _, _ in by_page:
+        labels += [r.label for r in t.rows if r.label not in labels]
+    if len(set(labels)) != len(labels):
+        return tables
+    order = sorted(labels, key=lambda x: _label_number(x) or 0)
+    first = by_page[0][0]
+    merged = Table(first.page, [Row(x, [], 0) for x in order], first.header, first.context)
+    merged.columns = list(range(len(by_page)))
+    merged.grid = []
+    for x in order:
+        row: list[float | None] = []
+        for t, j, _ in by_page:
+            cell = next((g[j] for r, g in zip(t.rows, t.grid, strict=True) if r.label == x), None)
+            row.append(cell)
+        merged.grid.append(row)
+    merged.lanes = [p[2] for p in by_page]
+    merged.step_header = first.step_header
+    used = {id(p[0]) for p in parts} | dropped
+    out: list[Table] = []
+    for t in tables:
+        if id(t) == id(parts[0][0]):
+            out.append(merged)
+        elif id(t) not in used:
+            out.append(t)
+    return out
 
 
 def _join_pages(tables: list[Table]) -> list[Table]:
