@@ -1,0 +1,55 @@
+# Kiểm lỗ hổng đã công bố của phụ thuộc (DECISIONS.md D-111): npm audit cho web/review/db,
+# pip-audit cho pipeline. Chạy khi lockfile đổi, mỗi tuần và khi gọi tay; tách khỏi CI để một lỗ hổng
+# mới công bố không chặn mọi pull request (kể cả pull request dữ liệu).
+name: Audit
+
+on:
+  pull_request:
+    paths:
+      - "package-lock.json"
+      - "pipeline/uv.lock"
+      - ".github/workflows/audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "package-lock.json"
+      - "pipeline/uv.lock"
+      - ".github/workflows/audit.yml"
+  schedule:
+    - cron: "37 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Chặn từ mức high; mức thấp hơn chỉ hiện trong log.
+      - name: npm audit
+        run: |
+          npm audit --audit-level=none || true
+          npm audit --audit-level=high
+
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: pip-audit
+        run: |
+          uv export --frozen --no-hashes --no-emit-project --format requirements-txt > "$RUNNER_TEMP/requirements.txt"
+          uvx --from "pip-audit==2.10.1" pip-audit -r "$RUNNER_TEMP/requirements.txt" \
+            --no-deps --disable-pip --progress-spinner off
