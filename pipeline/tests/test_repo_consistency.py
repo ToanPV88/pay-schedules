@@ -143,3 +143,23 @@ def test_preview_and_production_use_different_databases() -> None:
     text = (ROOT / "apps" / "web" / "wrangler.jsonc").read_text(encoding="utf-8")
     names = re.findall(r'"database_name":\s*"([^"]+)"', text)
     assert names == ["pay-schedules", "pay-schedules-preview"]
+
+
+# Một tài liệu chỉ là bảng lương của một học khu (D-066). Ngoại lệ: học khu tiểu học và trung học
+# dùng chung một bảng (Montana), đã kiểm tay.
+SHARED_SEED_URLS = {
+    "https://resources.finalsite.net/images/v1784925041/billingsschoolsorg/izpgx2muwqwlieraxaui/2026-27BEASalaryMatrix-WithMastersandPHDStipendAdded.pdf",
+    "https://frazer.k12.mt.us/files/page/1865/Pay_Scales_2025.pdf",
+    "https://www.blueponyk12.com/employment/certified-salary-schedule",
+}
+
+
+def test_seed_urls_belong_to_one_district() -> None:
+    import csv
+
+    owners: dict[str, set[str]] = {}
+    with (ROOT / "pipeline" / "sources" / "schedule-urls.csv").open(encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            owners.setdefault(row["url"], set()).add(row["nces_id"])
+    shared = {u: len(n) for u, n in owners.items() if len(n) > 1 and u not in SHARED_SEED_URLS}
+    assert not shared, shared

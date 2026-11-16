@@ -114,6 +114,20 @@ def _run(raw: dict[str, Any]) -> ex.ExtractionRun:
     return ex.ExtractionRun(**raw)
 
 
+RAW_LIMIT = 60_000
+"""Characters of a reader's raw output kept in D1; one SQL statement must stay under 100 KB.
+The full output stays in the run's Release (extractions.json)."""
+
+
+def _stored_raw(raw: str) -> str:
+    if len(raw) <= RAW_LIMIT:
+        return raw
+    return json.dumps(
+        {"truncated": True, "chars": len(raw), "see": "extractions.json", "head": raw[:RAW_LIMIT]},
+        ensure_ascii=False,
+    )
+
+
 def _source(doc: DocWork, nces_id: str, release_tag: str) -> SourceDocument:
     return SourceDocument(
         asset_name=doc.asset_name,
@@ -235,7 +249,8 @@ def prepare(
         cost = sum(r.cost_usd_micros for r in exruns)
         runs += [
             RunRecord(doc.url, doc.sha256, r.model, r.prompt_version,
-                      r.raw_output or json.dumps({"error": r.error}), r.cost_usd_micros)
+                      _stored_raw(r.raw_output or json.dumps({"error": r.error})),
+                      r.cost_usd_micros)
             for r in exruns
         ]  # fmt: skip
         failed = [r for r in exruns if r.data() is None]

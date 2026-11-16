@@ -1181,3 +1181,23 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Không thêm điều khoản luật áp dụng và nơi giải quyết tranh chấp (chủ dự án chọn không).
 - Cần dữ liệu số lượng lớn, hoặc học khu, cơ quan, chủ quyền tài liệu xin sửa hay gỡ: qua trang
   Contact. Email liên hệ (`CONTACT_EMAIL`) thêm sau khi có tên miền riêng.
+
+## D-066: Tài liệu dùng chung nhiều học khu không phải bảng của học khu
+
+- Ngày: 2026-11-16. Lượt chạy D-064 (link nguồn theo Step & Lane) có các tệp tổng hợp: mốc lương
+  mọi học khu Missouri của MNEA (468 học khu), bảng của mọi học khu Connecticut trong một PDF của CEA
+  (118), mọi quận West Virginia trong một tệp WVDE (55), bảng tối thiểu của South Carolina (71) và
+  Maryland (15). Bộ đọc PDF chọn bảng lớn nhất của tệp, nên mọi học khu được gán tệp đó nhận cùng
+  một bảng: 39 học khu CT và WV đã bị publish sai (cùng ô lương trang 4 của tệp CEA, trang 551 của
+  tệp WVDE). 16/20 lô còn lỗi "Câu lệnh vượt 100 KB" vì kết quả đọc thô của tệp nghìn trang.
+- Sửa:
+  - `pay-pipeline unpublish-docs` + `unpublish.yml`: bảng đọc từ các URL trong
+    `pipeline/unpublish/shared-docs-20261116.txt` về `draft`, đóng mục chờ duyệt (để "Duyệt hết"
+    không publish lại), publish lại bảng cũ bị chúng thay, `district_pipeline` về `no_schedule`
+    (lý do ghi D-066), tính lại `district_summary`, xếp xóa cache.
+  - `schedule-urls.csv`: bỏ mọi link dùng chung nhiều học khu (cả 4 trang Google Sites cũ dùng chung
+    19–28 học khu). Test `test_seed_urls_belong_to_one_district` chặn từ nay; ngoại lệ là cặp học khu
+    tiểu học / trung học Montana dùng chung bảng (Billings, Havre, Frazer).
+  - Kết quả đọc thô lưu vào D1 tối đa 60.000 ký tự (bản đủ vẫn ở `extractions.json` của Release).
+- Tệp tổng hợp của bang/công đoàn chỉ dùng được khi có bộ đọc riêng biết trang nào của học khu nào
+  (như J-90, KY, OK). Chưa làm cho CT, WV, MO.

@@ -17,6 +17,7 @@ from pay_pipeline.catalog.d1sql import catalog_sql, render_sql
 from pay_pipeline.catalog.districts import build_catalog, render_report
 from pay_pipeline.pdf_pipeline import gather as pdf_gather
 from pay_pipeline.pdf_pipeline import run as pdf_run
+from pay_pipeline.pdf_pipeline.unpublish import unpublish_sql
 from pay_pipeline.schedules import state_import
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
@@ -103,6 +104,18 @@ def _cmd_schedules_build(args: argparse.Namespace) -> int:
         f"{len(result.prepared):,} bảng lương ({published:,} published,"
         f" {len(result.prepared) - published:,} chờ xem tay), {len(result.skipped):,} bỏ qua"
     )
+    return 0
+
+
+def _cmd_unpublish_docs(args: argparse.Namespace) -> int:
+    urls = [
+        u.strip() for u in Path(args.urls).read_text(encoding="utf-8").splitlines() if u.strip()
+    ]
+    if not urls:
+        print("Danh sách URL trống", file=sys.stderr)
+        return 1
+    Path(args.sql).write_text(render_sql(unpublish_sql(urls, args.reason)), encoding="utf-8")
+    print(f"SQL gỡ bảng từ {len(urls)} tài liệu")
     return 0
 
 
@@ -243,6 +256,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
     p.set_defaults(func=_cmd_schedules_build)
+
+    p = sub.add_parser("unpublish-docs", help="Gỡ bảng đọc từ tài liệu dùng chung (D-066)")
+    p.add_argument("--urls", required=True, help="Tệp danh sách URL tài liệu, mỗi dòng một URL")
+    p.add_argument("--reason", required=True, help="Lý do ghi vào district_pipeline/review_queue")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
+    p.set_defaults(func=_cmd_unpublish_docs)
 
     p = sub.add_parser("pdf-gather", help="Pipeline PDF: Discover, Fetch, Classify một lô")
     p.add_argument("--queue", required=True, help="JSON hàng đợi từ D1 (wrangler --json)")

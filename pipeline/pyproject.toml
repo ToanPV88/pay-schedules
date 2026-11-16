@@ -44,6 +44,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # cho phép ký tự tiếng Việt tro
 # SQL chỉ ghép từ hằng số và quote(); không có dữ liệu ngoài đi thẳng vào câu lệnh.
 "src/pay_pipeline/schedules/d1sql.py" = ["S608"]
 "src/pay_pipeline/pdf_pipeline/run.py" = ["S608"]
+"src/pay_pipeline/pdf_pipeline/unpublish.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"
