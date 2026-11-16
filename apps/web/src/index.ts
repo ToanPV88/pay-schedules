@@ -9,24 +9,30 @@ import {
   type District,
   type DistrictSort,
   deleteOldErrorReports,
+  findPayTable,
   getCoverage,
   getDistrictById,
   getDistrictBySlug,
   getLatestSummary,
   getPayOverview,
+  getPayTable,
   getPublishedScheduleDistrict,
   getSchedule,
   getStateBySlug,
   insertErrorReport,
+  latestPayYear,
   listAsReportedChecks,
   listDistrictsOfState,
   listLargestDistricts,
   listMenuStates,
   listNeighbors,
+  listPayTables,
+  listPayTablesOfGroup,
   listPublishedSchedules,
   listRecentlyUpdated,
   listSitemapRows,
   listStates,
+  listVaStations,
   listYearHistory,
   type PayOverview,
   REPORT_MAX_LENGTH,
@@ -86,6 +92,16 @@ import {
   missingSchedulePage,
   type Selection,
 } from "./views/district";
+import {
+  FEDERAL_PATH,
+  federalIndexPage,
+  gsLocalityPage,
+  gsPath,
+  VA_NURSE_PATH,
+  vaIndexPage,
+  vaStationPage,
+  vaStationPath,
+} from "./views/federal";
 import { type Html, type PageMeta, pageTitle, renderPage, type Site } from "./views/layout";
 import { RECENT_PAGE_SIZE, recentPage, recentPath } from "./views/overview";
 import {
@@ -212,6 +228,26 @@ app.get("/robots.txt", (c) => {
   );
 });
 
+/** Trang bảng lương liên bang cho sitemap (D-065): trang tổng, từng vùng GS, từng cơ sở VA. */
+async function federalSitemapPaths(db: D1Database): Promise<string[]> {
+  const paths: string[] = [];
+  const gsYear = await latestPayYear(db, "gs_locality").catch(() => null);
+  if (gsYear !== null) {
+    paths.push(FEDERAL_PATH, gsPath("base"));
+    for (const t of await listPayTables(db, "gs_locality", gsYear)) {
+      paths.push(gsPath(t.slug));
+    }
+  }
+  const vaYear = await latestPayYear(db, "va_nurse").catch(() => null);
+  if (vaYear !== null) {
+    paths.push(VA_NURSE_PATH);
+    for (const s of await listVaStations(db, vaYear)) {
+      paths.push(vaStationPath(s.groupSlug));
+    }
+  }
+  return paths;
+}
+
 /** Sitemap chỉ liệt kê trang học khu có bảng published (PLAN Công đoạn 6, nghiệm thu). */
 app.get("/sitemap.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
@@ -225,6 +261,9 @@ app.get("/sitemap.xml", async (c) => {
     previous = base;
     const lastmod = row.lastPublished ? `<lastmod>${escapeXml(row.lastPublished)}</lastmod>` : "";
     urls.push(`<url><loc>${escapeXml(`${origin}${path}`)}</loc>${lastmod}</url>`);
+  }
+  for (const path of await federalSitemapPaths(c.env.DB)) {
+    urls.push(`<url><loc>${escapeXml(`${origin}${path}`)}</loc></url>`);
   }
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -655,6 +694,91 @@ app.get("/schedules/:file", async (c) => {
   return c.body(scheduleCsv(district, schedule, pageUrl), 200, {
     "Content-Type": "text/csv; charset=utf-8",
   });
+});
+
+// ---------------------------------------------------------------- bảng lương liên bang (D-065)
+
+const TAG_FEDERAL = "federal";
+
+app.get(FEDERAL_PATH, async (c) => {
+  const year = await latestPayYear(c.env.DB, "gs_locality");
+  if (year === null) {
+    return notFound(c);
+  }
+  const [base, localities, vaYear] = await Promise.all([
+    findPayTable(c.env.DB, "gs", "base", year),
+    listPayTables(c.env.DB, "gs_locality", year),
+    latestPayYear(c.env.DB, "va_nurse"),
+  ]);
+  const meta = {
+    title: pageTitle(`${year} GS pay scale: General Schedule and locality pay tables`),
+    description: `Official ${year} General Schedule (GS) pay tables from OPM: the base table and all ${localities.length} locality pay areas, by grade and step.`,
+    canonicalPath: FEDERAL_PATH,
+    noindex: hasQuery(c),
+  };
+  const body = federalIndexPage({ year, base, localities, vaYear });
+  return page(c, meta, body, { control: PAGE_CACHE, tags: [TAG_FEDERAL] });
+});
+
+app.get(`${FEDERAL_PATH}/gs/:slug`, async (c) => {
+  const year = await latestPayYear(c.env.DB, "gs_locality");
+  const slug = c.req.param("slug");
+  if (year === null) {
+    return notFound(c);
+  }
+  const table = await findPayTable(c.env.DB, slug === "base" ? "gs" : "gs_locality", slug, year);
+  if (!table) {
+    return notFound(c);
+  }
+  const localities = await listPayTables(c.env.DB, "gs_locality", year);
+  const name = table.family === "gs" ? "General Schedule base" : table.name;
+  const meta = {
+    title: pageTitle(`${year} GS pay scale: ${name}`),
+    description: `${year} General Schedule annual pay by grade and step for the ${name} locality pay area, from the official OPM salary table.`,
+    canonicalPath: gsPath(table.slug),
+    noindex: hasQuery(c),
+  };
+  return page(c, meta, gsLocalityPage({ table, localities }), {
+    control: PAGE_CACHE,
+    tags: [TAG_FEDERAL],
+  });
+});
+
+app.get(VA_NURSE_PATH, async (c) => {
+  const year = await latestPayYear(c.env.DB, "va_nurse");
+  if (year === null) {
+    return notFound(c);
+  }
+  const stations = await listVaStations(c.env.DB, year);
+  const meta = {
+    title: pageTitle(`VA nurse pay ${year}: locality pay schedules by facility`),
+    description: `Official ${year} VA registered nurse locality pay schedules for ${stations.length} VA facilities, by grade and step.`,
+    canonicalPath: VA_NURSE_PATH,
+    noindex: hasQuery(c),
+  };
+  return page(c, meta, vaIndexPage(year, stations), { control: PAGE_CACHE, tags: [TAG_FEDERAL] });
+});
+
+app.get(`${VA_NURSE_PATH}/:station`, async (c) => {
+  const year = await latestPayYear(c.env.DB, "va_nurse");
+  if (year === null) {
+    return notFound(c);
+  }
+  const infos = await listPayTablesOfGroup(c.env.DB, "va_nurse", c.req.param("station"), year);
+  if (infos.length === 0) {
+    return notFound(c);
+  }
+  const tables = (await Promise.all(infos.map((t) => getPayTable(c.env.DB, t.id)))).filter(
+    (t): t is NonNullable<typeof t> => t !== null,
+  );
+  const name = infos[0]?.name ?? "VA facility";
+  const meta = {
+    title: pageTitle(`${name} nurse pay ${year}`),
+    description: `${year} registered nurse locality pay schedules at ${name}, annual rates by grade and step from the VA.`,
+    canonicalPath: vaStationPath(c.req.param("station")),
+    noindex: hasQuery(c),
+  };
+  return page(c, meta, vaStationPage(name, tables), { control: PAGE_CACHE, tags: [TAG_FEDERAL] });
 });
 
 app.get("/:state", async (c) => {

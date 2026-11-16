@@ -144,6 +144,7 @@ ${statesMenu(site.menuStates)}
 <a href="/recently-updated">Recently updated</a>
 <a href="/compare">Compare</a>
 <a href="/calculator">Calculator</a>
+<a href="/federal-pay">Federal pay</a>
 <a href="/methodology">Methodology</a>
 </nav>
 ${NAV_SCRIPT}

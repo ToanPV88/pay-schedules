@@ -108,6 +108,8 @@ export async function insertFixture(
 export async function resetData(db: D1Database): Promise<void> {
   await db.batch(
     [
+      "pay_cells",
+      "pay_tables",
       "district_summary",
       "review_queue",
       "cells",
