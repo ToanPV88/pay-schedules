@@ -42,6 +42,7 @@ STAGING = {
     "_imp_reviews": "k INTEGER, reason TEXT",
     "_imp_accepted": "k INTEGER, reason TEXT",
     "_imp_map": "k INTEGER PRIMARY KEY, schedule_id INTEGER NOT NULL",
+    "_imp_reread": "schedule_id INTEGER PRIMARY KEY",
 }
 
 
@@ -230,6 +231,43 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         + f" JOIN schedules s ON {same_schedule} GROUP BY i.k"
     )
 
+    # A newer reader's reading of the same document (same key) replaces the grid read by the
+    # older reader: its lanes, steps and cells are deleted and copied again below (D-069). A draft
+    # is always replaced; a published schedule only when the new reading passes every check, so a
+    # newer reading that fails leaves the table on the website as it was. Schedules a person
+    # approved or edited on the review page are never touched.
+    reread = (
+        "SELECT m.schedule_id FROM _imp_map m JOIN _imp_schedules i ON i.k = m.k"
+        " JOIN schedules s ON s.id = m.schedule_id"
+        " JOIN extraction_runs e ON e.id = s.extraction_run_id"
+        " WHERE e.model IS NOT i.importer"
+        " AND (s.status = 'draft' OR i.status = 'published')"
+        f" AND NOT EXISTS ({_decided('s.id', 'approved')})"
+        " AND NOT EXISTS (SELECT 1 FROM review_edits r WHERE r.schedule_id = s.id)"
+    )
+    sql.append(f"INSERT INTO _imp_reread (schedule_id) {reread}")
+    for child in ("cells", "lanes", "steps"):
+        sql.append(
+            f"DELETE FROM {child} WHERE schedule_id IN (SELECT schedule_id FROM _imp_reread)"
+        )
+    sql.append(
+        "UPDATE schedules SET"
+        " extraction_run_id = (SELECT max(e.id) FROM extraction_runs e"
+        " JOIN _imp_map m ON m.schedule_id = schedules.id JOIN _imp_schedules i ON i.k = m.k"
+        " WHERE e.source_document_id = schedules.source_document_id AND e.model = i.importer),"
+        " contract_days = (SELECT i.contract_days FROM _imp_map m JOIN _imp_schedules i"
+        " ON i.k = m.k WHERE m.schedule_id = schedules.id),"
+        " pay_basis = (SELECT i.pay_basis FROM _imp_map m JOIN _imp_schedules i"
+        " ON i.k = m.k WHERE m.schedule_id = schedules.id),"
+        " source_page = (SELECT i.source_page FROM _imp_map m JOIN _imp_schedules i"
+        " ON i.k = m.k WHERE m.schedule_id = schedules.id),"
+        " confidence = (SELECT i.confidence FROM _imp_map m JOIN _imp_schedules i"
+        " ON i.k = m.k WHERE m.schedule_id = schedules.id),"
+        " notes = (SELECT i.notes FROM _imp_map m JOIN _imp_schedules i"
+        " ON i.k = m.k WHERE m.schedule_id = schedules.id)"
+        " WHERE id IN (SELECT schedule_id FROM _imp_reread)"
+    )
+
     last = max((p.key for p in result.prepared), default=0)
     for lo in range(1, last + 1, SLICE):
         hi = lo + SLICE - 1
@@ -284,6 +322,10 @@ def schedules_sql(result: ImportResult, now: dt.datetime | None = None) -> list[
         " WHERE status = 'published' AND id IN (SELECT m.schedule_id FROM _imp_map m"
         " JOIN _imp_schedules i ON i.k = m.k WHERE i.status = 'draft')"
         f" AND NOT EXISTS ({_decided('schedules.id', 'approved')})"
+        # ... but not when a newer reader read it and failed: the table stays as published (D-069).
+        " AND NOT EXISTS (SELECT 1 FROM _imp_map m JOIN _imp_schedules i ON i.k = m.k"
+        " JOIN extraction_runs e ON e.id = schedules.extraction_run_id"
+        " WHERE m.schedule_id = schedules.id AND e.model IS NOT i.importer)"
     )
     # Open reasons the checks no longer give (a rule changed) are closed, so the review page
     # only lists what is still wrong.

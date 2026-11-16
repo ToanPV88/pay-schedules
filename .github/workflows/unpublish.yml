@@ -16,9 +16,12 @@ concurrency:
 
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-  URLS: pipeline/unpublish/shared-docs-20261116.txt
-  REJECT_IDS: pipeline/unpublish/reject-20261116-2.txt
-  REQUEUE_IDS: pipeline/unpublish/requeue-unnamed-20261116.txt
+  # Each list is applied only when set; leave the ones already applied empty.
+  URLS: ""
+  REJECT_IDS: ""
+  REQUEUE_IDS: ""
+  # Districts to read again with the current reader even if they have a published table (D-069).
+  DUE_IDS: pipeline/sources/rerun-columns-20261116.csv
   REQUEUE_REASON: "[lane_label] Cột không có tên trong tài liệu (Column N): xem tài liệu gốc trước khi duyệt (D-067)"
   REJECT_REASON: "Loại khi rà hàng chờ 2026-11-16: bảng đọc sai hoặc không phải bảng hiện hành"
   REASON: "Gỡ: bảng đọc từ tài liệu tổng hợp nhiều học khu, không phải bảng của học khu (D-066)"
@@ -52,26 +55,34 @@ jobs:
           npm ci --no-audit --no-fund
           (cd pipeline && uv sync --locked --no-dev)
       - name: Build SQL
+        if: env.URLS != ''
         working-directory: pipeline
         run: uv run pay-pipeline unpublish-docs --urls "../$URLS" --reason "$REASON" --sql "$GITHUB_WORKSPACE/unpublish.sql"
       - name: Build reject SQL
+        if: env.REJECT_IDS != ''
         working-directory: pipeline
         run: uv run pay-pipeline reject-schedules --ids "../$REJECT_IDS" --reason "$REJECT_REASON" --sql "$GITHUB_WORKSPACE/reject.sql"
       - name: Build requeue SQL
+        if: env.REQUEUE_IDS != ''
         working-directory: pipeline
         run: uv run pay-pipeline reject-schedules --requeue --ids "../$REQUEUE_IDS" --reason "$REQUEUE_REASON" --sql "$GITHUB_WORKSPACE/requeue.sql"
+      - name: Build due SQL
+        if: env.DUE_IDS != ''
+        working-directory: pipeline
+        run: uv run pay-pipeline due-districts --ids-file "../$DUE_IDS" --sql "$GITHUB_WORKSPACE/due.sql"
       - name: Apply to D1
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
-          npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT d.url, s.status, COUNT(*) AS n FROM schedules s JOIN source_documents d ON d.id = s.source_document_id WHERE d.url IN (SELECT value FROM json_each('$(python3 -c 'import json,sys; print(json.dumps([l.strip() for l in open(sys.argv[1]) if l.strip()]))' "$GITHUB_WORKSPACE/$URLS")')) GROUP BY 1, 2"
-          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/unpublish.sql"
-          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/reject.sql"
-          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/requeue.sql"
+          for f in unpublish reject requeue due; do
+            if [ -s "$GITHUB_WORKSPACE/$f.sql" ]; then
+              echo "== $f.sql"
+              npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/$f.sql"
+            fi
+          done
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT COUNT(DISTINCT schedule_id) AS open_review FROM review_queue WHERE resolved_at IS NULL"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
-            "SELECT status, COUNT(*) AS n FROM district_pipeline WHERE detail LIKE '%D-066%' GROUP BY 1"
+            "SELECT COUNT(*) AS due FROM district_pipeline WHERE next_run_at IS NOT NULL AND next_run_at <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now')"

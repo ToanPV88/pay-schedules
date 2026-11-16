@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
 import json
 import os
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -18,7 +20,7 @@ from pay_pipeline.catalog.districts import build_catalog, render_report
 from pay_pipeline.federal import tables as federal
 from pay_pipeline.pdf_pipeline import gather as pdf_gather
 from pay_pipeline.pdf_pipeline import run as pdf_run
-from pay_pipeline.pdf_pipeline.unpublish import reject_sql, requeue_sql, unpublish_sql
+from pay_pipeline.pdf_pipeline.unpublish import due_sql, reject_sql, requeue_sql, unpublish_sql
 from pay_pipeline.schedules import state_import
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
@@ -129,6 +131,17 @@ def _cmd_reject_schedules(args: argparse.Namespace) -> int:
     build = requeue_sql if args.requeue else reject_sql
     Path(args.sql).write_text(render_sql(build(ids, args.reason)), encoding="utf-8")
     print(f"SQL loại {len(ids)} bảng chờ duyệt")
+    return 0
+
+
+def _cmd_due_districts(args: argparse.Namespace) -> int:
+    with Path(args.ids_file).open(encoding="utf-8") as f:
+        ids = [r["nces_id"] for r in csv.DictReader(f) if re.fullmatch(r"\d{7}", r["nces_id"])]
+    if not ids:
+        print("Danh sách học khu trống", file=sys.stderr)
+        return 1
+    Path(args.sql).write_text(render_sql(due_sql(ids)), encoding="utf-8")
+    print(f"SQL đặt {len(set(ids))} học khu đến hạn chạy lại")
     return 0
 
 
@@ -294,6 +307,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reason", required=True, help="Lý do loại")
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.set_defaults(func=_cmd_reject_schedules)
+    p = sub.add_parser("due-districts", help="Đặt học khu đến hạn đọc lại ngay (D-069)")
+    p.add_argument("--ids-file", required=True, help="CSV có cột nces_id")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
+    p.set_defaults(func=_cmd_due_districts)
 
     p = sub.add_parser("federal-build", help="Bảng lương liên bang: OPM GS, y tá VA (D-065)")
     p.add_argument("--sources", required=True, help="Thư mục tệp của Release src-federal-pay-*")

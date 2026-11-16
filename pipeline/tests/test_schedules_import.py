@@ -515,6 +515,46 @@ class TestSql:
             >= 1
         )
 
+    def _as_older_reader(self, db: sqlite3.Connection, schedule_id: int) -> None:
+        """Pretend an older reader version produced this schedule, then garble its grid."""
+        db.execute(
+            "UPDATE extraction_runs SET model = 'old-reader@1'"
+            " WHERE id = (SELECT extraction_run_id FROM schedules WHERE id = ?)",
+            (schedule_id,),
+        )
+        db.execute("UPDATE lanes SET label_raw = 'Column 1' WHERE schedule_id = ?", (schedule_id,))
+        db.execute("UPDATE cells SET amount_cents = 1 WHERE schedule_id = ?", (schedule_id,))
+
+    def grid(self, db: sqlite3.Connection, schedule_id: int) -> list[tuple[object, ...]]:
+        return db.execute(
+            "SELECT l.label_raw, t.label_raw, c.amount_cents FROM cells c JOIN steps t"
+            " ON t.id = c.step_id LEFT JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = ?"
+            " ORDER BY t.position, l.position",
+            (schedule_id,),
+        ).fetchall()
+
+    def test_newer_reader_replaces_grid(self, tmp_path: Path) -> None:
+        # D-069: the same document read by a newer reader replaces the old reading's grid.
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a"))
+        sid = db.execute(KY_2526).fetchone()[0]
+        good = self.grid(db, sid)
+        self._as_older_reader(db, sid)
+        load(db, run_import(tmp_path / "b"))
+        assert db.execute(KY_2526).fetchone() == (sid, "published")
+        assert self.grid(db, sid) == good
+
+    def test_newer_reader_that_fails_keeps_published_table(self, tmp_path: Path) -> None:
+        db = fresh_db()
+        load(db, run_import(tmp_path / "a"))
+        sid = db.execute(KY_2526).fetchone()[0]
+        self._as_older_reader(db, sid)
+        before = self.grid(db, sid)
+        hold = {("KY", "001", "2025-26"): "Kiểm tra chéo: ô lệch tài liệu học khu"}
+        load(db, run_import(tmp_path / "b", holds=hold))
+        assert db.execute(KY_2526).fetchone() == (sid, "published")
+        assert self.grid(db, sid) == before
+
     def test_hold_sends_published_schedule_back_to_review(self, tmp_path: Path) -> None:
         db = fresh_db()
         load(db, run_import(tmp_path / "a"))

@@ -118,3 +118,14 @@ def reject_sql(schedule_ids: list[int], reason: str, now: dt.datetime | None = N
         f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution = {quote(reason)}"
         f" WHERE resolved_at IS NULL AND schedule_id IN ({drafts})",
     ]
+
+
+def due_sql(nces_ids: list[str], now: dt.datetime | None = None) -> list[str]:
+    """Make districts due now, so the next PDF pipeline run reads them again even when they already
+    have a published table (D-069: a newer reader replaces the old reading)."""
+    stamp = (now or dt.datetime.now(dt.UTC)).astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ids = ", ".join(quote(n) for n in sorted(set(nces_ids)))
+    return [
+        f"UPDATE district_pipeline SET next_run_at = {quote(stamp)}"
+        f" WHERE district_id IN (SELECT id FROM districts WHERE nces_id IN ({ids}))"
+    ]
