@@ -12,7 +12,7 @@
  */
 import type { Context, Next } from "hono";
 import { NO_STORE } from "./cache";
-import type { AppEnv, Env, RateLimiter } from "./env";
+import { type AppEnv, type Env, isProduction, type RateLimiter } from "./env";
 
 /** Tham số mỗi đường dẫn dùng. So theo thứ tự, mẫu đầu tiên khớp thắng. */
 const ALLOWED_PARAMS: [RegExp, readonly string[]][] = [
@@ -81,17 +81,23 @@ function limiterOf(env: Env, kind: LimitKind): RateLimiter | undefined {
   return kind === "api" ? env.API_LIMITER : env.PAGE_LIMITER;
 }
 
-/** true khi được đi tiếp. Không có IP (chạy local, test) hoặc không có binding thì cho qua. */
-async function withinLimit(env: Env, kind: LimitKind, ip: string | undefined): Promise<boolean> {
+export type LimitResult = "ok" | "blocked" | "no-ip" | "no-binding" | "error";
+
+/** Không có IP (chạy local, test), không có binding hoặc binding lỗi thì cho qua. */
+async function checkLimit(env: Env, kind: LimitKind, ip: string | undefined): Promise<LimitResult> {
   const limiter = limiterOf(env, kind);
-  if (!limiter || !ip) {
-    return true;
+  if (!limiter) {
+    return "no-binding";
+  }
+  if (!ip) {
+    return "no-ip";
   }
   try {
     const { success } = await limiter.limit({ key: `${kind}:${ip}` });
-    return success;
-  } catch {
-    return true;
+    return success ? "ok" : "blocked";
+  } catch (err) {
+    console.warn(`rate limit ${kind}: ${err instanceof Error ? err.message : String(err)}`);
+    return "error";
   }
 }
 
@@ -102,7 +108,12 @@ export async function guard(c: Context<AppEnv>, next: Next): Promise<Response | 
     return;
   }
   const kind = limitKind(c.req.method, url.pathname);
-  if (!(await withinLimit(c.env, kind, c.req.header("cf-connecting-ip")))) {
+  const result = await checkLimit(c.env, kind, c.req.header("cf-connecting-ip"));
+  if (!isProduction(c.env)) {
+    // Chỉ bản xem trước: để kiểm binding có chạy thật không.
+    c.header("X-Rate-Limit", `${kind} ${result}`);
+  }
+  if (result === "blocked") {
     c.header("Retry-After", "60");
     c.header("Cache-Control", NO_STORE);
     return c.text("Too many requests. Please wait a minute and try again.", 429);
