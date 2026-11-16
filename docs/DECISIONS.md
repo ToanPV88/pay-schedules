@@ -1261,3 +1261,6 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   ngay, để pipeline đọc lại cả học khu đã có bảng published.
 - Áp dụng: 418 học khu `pipeline/sources/rerun-columns-20261116.csv` (36 bảng gỡ ở D-067 và các
   bảng published còn cột "Column N").
+- Bổ sung (bộ đọc @16): lưới cột năm học chạy sang trang sau không lặp tiêu đề (Attica: bậc 1–4
+  trang 25, 5–18 trang 26) được nối và lấy đúng cột đó (bậc chữ "I", "O" in thành "1", "0" vẫn nối
+  được). Một cột lương duy nhất tên "Salary" không còn bị coi là nhãn lane thiếu tên.

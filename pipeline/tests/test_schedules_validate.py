@@ -244,6 +244,12 @@ class TestLaneRank:
         s.lanes[3] = Lane("RANK DR")
         assert check_labels(s) == []
 
+    def test_one_salary_column_is_a_name(self) -> None:
+        # New York contracts: one salary column, no lanes (D-068).
+        assert check_labels(labelled(["Salary"], [[48552]])) == []
+        s = labelled(["BA", "Salary"], [[48552, 52913]])
+        assert [i.code for i in check_labels(s)] == ["lane_label"]
+
     def test_rounding_in_the_source_is_not_a_fall(self) -> None:
         # Kentucky, Fayette County 2024-25: Rank II step 38 $91,493.01, step 39 $91,493.00.
         assert check_monotonic(grid([[91493.01], [91493.00]])) == []

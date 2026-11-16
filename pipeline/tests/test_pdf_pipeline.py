@@ -656,6 +656,24 @@ class TestReader:
         assert t.grid == [[45031], [46708], [48848]]
         assert rd.to_answer(t, "", rd.LAYOUT)["school_year"] == "2022-23"
 
+    def test_year_columns_continue_on_next_page(self) -> None:
+        first = [
+            L("Step", "2020-2021", "2021-2022", "2022-2023", step=12),
+            L("1", "42,139", "43,614", "45,031", step=12),
+            L("2", "43,709", "45,239", "46,708", step=12),
+            L("3", "45,710", "47,310", "48,848", step=12),
+        ]
+        second = [
+            L("4", "46,710", "48,310", "49,848", step=12),
+            L("5", "47,710", "49,310", "50,848", step=12),
+            L("6", "48,710", "50,310", "51,848", step=12),
+        ]
+        tables = rd._join_pages(rd.find_tables(first, 1) + rd.find_tables(second, 2))
+        t = rd.pick_table(tables)
+        assert t is not None
+        assert t.lanes == ["Salary"]
+        assert t.grid == [[45031], [46708], [48848], [49848], [50848], [51848]]
+
     def test_side_figures_and_dashes(self) -> None:
         # Garland ISD: daily rate, a stipend below the salary range and "-" for no stipend sit
         # between the annual amounts; they are skipped, not taken as words inside the row.
