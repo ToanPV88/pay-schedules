@@ -17,6 +17,10 @@
   "vars": { "ENVIRONMENT": "production" },
   "services": [{ "binding": "WEB", "service": "pay-schedules" }],
   "triggers": { "crons": ["*/10 * * * *"] },
+  // Đếm lần đăng nhập sai theo IP (src/lockout.ts, D-110). Dải namespace 732x.
+  "ratelimits": [
+    { "name": "AUTH_LIMITER", "namespace_id": "7321", "simple": { "limit": 10, "period": 60 } }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -33,6 +37,9 @@
       "vars": { "ENVIRONMENT": "preview" },
       "services": [],
       "triggers": { "crons": [] },
+      "ratelimits": [
+        { "name": "AUTH_LIMITER", "namespace_id": "7331", "simple": { "limit": 10, "period": 60 } }
+      ],
       "d1_databases": [
         {
           "binding": "DB",

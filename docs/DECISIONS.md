@@ -1130,3 +1130,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Bỏ các export dạng số, chuỗi khỏi `src/index.ts` (MENU_STATE_LIMIT, SUGGEST_LIMIT, SITE_NAME):
   `wrangler dev` từ chối module chính có export không phải handler, nên trước đây không chạy được
   Worker ở máy.
+
+## D-110: Khóa tạm trang duyệt khi đăng nhập sai nhiều lần
+
+- Ngày: 2026-11-16. Chủ dự án duyệt danh sách bảo mật (mục S4, phần làm trong code).
+- Một IP gửi mật khẩu sai 10 lần trong 15 phút thì bị khóa 15 phút: mọi request từ IP đó, kể cả có
+  mật khẩu đúng, nhận 429 kèm `Retry-After`. Đăng nhập đúng thì xóa bộ đếm. Lần trình duyệt gọi chưa
+  kèm mật khẩu không bị tính.
+- Đếm trong bộ nhớ isolate, thêm Workers Rate Limiting binding `AUTH_LIMITER` (10 lần sai mỗi phút,
+  namespace 7321, preview 7331) làm lớp phụ; như D-108, cả hai chỉ là trần thô vì request rải ra
+  nhiều isolate. Không ghi D1, để kẻ dò mật khẩu không làm tốn lượt ghi.
+- Lớp bảo vệ chính vẫn là mật khẩu ngẫu nhiên dài. Chặn hẳn người lạ cần Cloudflare Access trước
+  trang duyệt (miễn phí tới 50 người dùng), chủ dự án bật trong dashboard.

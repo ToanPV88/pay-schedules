@@ -8,6 +8,14 @@ import {
   PURGE_MAX_ATTEMPTS,
   parseMoney,
 } from "../src/index";
+import {
+  clearFailures,
+  LOCK_MS,
+  lockedUntil,
+  MAX_FAILURES,
+  recordFailure,
+  resetLockout,
+} from "../src/lockout";
 import { sameOriginPost } from "../src/origin";
 import { TRIAGE_PUBLISHED, triage } from "../src/triage";
 
@@ -103,6 +111,43 @@ describe("bảo vệ", () => {
       expect(res.headers.get("www-authenticate")).toContain("Basic");
       expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     }
+  });
+
+  it("sai mật khẩu nhiều lần thì khóa IP đó, IP khác vẫn vào được", async () => {
+    resetLockout();
+    const wrong = `Basic ${btoa("review:wrong")}`;
+    const from = (ip: string) => ({ "cf-connecting-ip": ip });
+    for (let i = 1; i < MAX_FAILURES; i++) {
+      const res = await req("/", { auth: wrong, headers: from("198.51.100.20") });
+      expect(res.status).toBe(401);
+    }
+    const locked = await req("/", { auth: wrong, headers: from("198.51.100.20") });
+    expect(locked.status).toBe(429);
+    expect(Number(locked.headers.get("retry-after"))).toBeGreaterThan(0);
+    // Đang khóa thì mật khẩu đúng cũng phải chờ.
+    expect((await req("/", { headers: from("198.51.100.20") })).status).toBe(429);
+    expect((await req("/", { headers: from("198.51.100.21") })).status).toBe(200);
+    // Lần đầu trình duyệt gọi chưa kèm mật khẩu thì không tính là sai.
+    for (let i = 0; i < MAX_FAILURES + 2; i++) {
+      expect((await req("/", { auth: null, headers: from("198.51.100.22") })).status).toBe(401);
+    }
+    resetLockout();
+  });
+
+  it("bộ đếm lần sai: hết khóa sau 15 phút, đăng nhập đúng thì xóa", () => {
+    resetLockout();
+    const t = 1_000_000;
+    for (let i = 1; i < MAX_FAILURES; i++) {
+      expect(recordFailure("ip-a", t + i)).toBe(false);
+    }
+    expect(recordFailure("ip-a", t + MAX_FAILURES)).toBe(true);
+    expect(lockedUntil("ip-a", t + MAX_FAILURES + 1)).toBe(t + MAX_FAILURES + LOCK_MS);
+    expect(lockedUntil("ip-a", t + MAX_FAILURES + LOCK_MS)).toBe(0);
+    expect(recordFailure("ip-a", t + MAX_FAILURES + LOCK_MS + 1)).toBe(false);
+    recordFailure("ip-b", t);
+    clearFailures("ip-b");
+    expect(lockedUntil("ip-b", t)).toBe(0);
+    resetLockout();
   });
 
   it("POST cùng site không có Origin dùng được nhờ Sec-Fetch-Site", async () => {
