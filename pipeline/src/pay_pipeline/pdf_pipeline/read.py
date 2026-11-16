@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@13"
-WORDS = "pdfplumber-words@13"
-XLSX = "xlsx-cells@13"
-DOCX = "docx-cells@13"
-HTML = "html-cells@13"
+LAYOUT = "layout-text@15"
+WORDS = "pdfplumber-words@15"
+XLSX = "xlsx-cells@15"
+DOCX = "docx-cells@15"
+HTML = "html-cells@15"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -128,6 +128,7 @@ class Table:
     lanes: list[str] = field(default_factory=list)
     step_header: str = ""
     transposed: bool = False  # lanes printed as rows (D-060)
+    column_year: str | None = None  # columns were school years; this one was kept (D-068)
 
     @property
     def cells(self) -> int:
@@ -712,13 +713,49 @@ def _build(table: Table) -> Table | None:
         for j, words in enumerate(lanes)
     ]
     table.step_header = " ".join(step_words)
-    if total_only:
+    _keep_year_column(table, lanes)
+    if total_only and table.column_year is None:
         # "Base Pay | Educator Salary Adjustment | Lane Z Annual Salary" (Jordan, UT): the last
         # column is the sum of the others, so it alone is the salary (D-060).
         table.columns = table.columns[-1:]
         table.grid = [r[-1:] for r in table.grid]
         table.lanes = table.lanes[-1:]
     return table
+
+
+_LANE_WORD = re.compile(
+    r"\b(?:bachelor'?s?|masters?'?s?|master|doctorate|doctoral|ph\.?d|b\.?a\.?|m\.?a\.?|b\.?s\.?|"
+    r"m\.?s\.?)(?:\s*\+\s*\d{1,3})?(?![a-z])",
+    re.I,
+)
+
+
+def _keep_year_column(table: Table, lanes: list[list[str]]) -> None:
+    """Columns headed by school years ("2024-2025 2025-2026 2026-2027") are one lane over several
+    years, not several lanes (multi-year contracts, New York). Keep the column of the year in force
+    (D-058) and name the lane from the heading above the table ("Bachelor Salaries", "BA"), or
+    "Salary" when none is printed (D-068)."""
+    if len(lanes) < 2:
+        return
+    years: list[str | None] = []
+    for words in lanes:
+        found = school_years(" ".join(words))
+        years.append(found[0] if len(found) == 1 else None)
+    dated = [y for y in years if y]
+    if len(dated) < 2 or len(dated) < len(lanes) - 1 or len(set(dated)) != len(dated):
+        return
+    year = year_in_force(set(dated))
+    j = years.index(year)
+    name = "Salary"
+    for text in [table.step_header, *reversed(table.context.splitlines()[-4:])]:
+        m = _LANE_WORD.search(text)
+        if m:
+            name = " ".join(m.group(0).split())
+            break
+    table.columns = [table.columns[j]]
+    table.grid = [[r[j]] for r in table.grid]
+    table.lanes = [name]
+    table.column_year = year
 
 
 def _total_column(grid: list[list[float | None]]) -> bool:
@@ -840,6 +877,8 @@ def _standard(days: int | None) -> bool:
 
 
 def _years(table: Table, page_text: str) -> str | None:
+    if table.column_year:
+        return table.column_year
     found = school_years(table.context) or school_years(page_text)
     return found[0] if found else None
 

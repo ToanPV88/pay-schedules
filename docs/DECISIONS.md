@@ -1235,3 +1235,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   đọc tên cột tốt hơn rồi đọc lại.
 - Từ nay pipeline PDF: bảng từ hai cột trở lên có cột "Column N" (hoặc nhãn chỉ có dấu gạch) bị
   `lane_label`, không tự publish. Bảng một cột vẫn tự publish (D-045).
+
+## D-068: Cột là năm học thì là một lane qua nhiều năm, lấy cột của năm đang áp dụng
+
+- Ngày: 2026-11-16. Rà 36 bảng gỡ ở D-067: tất cả là PDF có chữ (không phải scan). 28 bảng là hợp
+  đồng New York in mỗi lane một lưới, các cột là năm học của hợp đồng ("Step | 2024-2025 |
+  2025-2026 | 2026-2027"). Bộ đọc bỏ năm khỏi tên cột (`_NOISE`) nên cột thành "Column N", và hiểu
+  nhầm 3–4 năm là 3–4 lane.
+- Từ nay (bộ đọc @15): khi mọi cột (hoặc mọi cột trừ một) có tiêu đề là một năm học khác nhau, bảng
+  là một lane; giữ cột của năm đang áp dụng (D-058), năm học của bảng lấy theo cột đó. Tên lane lấy
+  từ tiêu đề cột bậc hoặc vài dòng trên bảng ("Bachelor Salaries" → "Bachelor", "BA"), không có thì
+  "Salary".
+- 8 bảng còn lại (cột không có tiêu đề, bảng tuyển dụng TX, PDF hỏng) vẫn bị D-067 giữ ở hàng chờ.
