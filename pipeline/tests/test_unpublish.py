@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 from pathlib import Path
 
 from pay_pipeline.catalog.d1sql import render_sql
 from pay_pipeline.pdf_pipeline.run import RAW_LIMIT, _stored_raw
-from pay_pipeline.pdf_pipeline.unpublish import unpublish_sql
+from pay_pipeline.pdf_pipeline.unpublish import due_sql, unpublish_sql
 
 MIGRATIONS = Path(__file__).resolve().parents[2] / "packages" / "db" / "migrations"
 SHARED = "https://example.org/all-districts.pdf"
@@ -95,3 +96,11 @@ def test_requeue_takes_published_back_to_review() -> None:
     )
     db.executescript(render_sql(requeue_sql([12], "x")))  # chạy lại: không thêm mục trùng
     assert db.execute("SELECT COUNT(*) FROM review_queue").fetchone() == (1,)
+
+
+def test_due_sql_makes_districts_due() -> None:
+    sql = due_sql(["3600009", "3600009", "4812120"], now=dt.datetime(2026, 11, 16, tzinfo=dt.UTC))
+    assert sql == [
+        "UPDATE district_pipeline SET next_run_at = '2026-11-16T00:00:00Z'"
+        " WHERE district_id IN (SELECT id FROM districts WHERE nces_id IN ('3600009', '4812120'))"
+    ]

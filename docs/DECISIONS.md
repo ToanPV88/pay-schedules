@@ -1247,3 +1247,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   từ tiêu đề cột bậc hoặc vài dòng trên bảng ("Bachelor Salaries" → "Bachelor", "BA"), không có thì
   "Salary".
 - 8 bảng còn lại (cột không có tiêu đề, bảng tuyển dụng TX, PDF hỏng) vẫn bị D-067 giữ ở hàng chờ.
+
+## D-069: Bộ đọc mới đọc lại cùng tài liệu thì thay lưới cũ
+
+- Ngày: 2026-11-16. Bảng nhận diện theo (học khu, năm học, loại, tên, tài liệu); khi bộ đọc mới đọc
+  lại cùng tài liệu ra cùng khóa, importer giữ lane/bậc/ô cũ (chỉ chèn ô còn thiếu), nên sửa bộ đọc
+  (D-068) không tới được bảng đã có.
+- Từ nay: cùng khóa mà bản đọc cũ do bộ đọc khác (`extraction_runs.model` khác) tạo thì lane, bậc,
+  ô bị xóa và chép lại từ bản đọc mới. Bảng nháp luôn được thay; bảng published chỉ được thay khi
+  bản đọc mới qua mọi kiểm tra; bản đọc mới không qua thì bảng published giữ nguyên trên site (không
+  về nháp). Bảng người duyệt đã duyệt hoặc đã sửa ô thì không động tới.
+- Lệnh `due-districts` (chạy trong `unpublish.yml`, biến `DUE_IDS`) đặt học khu đến hạn chạy lại
+  ngay, để pipeline đọc lại cả học khu đã có bảng published.
+- Áp dụng: 418 học khu `pipeline/sources/rerun-columns-20261116.csv` (36 bảng gỡ ở D-067 và các
+  bảng published còn cột "Column N").
