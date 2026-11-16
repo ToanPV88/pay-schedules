@@ -75,18 +75,49 @@ const privacy: ContentPage = {
 <p>The site does not show advertising yet. This page will be updated, including how to opt out of advertising cookies, before any advertising is added.</p>`,
 };
 
+/** Bản nháp điều khoản (DECISIONS.md D-112): chủ dự án duyệt trước khi merge. */
+export const TERMS_UPDATED = "2026-11-16";
+
 const terms: ContentPage = {
   title: "Terms of use",
-  description: `Terms for using ${SITE_NAME}.`,
+  description: `Terms for using and reusing ${SITE_NAME}.`,
   body: () => html`<h1>Terms of use</h1>
-<p class="lede">The information on this site is provided for reference only, without warranty of any kind.</p>
+<p class="lede">${SITE_NAME} is free to use. These terms explain what the site is, what you can do with what you find here, and what is not allowed. By using the site you agree to them.</p>
+<p>Last updated: <time datetime="${TERMS_UPDATED}">November 16, 2026</time>.</p>
+
+<h2>Reference only</h2>
 <ul>
 <li>Figures are extracted automatically from public documents and may contain errors or be out of date. The district’s own document governs. Actual pay, placement on a schedule and credit for experience are decided by each district.</li>
 <li>Nothing on this site is legal, financial or employment advice.</li>
-<li>The source documents belong to their publishers. Links to them are provided so that every figure can be checked.</li>
-<li>Do not use automated tools to download large parts of the site in a way that degrades it for others.</li>
+<li>The site is provided as is, without warranty of any kind. We are not liable for decisions made using it.</li>
 </ul>
-<p>Districts that want a table corrected or removed can use the <a href="/contact">contact page</a>.</p>`,
+
+<h2>Source documents</h2>
+<p>Salary schedules are published by school districts and state agencies, and the documents belong to their publishers. We link to every source so that each figure can be checked against it.</p>
+
+<h2>What you can do</h2>
+<ul>
+<li>Look up, compare and print schedules for your own use, including job searches, negotiations, reporting and research.</li>
+<li>Quote or share individual figures, a district’s table or a comparison, with a link to the page you took it from.</li>
+<li>Download the CSV or Excel file of a schedule and use it in your own work, keeping the source lines at the bottom of the file.</li>
+<li>Link to any page on the site.</li>
+</ul>
+<p>When you reuse our figures, please credit “${SITE_NAME}” with a link to the page, and the district’s own document where you can.</p>
+
+<h2>What is not allowed</h2>
+<ul>
+<li>Using scrapers, crawlers or other automated tools to copy or download large parts of the site. Search engines that follow our robots.txt are welcome.</li>
+<li>Republishing all or a substantial part of the site’s tables, for example as another website, app, dataset or product, or using them to build or train one, without our written permission.</li>
+<li>Removing or changing the source and attribution lines in downloaded files when you share them.</li>
+<li>Getting around rate limits or other measures that protect the site, or using it in a way that degrades it for others.</li>
+</ul>
+<p>If you need data in bulk, for example for research or for a union or district, <a href="/contact">contact us</a> and describe what you need.</p>
+
+<h2>Corrections and removal</h2>
+<p>Districts, agencies and rights holders that want a table corrected, updated or removed can use the <a href="/contact">contact page</a>. Please include the district name and a link to the page or document. We handle these requests before any other work. To report a wrong figure, use “Report an error” on the district page.</p>
+
+<h2>Changes</h2>
+<p>We may update these terms. The date at the top shows the latest version.</p>`,
 };
 
 const contact: ContentPage = {

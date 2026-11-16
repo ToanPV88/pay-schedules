@@ -1166,3 +1166,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - 1.739 học khu đang thiếu bảng có link năm học 2024-25 trở đi; tối đa 2 link mỗi học khu, đặt
   trước các link cũ trong `schedule-urls.csv` (tổng tối đa 3). Danh sách chạy:
   `pipeline/sources/snl-seeds-20261116.csv`.
+
+## D-112: Điều khoản sử dụng (bản nháp, chờ chủ dự án duyệt)
+
+- Ngày: 2026-11-16. Mục C7 trong danh sách chống sao chép. Pull request để ở dạng nháp; chủ dự án
+  duyệt nội dung trước khi merge.
+- Cho phép: tra cứu, so sánh, in để dùng riêng (tìm việc, thương lượng, báo chí, nghiên cứu); trích
+  từng số liệu hay một bảng kèm link về trang; tải CSV/Excel và dùng, giữ dòng nguồn cuối tệp.
+- Không cho phép: công cụ tự động chép phần lớn site (trừ máy tìm kiếm theo robots.txt); đăng lại
+  toàn bộ hoặc phần lớn các bảng thành site, app, bộ dữ liệu, sản phẩm khác, hoặc dùng để xây hay
+  huấn luyện chúng, khi chưa có văn bản cho phép; xóa dòng nguồn trong tệp tải; lách giới hạn tần suất.
+- Cần dữ liệu số lượng lớn thì liên hệ. Học khu, cơ quan, chủ quyền tài liệu xin sửa hay gỡ qua trang
+  Contact, được xử lý trước mọi việc khác.
+- Chưa có: luật áp dụng và nơi giải quyết tranh chấp, giới hạn trách nhiệm chi tiết; chủ dự án quyết,
+  nên hỏi luật sư. Số liệu lương là dữ kiện công khai; điều khoản chủ yếu chặn sao chép hàng loạt.

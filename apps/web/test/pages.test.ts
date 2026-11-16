@@ -289,6 +289,14 @@ describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
     }
   });
 
+  it("điều khoản cho trích dẫn có ghi nguồn, cấm chép hàng loạt (D-112)", async () => {
+    const html = await page("/terms");
+    expect(html).toContain("What you can do");
+    expect(html).toContain("What is not allowed");
+    expect(html).toContain("scrapers, crawlers or other automated tools");
+    expect(html).toContain('<time datetime="2026-11-16">');
+  });
+
   it("trang mẫu /demo có ở bản xem trước", async () => {
     const html = await page("/demo", { ENVIRONMENT: "preview" });
     expect(html).toContain("Demo page with made-up data");
