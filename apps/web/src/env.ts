@@ -1,3 +1,8 @@
+/** Workers Rate Limiting binding (kiểu viết tay, chỉ phần guard.ts dùng). */
+export interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
 /** Binding và biến của Worker. Biến khai trong wrangler.jsonc; bí mật đặt bằng `wrangler secret put`. */
 export type Env = {
   DB: D1Database;
@@ -14,6 +19,10 @@ export type Env = {
   PURGE_TOKEN?: string;
   /** Địa chỉ liên hệ hiện ở trang /contact. Rỗng cho tới khi chủ dự án chọn. */
   CONTACT_EMAIL?: string;
+  /** Giới hạn tần suất theo IP (guard.ts, D-108): trang, API, file tải. */
+  PAGE_LIMITER?: RateLimiter;
+  API_LIMITER?: RateLimiter;
+  DOWNLOAD_LIMITER?: RateLimiter;
 };
 
 export type AppEnv = { Bindings: Env };

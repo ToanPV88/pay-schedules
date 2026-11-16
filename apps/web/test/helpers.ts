@@ -35,7 +35,8 @@ export async function seed() {
   return { a, b, c };
 }
 
-export type EnvOverrides = Partial<Record<string, string>>;
+/** Ghi đè biến (chuỗi) hoặc binding giả (vd. bộ giới hạn tần suất). */
+export type EnvOverrides = Partial<Record<string, unknown>>;
 
 /** Gọi Worker với env thật của test, ghi đè vài biến khi cần. */
 export function request(
