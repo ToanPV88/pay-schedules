@@ -118,6 +118,8 @@ def _cmd_unpublish_docs(args: argparse.Namespace) -> int:
     Path(args.sql).write_text(render_sql(unpublish_sql(urls, args.reason)), encoding="utf-8")
     print(f"SQL gỡ bảng từ {len(urls)} tài liệu")
     return 0
+
+
 def _cmd_federal_build(args: argparse.Namespace) -> int:
     tables, files = federal.load_sources(Path(args.sources))
     Path(args.sql).write_text(
