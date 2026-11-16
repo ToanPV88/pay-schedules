@@ -241,7 +241,11 @@ ${
     : ""
 }
 <table><tr><th class="l">Học khu</th><th>Bang</th><th>Năm học</th><th class="l">Nguồn</th><th class="l">Lý do</th></tr>${rows}</table>
-<p><a href="/?state=${state}&offset=${offset + PAGE_SIZE}">Trang sau</a></p>`,
+<p><a href="/?state=${state}&offset=${offset + PAGE_SIZE}">Trang sau</a></p>
+<h2>Gỡ bảng đã publish</h2>
+<form method="post" action="/unpublish" onsubmit="return confirm('Gỡ mọi bảng giáo viên đã publish của học khu này khỏi website?')">
+<input name="nces_id" placeholder="Mã NCES (7 số)" required size="10" pattern="[0-9]{7}">
+<input name="reason" placeholder="Lý do gỡ" required size="40"> <button>Gỡ khỏi site</button></form>`,
     ),
   );
 });
@@ -657,6 +661,65 @@ app.post("/approve-all", async (c) => {
       "Duyệt hết",
       html`<h1>Đã duyệt và publish ${results.length} bảng${state ? ` (${state})` : ""}</h1>
 <p>Cache website được xóa dần qua hàng chờ (D-023).</p><p><a href="/">Về hàng chờ</a></p>`,
+    ),
+  );
+});
+
+/**
+ * Gỡ khỏi website mọi bảng giáo viên đã publish của một học khu (D-061: website tìm nhầm học khu
+ * khác). Bảng về lại draft, không vào hàng chờ; bảng cũ bị nó thay (superseded) được publish lại.
+ */
+app.post("/unpublish", async (c) => {
+  const form = await c.req.parseBody();
+  const nces = typeof form.nces_id === "string" ? form.nces_id.trim() : "";
+  const reason = typeof form.reason === "string" ? form.reason.trim().slice(0, 500) : "";
+  if (!/^[0-9]{7}$/.test(nces)) return c.text("Mã NCES phải có 7 số.", 400);
+  if (!reason) return c.text("Cần lý do.", 400);
+  const district = await c.env.DB.prepare("SELECT id, name FROM districts WHERE nces_id = ?")
+    .bind(nces)
+    .first<{ id: number; name: string }>();
+  if (!district) return c.text("Không có học khu này.", 404);
+  const { results } = await c.env.DB.prepare(
+    `SELECT id FROM schedules
+      WHERE district_id = ? AND status = 'published' AND schedule_type = 'teacher'`,
+  )
+    .bind(district.id)
+    .all<{ id: number }>();
+  const stamp = nowIso();
+  const statements = results.flatMap(({ id }) => [
+    c.env.DB.prepare(
+      "UPDATE schedules SET status = 'draft', published_at = NULL WHERE id = ? AND status = 'published'",
+    ).bind(id),
+    c.env.DB.prepare(
+      `UPDATE schedules SET status = 'published', superseded_by = NULL,
+              published_at = COALESCE(published_at, ?2)
+        WHERE superseded_by = ?1 AND status = 'superseded'`,
+    ).bind(id, stamp),
+  ]);
+  if (statements.length) {
+    await c.env.DB.batch([
+      ...statements,
+      c.env.DB.prepare(
+        `UPDATE district_pipeline
+            SET status = CASE WHEN EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = ?1
+                                            AND s.status = 'published' AND s.schedule_type = 'teacher')
+                              THEN 'published' ELSE 'no_schedule' END,
+                detail = ?2, next_run_at = ?3
+          WHERE district_id = ?1`,
+      ).bind(district.id, `Gỡ khỏi site: ${reason}`, plusDays(REJECTED_RETRY_DAYS)),
+      ...summaryStatements(c.env.DB, district.id, stamp),
+      c.env.DB.prepare(
+        `INSERT INTO cache_purge_queue (district_id, queued_at) VALUES (?, ?)
+         ON CONFLICT (district_id) DO UPDATE SET queued_at = excluded.queued_at`,
+      ).bind(district.id, stamp),
+    ]);
+    c.executionCtx.waitUntil(drainPurgeQueue(c.env, 1));
+  }
+  return c.html(
+    page(
+      c.env,
+      "Gỡ bảng",
+      html`<h1>Đã gỡ ${results.length} bảng của ${district.name}</h1><p><a href="/">Về hàng chờ</a></p>`,
     ),
   );
 });
