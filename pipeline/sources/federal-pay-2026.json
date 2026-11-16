@@ -1,0 +1,306 @@
+{
+  "release_prefix": "src-federal-pay-2026",
+  "description": "Bảng lương liên bang 2026 (D-065): OPM General Schedule cơ bản và 58 vùng locality (trang HTML của OPM), bảng lương y tá VA theo cơ sở (Excel của VA OCHCO). Không có lương cá nhân.",
+  "files": [
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/GS.aspx",
+      "name": "opm_2026_GS.html",
+      "note": "OPM salary table 2026-GS"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/AL.aspx",
+      "name": "opm_2026_AL.html",
+      "note": "OPM salary table 2026-AL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/AQ.aspx",
+      "name": "opm_2026_AQ.html",
+      "note": "OPM salary table 2026-AQ"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/ATL.aspx",
+      "name": "opm_2026_ATL.html",
+      "note": "OPM salary table 2026-ATL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/AU.aspx",
+      "name": "opm_2026_AU.html",
+      "note": "OPM salary table 2026-AU"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/BH.aspx",
+      "name": "opm_2026_BH.html",
+      "note": "OPM salary table 2026-BH"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/BOS.aspx",
+      "name": "opm_2026_BOS.html",
+      "note": "OPM salary table 2026-BOS"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/BU.aspx",
+      "name": "opm_2026_BU.html",
+      "note": "OPM salary table 2026-BU"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/BN.aspx",
+      "name": "opm_2026_BN.html",
+      "note": "OPM salary table 2026-BN"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/CT.aspx",
+      "name": "opm_2026_CT.html",
+      "note": "OPM salary table 2026-CT"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/CHI.aspx",
+      "name": "opm_2026_CHI.html",
+      "note": "OPM salary table 2026-CHI"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/CIN.aspx",
+      "name": "opm_2026_CIN.html",
+      "note": "OPM salary table 2026-CIN"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/CLE.aspx",
+      "name": "opm_2026_CLE.html",
+      "note": "OPM salary table 2026-CLE"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/CS.aspx",
+      "name": "opm_2026_CS.html",
+      "note": "OPM salary table 2026-CS"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/COL.aspx",
+      "name": "opm_2026_COL.html",
+      "note": "OPM salary table 2026-COL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/CC.aspx",
+      "name": "opm_2026_CC.html",
+      "note": "OPM salary table 2026-CC"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DFW.aspx",
+      "name": "opm_2026_DFW.html",
+      "note": "OPM salary table 2026-DFW"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DV.aspx",
+      "name": "opm_2026_DV.html",
+      "note": "OPM salary table 2026-DV"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DAY.aspx",
+      "name": "opm_2026_DAY.html",
+      "note": "OPM salary table 2026-DAY"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DEN.aspx",
+      "name": "opm_2026_DEN.html",
+      "note": "OPM salary table 2026-DEN"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DM.aspx",
+      "name": "opm_2026_DM.html",
+      "note": "OPM salary table 2026-DM"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DET.aspx",
+      "name": "opm_2026_DET.html",
+      "note": "OPM salary table 2026-DET"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/FN.aspx",
+      "name": "opm_2026_FN.html",
+      "note": "OPM salary table 2026-FN"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/HB.aspx",
+      "name": "opm_2026_HB.html",
+      "note": "OPM salary table 2026-HB"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/HAR.aspx",
+      "name": "opm_2026_HAR.html",
+      "note": "OPM salary table 2026-HAR"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/HOU.aspx",
+      "name": "opm_2026_HOU.html",
+      "note": "OPM salary table 2026-HOU"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/HNT.aspx",
+      "name": "opm_2026_HNT.html",
+      "note": "OPM salary table 2026-HNT"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/IND.aspx",
+      "name": "opm_2026_IND.html",
+      "note": "OPM salary table 2026-IND"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/KC.aspx",
+      "name": "opm_2026_KC.html",
+      "note": "OPM salary table 2026-KC"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/LR.aspx",
+      "name": "opm_2026_LR.html",
+      "note": "OPM salary table 2026-LR"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/LV.aspx",
+      "name": "opm_2026_LV.html",
+      "note": "OPM salary table 2026-LV"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/LA.aspx",
+      "name": "opm_2026_LA.html",
+      "note": "OPM salary table 2026-LA"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/MFL.aspx",
+      "name": "opm_2026_MFL.html",
+      "note": "OPM salary table 2026-MFL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/MIL.aspx",
+      "name": "opm_2026_MIL.html",
+      "note": "OPM salary table 2026-MIL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/MSP.aspx",
+      "name": "opm_2026_MSP.html",
+      "note": "OPM salary table 2026-MSP"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/NY.aspx",
+      "name": "opm_2026_NY.html",
+      "note": "OPM salary table 2026-NY"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/OM.aspx",
+      "name": "opm_2026_OM.html",
+      "note": "OPM salary table 2026-OM"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/PB.aspx",
+      "name": "opm_2026_PB.html",
+      "note": "OPM salary table 2026-PB"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/PHL.aspx",
+      "name": "opm_2026_PHL.html",
+      "note": "OPM salary table 2026-PHL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/PX.aspx",
+      "name": "opm_2026_PX.html",
+      "note": "OPM salary table 2026-PX"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/PIT.aspx",
+      "name": "opm_2026_PIT.html",
+      "note": "OPM salary table 2026-PIT"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/POR.aspx",
+      "name": "opm_2026_POR.html",
+      "note": "OPM salary table 2026-POR"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/RA.aspx",
+      "name": "opm_2026_RA.html",
+      "note": "OPM salary table 2026-RA"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/RN.aspx",
+      "name": "opm_2026_RN.html",
+      "note": "OPM salary table 2026-RN"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/RCH.aspx",
+      "name": "opm_2026_RCH.html",
+      "note": "OPM salary table 2026-RCH"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/RT.aspx",
+      "name": "opm_2026_RT.html",
+      "note": "OPM salary table 2026-RT"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SAC.aspx",
+      "name": "opm_2026_SAC.html",
+      "note": "OPM salary table 2026-SAC"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SO.aspx",
+      "name": "opm_2026_SO.html",
+      "note": "OPM salary table 2026-SO"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SD.aspx",
+      "name": "opm_2026_SD.html",
+      "note": "OPM salary table 2026-SD"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SF.aspx",
+      "name": "opm_2026_SF.html",
+      "note": "OPM salary table 2026-SF"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SEA.aspx",
+      "name": "opm_2026_SEA.html",
+      "note": "OPM salary table 2026-SEA"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SN.aspx",
+      "name": "opm_2026_SN.html",
+      "note": "OPM salary table 2026-SN"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/SL.aspx",
+      "name": "opm_2026_SL.html",
+      "note": "OPM salary table 2026-SL"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/TU.aspx",
+      "name": "opm_2026_TU.html",
+      "note": "OPM salary table 2026-TU"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/VB.aspx",
+      "name": "opm_2026_VB.html",
+      "note": "OPM salary table 2026-VB"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/DCB.aspx",
+      "name": "opm_2026_DCB.html",
+      "note": "OPM salary table 2026-DCB"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/RUS.aspx",
+      "name": "opm_2026_RUS.html",
+      "note": "OPM salary table 2026-RUS"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/AK.aspx",
+      "name": "opm_2026_AK.html",
+      "note": "OPM salary table 2026-AK"
+    },
+    {
+      "url": "https://www.opm.gov/policy-data-oversight/pay-leave/salaries-wages/salary-tables/26Tables/html/HI.aspx",
+      "name": "opm_2026_HI.html",
+      "note": "OPM salary table 2026-HI"
+    },
+    {
+      "url": "https://www.va.gov/OHRM/Pay/2026/LPS/Nurse-LPS-2026.xlsx",
+      "name": "va_nurse_lps_2026.xlsx",
+      "note": "VA Title 38 nurse locality pay schedules 2026 (mọi cơ sở)"
+    }
+  ]
+}

@@ -347,7 +347,7 @@ Thứ tự mở rộng, từ dễ đến khó:
 | 4 | Nhân viên bang | Pay plan do bang công bố | Ma trận ngạch × bậc |
 | 5 | Y tá | Hợp đồng công đoàn, bệnh viện công | Lương theo giờ; chỉ có ở nơi có công đoàn |
 
-Không làm bảng lương liên bang, vì federalpay.org đã phủ mảng này.
+Ban đầu không làm bảng lương liên bang vì federalpay.org đã phủ mảng này. Ngày 2026-11-16 chủ dự án đổi quyết định: làm bảng GS của OPM (bảng cơ bản và các vùng locality) và bảng lương y tá VA, xem `DECISIONS.md` D-065.
 
 Thay đổi về dữ liệu:
 

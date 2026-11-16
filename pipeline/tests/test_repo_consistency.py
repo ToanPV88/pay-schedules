@@ -31,6 +31,7 @@ WRITE_JOBS = {
     ("fetch-sources.yml", "archive"): {"contents": "write"},
     ("import-districts.yml", "publish-report"): {"contents": "write"},
     ("import-schedules.yml", "publish-report"): {"contents": "write"},
+    ("import-federal.yml", "publish-report"): {"contents": "write"},
     ("pdf-pipeline.yml", "archive"): {"contents": "write"},
     ("pdf-pipeline-resume.yml", "archive"): {"contents": "write", "actions": "read"},
     ("pdf-eval.yml", "publish-report"): {"contents": "write"},

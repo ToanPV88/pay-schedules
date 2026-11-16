@@ -1201,3 +1201,26 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   - Kết quả đọc thô lưu vào D1 tối đa 60.000 ký tự (bản đủ vẫn ở `extractions.json` của Release).
 - Tệp tổng hợp của bang/công đoàn chỉ dùng được khi có bộ đọc riêng biết trang nào của học khu nào
   (như J-90, KY, OK). Chưa làm cho CT, WV, MO.
+## D-065: Bảng lương liên bang: OPM General Schedule và y tá VA
+
+- Ngày: 2026-11-16. Chủ dự án quyết định làm bảng lương liên bang, bỏ dòng "không làm bảng lương
+  liên bang" của PLAN Công đoạn 10, và giao làm cả dữ liệu lẫn trang web. Đối thủ Step & Lane đã có
+  các bảng này; nguồn gốc là tài liệu chính thức, dữ liệu công của chính phủ.
+- Nguồn (`pipeline/sources/federal-pay-2026.json`, tải bằng `fetch-sources.yml`, lưu Release
+  `src-federal-pay-2026-*`):
+  - OPM: 59 trang HTML `salary-tables/26Tables/html/<mã>.aspx` (GS cơ bản và 58 vùng locality),
+    mỗi trang một bảng 15 ngạch × 10 bậc, lương năm. Cột "WGI" của bảng cơ bản không phải lương,
+    bỏ. Dấu "*" (trần Executive Schedule IV) giữ thành chú thích của ô.
+  - VA OCHCO: `Nurse-LPS-2026.xlsx`, một sheet, mỗi dòng là một ngạch (Nurse I–V, kèm Level) của
+    một salary plan tại một cơ sở (station); bậc là cột "Step 1".."Step 26". Thử ngày 16/11: 151 cơ
+    sở, 2.341 salary plan. Mã bang "CE" của VA là Puerto Rico; bảng ngoài 50 bang + DC không gắn bang.
+- Dữ liệu tách khỏi `districts`/`schedules`: bảng `pay_tables` + `pay_cells` (migration 0011), vì
+  đơn vị trả lương là cả nước, một vùng hay một cơ sở liên bang, hàng là ngạch. Không đổi tên
+  `districts` thành `employers` như PLAN Công đoạn 10 gợi ý: việc đó đụng mọi trang và pipeline
+  giáo viên; làm khi mở sang thành phố, quận.
+- Nạp: `import-federal.yml` (`pay-pipeline federal-build`) thay toàn bộ (loại bảng, năm). Bảng nào
+  sai (thiếu ô, lương giảm theo bậc, ngoài $10.000–$1.000.000, số hàng/cột GS khác 15×10) thì giữ
+  lại, ghi báo cáo, không nạp. Không có bước duyệt tay: nguồn là bảng số của cơ quan ban hành.
+- Web: `/federal-pay` (bảng GS cơ bản, danh sách vùng), `/federal-pay/gs/<vùng>`, `/va-nurse-pay`
+  (cơ sở theo bang), `/va-nurse-pay/<cơ sở>`; có trong sitemap; menu có mục "Federal pay".
+- Sau này: USPS (APWU, NALC, NPMHU), bảng năm 2027 khi OPM công bố (thêm manifest mới).

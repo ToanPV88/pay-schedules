@@ -15,6 +15,7 @@ from pay_pipeline.acquisition.http import PoliteFetcher
 from pay_pipeline.acquisition.policy import CrawlPolicy
 from pay_pipeline.catalog.d1sql import catalog_sql, render_sql
 from pay_pipeline.catalog.districts import build_catalog, render_report
+from pay_pipeline.federal import tables as federal
 from pay_pipeline.pdf_pipeline import gather as pdf_gather
 from pay_pipeline.pdf_pipeline import run as pdf_run
 from pay_pipeline.pdf_pipeline.unpublish import unpublish_sql
@@ -117,6 +118,15 @@ def _cmd_unpublish_docs(args: argparse.Namespace) -> int:
     Path(args.sql).write_text(render_sql(unpublish_sql(urls, args.reason)), encoding="utf-8")
     print(f"SQL gỡ bảng từ {len(urls)} tài liệu")
     return 0
+def _cmd_federal_build(args: argparse.Namespace) -> int:
+    tables, files = federal.load_sources(Path(args.sources))
+    Path(args.sql).write_text(
+        render_sql(federal.pay_tables_sql(tables, files, args.release_tag)), encoding="utf-8"
+    )
+    Path(args.report).write_text(federal.report(tables, args.release_tag), encoding="utf-8")
+    bad = sum(bool(t.problems) for t in tables)
+    print(f"{len(tables):,} bảng lương liên bang, {bad:,} giữ lại vì lỗi")
+    return 1 if bad and bad == len(tables) else 0
 
 
 def _wrangler_rows(path: Path) -> list[dict[str, object]]:
@@ -262,6 +272,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reason", required=True, help="Lý do ghi vào district_pipeline/review_queue")
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.set_defaults(func=_cmd_unpublish_docs)
+    p = sub.add_parser("federal-build", help="Bảng lương liên bang: OPM GS, y tá VA (D-065)")
+    p.add_argument("--sources", required=True, help="Thư mục tệp của Release src-federal-pay-*")
+    p.add_argument("--release-tag", required=True, help="Tag Release chứa tệp nguồn")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
+    p.add_argument("--report", required=True, help="Báo cáo Markdown đầu ra")
+    p.set_defaults(func=_cmd_federal_build)
 
     p = sub.add_parser("pdf-gather", help="Pipeline PDF: Discover, Fetch, Classify một lô")
     p.add_argument("--queue", required=True, help="JSON hàng đợi từ D1 (wrangler --json)")
