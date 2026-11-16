@@ -156,6 +156,10 @@ def _clean_title(draft: ScheduleDraft) -> ScheduleDraft:
     return replace(draft, title="", notes=notes)
 
 
+_UNNAMED_LANE = re.compile(r"Column \d+|[\s\-–—.~_*]*")
+"""Nhãn bộ đọc tự đặt khi không thấy tiêu đề cột, hoặc nhãn chỉ có dấu gạch (D-067)."""
+
+
 def merge_lane_labels(a: list[Lane], b: list[Lane]) -> list[Lane]:
     """Two readers may sweep stray words into a heading; when one label contains the other,
     the shorter one is the heading."""
@@ -198,6 +202,12 @@ def pdf_checks(answer: dict[str, Any], draft: ScheduleDraft, today: dt.date) -> 
     bad = [ln.label_raw for ln in draft.lanes if _PROSE_IN_LABEL.search(ln.label_raw)]
     if bad:
         issues.append(Issue("lane_label", f"Nhãn lane lẫn chữ của đoạn văn: {bad[0][:80]!r}"))
+    unnamed = [ln.label_raw for ln in draft.lanes if _UNNAMED_LANE.fullmatch(ln.label_raw)]
+    if unnamed and len(draft.lanes) >= 2:
+        # Không biết cột nào là BA, cột nào là MA: không tự publish. Bảng một cột thì được (D-045).
+        issues.append(
+            Issue("lane_label", f"Cột không có tên trong tài liệu: {unnamed[0]!r} (D-067)")
+        )
     if str(answer.get("reader", "")).startswith("tesseract"):
         agree = int(answer.get("ocr_agree") or 0)
         if agree < ocr.AGREE_TO_PUBLISH:

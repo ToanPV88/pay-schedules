@@ -1,0 +1,36 @@
+5120 # TX ENNIS ISD: Classroom | Teachers | Column 3
+5123 # TX BURKBURNETT ISD: Column 1 | Column 2
+5131 # NY FORT PLAIN CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3
+5158 # NY LANSINGBURGH CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5164 # NY JEFFERSON CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3
+5169 # PA Quakertown Community SD: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5171 # NY EAST GREENBUSH CENTRAL SCHOOL DISTRICT: Column 1 | BA | Column 3 | Column 4
+5178 # NY LYNCOURT UNION FREE SCHOOL DISTRICT: Increase % | Column 2 | Column 3 | Column 4 | Column 5
+5193 # NY RED CREEK CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3
+5204 # NY GUILDERLAND CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5212 # NY BRASHER FALLS CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5233 # OH Licking Heights Local: Column 1 | MA | MA+lS | MA+30 | .MA.+4f5. ,;-
+5241 # TX VENUS ISD: Column 1 | Column 2 | Column 3 | Column 4
+5244 # NY SARANAC CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5245 # NY HOOSICK FALLS CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5246 # NY CHAUTAUQUA LAKE CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5254 # NY DEPEW UNION FREE SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5301 # TX ROYSE CITY ISD: Column 1 | Column 2
+5305 # NY SWEET HOME CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5307 # NY HAMBURG CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5308 # NY WALLKILL CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5314 # NY FRIENDSHIP CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3
+5323 # NY LACKAWANNA CITY SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5329 # NY ELLICOTTVILLE CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5330 # NY HAMMONDSPORT CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5342 # NY CANANDAIGUA CITY SCHOOL DISTRICT: Column 1 | Column 2 | Column 3
+5347 # NY ATTICA CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5349 # NY WATERFORD-HALFMOON UNION FREE SCHOOL DIS: Column 1 | Column 2 | Column 3
+5363 # NY SARANAC LAKE CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5364 # NY TRI-VALLEY CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5
+5365 # NY WHITEHALL CENTRAL SCHOOL DISTRICT: Base(24-25) | Column 2 | Column 3 | Column 4
+5375 # NY HUDSON FALLS CENTRAL SCHOOL DISTRICT: ARTICLEXXI SALARY | Column 2 | Column 3
+5381 # NY HARTFORD CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4
+5392 # NY TACONIC HILLS CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3
+5394 # NY SCHOHARIE CENTRAL SCHOOL DISTRICT: TA | Column 2
+5410 # NY NEWFANE CENTRAL SCHOOL DISTRICT: Column 1 | Column 2 | Column 3 | Column 4 | Column 5

@@ -1,0 +1,80 @@
+5202 # AR BENTON SCHOOL DISTRICT: [lane_label] Nhãn lane không giống tiêu đề cột: '$825 $1,800 Range 1 B
+5335 # CT Bridgeport School District: [lane_label] Nhiều lane cùng nhãn '$0 $0 $0 $0 $0': thiếu tiêu đề cột 
+5368 # FL HIGHLANDS: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 0, 'Teacher FICA' 
+5288 # FL MADISON: [monotonic_step] Lương giảm khi tăng bậc: lane 'Bachelors', bậc 10 $45
+5133 # IL Chicago Public Schools Dist 299: [school_year] Bảng năm 2017-18 đã cũ: có thể có bảng mới hơn || [doubl
+5346 # MO WARSAW R-IX: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5249 # NJ Garfield Public School District: [lane_label] Nhiều lane cùng nhãn 'a-6 tier 1&2 paraprofessionals step
+5409 # NJ Glen Ridge Public School District: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 12, "BA+60'" $108,
+5411 # NJ Lenape Valley Regional High School : [monotonic_lane] Lương giảm khi lên lane trình độ cao hơn: bậc 10, 'MA
+5236 # NJ Roxbury Township School District: [double_extraction] layout-text@13 không thấy bảng lương
+5125 # NJ Upper Freehold Regional School Dist: [double_extraction] layout-text@13 không thấy bảng lương || [school_ye
+5134 # NM GALLUP: [lane_label] Nhiều lane cùng nhãn 'ba15': thiếu tiêu đề cột
+5337 # NY ALBANY CITY SCHOOL DISTRICT: [lane_label] Nhiều lane cùng nhãn 'schedule': thiếu tiêu đề cột; Nhãn 
+5129 # NY ALLEGANY-LIMESTONE CENTRAL SCHOOL D: [lane_label] Nhiều lane cùng nhãn 'b': thiếu tiêu đề cột
+5146 # NY BARKER CENTRAL SCHOOL DISTRICT: [school_year] Bảng năm 2023-24 đã cũ: có thể có bảng mới hơn || [monot
+5192 # NY BEAVER RIVER CENTRAL SCHOOL DISTRIC: [school_year] Bảng năm 2023-24 đã cũ: có thể có bảng mới hơn || [doubl
+5121 # NY BINGHAMTON CITY SCHOOL DISTRICT: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 1, 'RN/PTA/COTA wi
+5380 # NY BOLIVAR-RICHBURG CENTRAL SCHOOL DIS: [school_year] Năm học 2028-29 ở quá xa trong tương lai || [double_extr
+5289 # NY CAMDEN CENTRAL SCHOOL DISTRICT: [double_extraction] layout-text@13 không thấy bảng lương || [step_star
+5163 # NY CANDOR CENTRAL SCHOOL DISTRICT: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5157 # NY CHEEKTOWAGA-MARYVALE UNION FREE SCH: [step_start] Bảng bắt đầu ở bậc 5: có thể thiếu hàng đầu || [double_ex
+5243 # NY CHENANGO VALLEY CENTRAL SCHOOL DIST: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5268 # NY COMMACK UNION FREE SCHOOL DISTRICT: [double_extraction] 152 ô lệch giữa hai lần trích
+5252 # NY EAST ISLIP UNION FREE SCHOOL DISTRI: [step_start] Bảng bắt đầu ở bậc 12: có thể thiếu hàng đầu || [double_e
+5203 # NY FARMINGDALE UNION FREE SCHOOL DISTR: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5376 # NY FREDONIA CENTRAL SCHOOL DISTRICT: [double_extraction] layout-text@13 không thấy bảng lương || [school_ye
+5225 # NY GORHAM-MIDDLESEX CENTRAL SCHOOL DIS: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 2, 'Column 1' $44,
+5197 # NY GREENWOOD LAKE UNION FREE SCHOOL DI: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5128 # NY HANNIBAL CENTRAL SCHOOL DISTRICT: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 2, 'B+60' $71,704.
+5207 # NY HARBORFIELDS CENTRAL SCHOOL DISTRIC: [school_year] Năm học 2028-29 ở quá xa trong tương lai
+5313 # NY HARPURSVILLE CENTRAL SCHOOL DISTRIC: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5296 # NY HEUVELTON CENTRAL SCHOOL DISTRICT: [lane_label] Nhiều lane cùng nhãn 'masters': thiếu tiêu đề cột
+5275 # NY HOLLAND PATENT CENTRAL SCHOOL DISTR: [step_start] Bảng bắt đầu ở bậc 4: có thể thiếu hàng đầu || [double_ex
+5196 # NY HONEOYE CENTRAL SCHOOL DISTRICT: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5379 # NY ISLAND PARK UNION FREE SCHOOL DISTR: [schedule_scope] Bảng chỉ cho một nhóm giáo viên: For teachers hired p
+5188 # NY JAMESVILLE-DEWITT CENTRAL SCHOOL DI: [step_start] Bảng bắt đầu ở bậc 4: có thể thiếu hàng đầu || [double_ex
+5350 # NY LAKE GEORGE CENTRAL SCHOOL DISTRICT: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5325 # NY LANSING CENTRAL SCHOOL DISTRICT: [lane_label] Nhiều lane cùng nhãn 'step $': thiếu tiêu đề cột || [doub
+5257 # NY LISBON CENTRAL SCHOOL DISTRICT: [double_extraction] Năm học lệch: 2026-27 / 2025-26; Hai lần trích ra 
+5367 # NY LITTLE FLOWER UNION FREE SCHOOL DIS: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5295 # NY MADRID-WADDINGTON CENTRAL SCHOOL DI: [lane_label] Nhãn lane lẫn chữ của đoạn văn: 'individuals will receive
+5407 # NY MINEOLA UNION FREE SCHOOL DISTRICT: [lane_label] Nhãn lane lẫn chữ của đoạn văn: 'I, 1, 2022, replace have
+5147 # NY MORRISVILLE-EATON CENTRAL SCHOOL DI: [lane_label] Nhiều lane cùng nhãn 'ma': thiếu tiêu đề cột
+5294 # NY MOUNT MARKHAM CENTRAL SCHOOL DISTRI: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5144 # NY NEW HYDE PARK-GARDEN CITY PARK UNIO: [double_extraction] Năm học lệch: 2024-25 / 2023-24; Hai lần trích ra 
+5272 # NY NIAGARA-WHEATFIELD CENTRAL SCHOOL D: [monotonic_lane] Lương giảm khi lên lane trình độ cao hơn: bậc 1, 'BA'
+5170 # NY NORTHPORT-EAST NORTHPORT UNION FREE: [schedule_scope] Bảng chỉ cho một nhóm giáo viên: Gray represents gran
+5126 # NY OLEAN CITY SCHOOL DISTRICT: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 9, 'Column 2' $49,
+5213 # NY ONONDAGA CENTRAL SCHOOL DISTRICT: [step_start] Bảng bắt đầu ở bậc 6: có thể thiếu hàng đầu || [double_ex
+5412 # NY OYSTERPONDS UNION FREE SCHOOL DISTR: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5150 # NY PATCHOGUE-MEDFORD UNION FREE SCHOOL: [double_extraction] Năm học lệch: 2025-26 / 2022-23; Hai lần trích ra 
+5269 # NY PINE BUSH CENTRAL SCHOOL DISTRICT: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 1, 'MA60 6' $73,74
+5152 # NY PITTSFORD CENTRAL SCHOOL DISTRICT: [lane_label] Nhãn lane lẫn chữ của đoạn văn: "at the Bachelor's"
+5132 # NY POLAND CENTRAL SCHOOL DISTRICT: [step_start] Bảng bắt đầu ở bậc 3: có thể thiếu hàng đầu || [double_ex
+5356 # NY PORT WASHINGTON UNION FREE SCHOOL D: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5221 # NY RYE CITY SCHOOL DISTRICT: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5184 # NY SARATOGA SPRINGS CITY SD: [lane_label] Nhiều lane cùng nhãn 'district ma step salary': thiếu tiê
+5408 # NY SAUGERTIES CENTRAL SCHOOL DISTRICT: [lane_label] Nhiều lane cùng nhãn 'ba': thiếu tiêu đề cột
+5226 # NY SCHODACK CENTRAL SCHOOL DISTRICT: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5406 # NY STARPOINT CENTRAL SCHOOL DISTRICT: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5180 # NY TOWN OF WEBB UNION FREE SCHOOL DIST: [monotonic_step] Lương giảm khi tăng bậc: lane 'M+30', bậc 4 $74,433.0
+5389 # NY WEST HEMPSTEAD UNION FREE SCHOOL DI: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 1, 'BA60/MA15' $64
+5306 # NY WEST IRONDEQUOIT CENTRAL SCHOOL DIS: [school_year] Năm học 2028-29 ở quá xa trong tương lai
+5179 # NY WORCESTER CENTRAL SCHOOL DISTRICT: [school_year] Năm học 2028-29 ở quá xa trong tương lai
+5290 # OH Fairfield Union Local: [double_extraction] 27 ô lệch giữa hai lần trích
+5310 # OH Jefferson Area Local: [monotonic_lane] Lương giảm khi lên lane trình độ cao hơn: bậc 0, 'BA+
+5247 # OH Joseph Badger Local: [monotonic_step] Lương giảm khi tăng bậc: lane 'MA+15', bậc 9 $87,608.
+5142 # OH Niles City: [double_extraction] Năm học lệch: 2027-28 / 2025-26; 165 ô lệch giữa h
+5277 # OH Western Reserve Local: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5374 # PA North Pocono SD: [double_extraction] Năm học lệch: 2025-26 / 2026-27; Hai lần trích ra 
+5355 # PA Ridley SD: [double_extraction] Hai lần trích ra lưới bậc × lane khác nhau
+5319 # SD Brandon Valley School District 49-2: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 1, 'Column 2' $56,
+5298 # TN Hamilton County: [double_extraction] 20 ô lệch giữa hai lần trích
+5352 # TX HOUSTON ISD: [double_extraction] layout-text@13 không thấy bảng lương
+5405 # TX KAUFMAN ISD: [double_extraction] 9 ô lệch giữa hai lần trích
+5185 # TX MARSHALL ISD: [schedule_scope] Bảng chỉ cho một nhóm giáo viên: NON CLASSROOM TEACHE
+5316 # TX MIDWAY ISD: [double_extraction] layout-text@13 không thấy bảng lương || [step_star
+5318 # TX ROMA ISD: [monotonic_lane] Lương đổi chiều giữa hai lane: bậc 14, 'Column 1' $49
+5361 # TX VAN ISD: [schedule_scope] Bảng chỉ cho một nhóm giáo viên: Step Bachelors Maste
+5402 # WI Stevens Point Area Public School Di: [step_start] Bảng bắt đầu ở bậc 10: có thể thiếu hàng đầu || [double_e
