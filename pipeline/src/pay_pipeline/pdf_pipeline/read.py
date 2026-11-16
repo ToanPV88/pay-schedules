@@ -80,7 +80,7 @@ _TITLE = re.compile(
     re.I,
 )
 _NOISE = re.compile(
-    r"^(?:20\d\d(?:[-–/]\d{2,4})?|\(?[+-]?\d+(?:\.\d+)?%\)?|_{3,}|annual|\(?1[6-9]\d|\(?2[0-4]\d|"
+    r"^(?:[0-2]\.\d{3,4}|20\d\d(?:[-–/]\d{2,4})?|\(?[+-]?\d+(?:\.\d+)?%\)?|_{3,}|annual|\(?1[6-9]\d|\(?2[0-4]\d|"
     r"days?\)?)$",
     re.I,
 )
@@ -318,7 +318,9 @@ def _right_of(line: Line, rows: list[Row]) -> bool:
     return min(w.x0 for w in line.words) > right + 2 * width
 
 
-_TOTAL = re.compile(r"^(?:total|annual\s+total|total\s+salary)$", re.I)
+_TOTAL = re.compile(r"^(?:total|annual\s+total|total\s+salary|total\s+comp(?:ensation)?)$", re.I)
+# "Base--0  63,920 ...": the step number joined to the first pay component (Pasco, WA) (D-063)
+_BASE_STEP = re.compile(r"^base\s*-*\s*(\d{1,2})$", re.I)
 
 
 def collapse_components(lines: list[Line]) -> list[Line]:
@@ -342,8 +344,15 @@ def collapse_components(lines: list[Line]) -> list[Line]:
     for line in lines:
         words = line.words
         has_money = any(money(w.text) is not None or _SIDE.match(w.text) for w in words)
-        if words and has_money and _LABEL.match(words[0].text):
+        base = _BASE_STEP.match(words[0].text) if words else None
+        # "5 Days  1,776 ..." under "Base--0": a component that starts with a number (Pasco)
+        component = (
+            step is not None and len(words) > 1 and re.match(r"[A-Za-z]", words[1].text) is not None
+        )
+        if words and has_money and (_LABEL.match(words[0].text) or base) and not component:
             step = words[0]  # "1  Base Pay  180.00  $63,117 ..."
+            if base:
+                step = Word(base.group(1), step.x0, step.x1)
             out.append(Line([]))
         elif words and has_money and step is not None and _TOTAL.match(label_of(line)):
             amounts = [w for w in words if money(w.text) is not None]

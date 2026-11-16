@@ -816,6 +816,20 @@ class TestReader:
         assert [r.label for r in tables[0].rows] == ["1", "2", "3", "6", "7"]
         assert tables[0].grid[-2] == [None, 57500]
 
+    def test_index_lines_and_base_step_components(self) -> None:
+        # Pasco, WA: index line, "Base--N", "5 Days", "Total Comp" for each step (D-063)
+        lines = [L("Step", "", "BA+15", "MA")]
+        for n in range(4):
+            lines += [
+                L("", f"{1 + n / 100:.4f}", f"{1.03 + n / 100:.4f}"),
+                L(f"Base--{n}", f"{60000 + 900 * n:,}", f"{70000 + 900 * n:,}"),
+                L("5 Days", f"{1700 + n:,}", f"{1900 + n:,}"),
+                L("Total Comp", f"{61700 + 901 * n:,}", f"{71900 + 901 * n:,}"),
+            ]
+        t = rd.find_tables(lines, 1)[0]
+        assert [r.label for r in t.rows] == ["0", "1", "2", "3"]
+        assert t.grid[1] == [62601, 72801]
+
     def test_lanes_printed_as_rows(self) -> None:
         # DC Public Schools / Knox County: steps across, one line per lane (D-060)
         lines = [L("", "Teacher Salary Schedule"), L("Education", "1", "2", "3", "4", "5")]
