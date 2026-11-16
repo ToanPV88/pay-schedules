@@ -4,9 +4,11 @@
  * Workers Cache phục vụ trang đã cache mà không gọi Worker, nên mọi request tới đây đều là lần trượt
  * cache: dựng trang, đọc D1, sinh file tải. Hai lớp chặn:
  *
- * 1. Giới hạn tần suất theo IP (Workers Rate Limiting binding; đếm riêng ở mỗi điểm Cloudflare):
- *    trang, API và file tải mỗi loại một ngưỡng. Vượt thì trả 429. Binding thiếu hoặc lỗi thì cho qua
- *    (fail-open), để sự cố của tính năng chặn không làm sập site.
+ * 1. Giới hạn tần suất theo IP: trang, API và file tải mỗi loại một ngưỡng; vượt thì trả 429. Đếm hai
+ *    nơi: cửa sổ một phút trong bộ nhớ của isolate (chính xác trong từng isolate, nên một IP được tối
+ *    đa ngưỡng × số isolate phục vụ nó), và Workers Rate Limiting binding. Đo trên workers.dev ngày
+ *    2026-11-16: binding không chặn lượt nào trong hơn 900 lượt/2 phút (ngưỡng 120), nên chỉ là lớp
+ *    phụ. Binding thiếu hoặc lỗi thì cho qua, để sự cố của tính năng chặn không làm sập site.
  * 2. Chuẩn hoá tham số: tham số mà trang không dùng (vd. ?x=1, utm_*, fbclid) làm trượt cache và bắt
  *    D1 chạy lại. Gặp thì chuyển 301 về địa chỉ chỉ còn tham số hợp lệ; bản chuyển hướng được cache.
  */
@@ -81,19 +83,55 @@ function limiterOf(env: Env, kind: LimitKind): RateLimiter | undefined {
   return kind === "api" ? env.API_LIMITER : env.PAGE_LIMITER;
 }
 
-export type LimitResult = "ok" | "blocked" | "no-ip" | "no-binding" | "error";
+/** Ngưỡng mỗi phút của mỗi loại; trùng với `ratelimits` trong wrangler.jsonc. */
+export const LIMITS: Record<LimitKind, number> = { page: 240, api: 120, download: 30 };
+const WINDOW_MS = 60_000;
+/** Số khóa (loại + IP) giữ trong bộ nhớ của isolate; quá thì bỏ các cửa sổ đã hết hạn. */
+const MAX_KEYS = 5_000;
+const windows = new Map<string, { start: number; count: number }>();
 
-/** Không có IP (chạy local, test), không có binding hoặc binding lỗi thì cho qua. */
+/** Cửa sổ cố định một phút trong bộ nhớ của isolate. */
+export function localAllow(key: string, limit: number, now = Date.now()): boolean {
+  let window = windows.get(key);
+  if (!window || now - window.start >= WINDOW_MS) {
+    if (!window && windows.size >= MAX_KEYS) {
+      for (const [k, w] of windows) {
+        if (now - w.start >= WINDOW_MS) {
+          windows.delete(k);
+        }
+      }
+      if (windows.size >= MAX_KEYS) {
+        windows.clear();
+      }
+    }
+    window = { start: now, count: 0 };
+    windows.set(key, window);
+  }
+  window.count += 1;
+  return window.count <= limit;
+}
+
+export function resetLocalLimits(): void {
+  windows.clear();
+}
+
+export type LimitResult = "ok" | "blocked" | "local-blocked" | "no-ip" | "no-binding" | "error";
+
+/** Không có IP (chạy local, test) thì cho qua; không có binding hoặc binding lỗi thì chỉ đếm local. */
 async function checkLimit(env: Env, kind: LimitKind, ip: string | undefined): Promise<LimitResult> {
+  if (!ip) {
+    return "no-ip";
+  }
+  const key = `${kind}:${ip}`;
+  if (!localAllow(key, LIMITS[kind])) {
+    return "local-blocked";
+  }
   const limiter = limiterOf(env, kind);
   if (!limiter) {
     return "no-binding";
   }
-  if (!ip) {
-    return "no-ip";
-  }
   try {
-    const { success } = await limiter.limit({ key: `${kind}:${ip}` });
+    const { success } = await limiter.limit({ key });
     return success ? "ok" : "blocked";
   } catch (err) {
     console.warn(`rate limit ${kind}: ${err instanceof Error ? err.message : String(err)}`);
@@ -113,7 +151,7 @@ export async function guard(c: Context<AppEnv>, next: Next): Promise<Response | 
     // Chỉ bản xem trước: để kiểm binding có chạy thật không.
     c.header("X-Rate-Limit", `${kind} ${result}`);
   }
-  if (result === "blocked") {
+  if (result === "blocked" || result === "local-blocked") {
     c.header("Retry-After", "60");
     c.header("Cache-Control", NO_STORE);
     return c.text("Too many requests. Please wait a minute and try again.", 429);
