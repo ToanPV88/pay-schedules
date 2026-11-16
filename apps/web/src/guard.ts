@@ -6,9 +6,9 @@
  *
  * 1. Giới hạn tần suất theo IP: trang, API và file tải mỗi loại một ngưỡng; vượt thì trả 429. Đếm hai
  *    nơi: cửa sổ một phút trong bộ nhớ của isolate (chính xác trong từng isolate, nên một IP được tối
- *    đa ngưỡng × số isolate phục vụ nó), và Workers Rate Limiting binding. Đo trên workers.dev ngày
- *    2026-11-16: binding không chặn lượt nào trong hơn 900 lượt/2 phút (ngưỡng 120), nên chỉ là lớp
- *    phụ. Binding thiếu hoặc lỗi thì cho qua, để sự cố của tính năng chặn không làm sập site.
+ *    đa ngưỡng × số isolate phục vụ nó), và Workers Rate Limiting binding. Cả hai chỉ là trần thô: đo
+ *    trên workers.dev ngày 2026-11-16, binding không chặn lượt nào trong hơn 900 lượt/2 phút, và 40
+ *    lượt tuần tự rơi vào 8 isolate (D-108). Binding thiếu hoặc lỗi thì cho qua.
  * 2. Chuẩn hoá tham số: tham số mà trang không dùng (vd. ?x=1, utm_*, fbclid) làm trượt cache và bắt
  *    D1 chạy lại. Gặp thì chuyển 301 về địa chỉ chỉ còn tham số hợp lệ; bản chuyển hướng được cache.
  */
@@ -84,7 +84,7 @@ function limiterOf(env: Env, kind: LimitKind): RateLimiter | undefined {
 }
 
 /** Ngưỡng mỗi phút của mỗi loại; trùng với `ratelimits` trong wrangler.jsonc. */
-export const LIMITS: Record<LimitKind, number> = { page: 240, api: 120, download: 30 };
+export const LIMITS: Record<LimitKind, number> = { page: 120, api: 60, download: 15 };
 const WINDOW_MS = 60_000;
 /** Số khóa (loại + IP) giữ trong bộ nhớ của isolate; quá thì bỏ các cửa sổ đã hết hạn. */
 const MAX_KEYS = 5_000;

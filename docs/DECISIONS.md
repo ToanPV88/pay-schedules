@@ -1079,13 +1079,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 
 - Ngày: 2026-11-16. Chủ dự án duyệt danh sách chống sao chép (mục C2, C3).
 - Workers Cache phục vụ trang đã cache mà không gọi Worker, nên giới hạn trong Worker chỉ tính lần
-  trượt cache (dựng trang, đọc D1, sinh file). Khóa theo IP: trang 240, API 120, file tải 30 lượt mỗi
+  trượt cache (dựng trang, đọc D1, sinh file). Khóa theo IP: trang 120, API 60, file tải 15 lượt mỗi
   phút; vượt thì 429 kèm `Retry-After: 60`.
 - Đếm hai nơi: cửa sổ một phút trong bộ nhớ của isolate (chính xác trong từng isolate; một IP được
   tối đa ngưỡng × số isolate phục vụ nó) và Workers Rate Limiting binding. Đo trên bản preview
   workers.dev ngày 2026-11-16: binding không chặn lượt nào trong hơn 900 lượt API trong 2 phút (ngưỡng
-  120), đúng với tài liệu Cloudflare ("permissive, eventually consistent") và các báo cáo cùng loại,
-  nên binding chỉ là lớp phụ. Binding thiếu hoặc lỗi thì cho qua. namespace_id dải 73xx (tài khoản
+  120), đúng với tài liệu Cloudflare ("permissive, eventually consistent") và các báo cáo cùng loại;
+  40 lượt tuần tự từ một trình duyệt rơi vào 8 isolate. Vì vậy cả hai lớp chỉ là trần thô cho đợt tải
+  dồn dập, không phải giới hạn chính xác. Binding thiếu hoặc lỗi thì cho qua.
+- Giới hạn chính xác trong Worker cần Durable Object (thêm độ trễ và lượt gọi tính phí ở mỗi lần trượt
+  cache): chưa làm, chờ chủ dự án quyết cùng mục C4. namespace_id dải 73xx (tài khoản
   dùng chung với travienphi và hospital-price-ai); bản preview dùng 731x.
 - Bản preview trả header `X-Rate-Limit: <loại> <kết quả>` để kiểm; production không có.
 - Tham số mà trang không dùng (vd. `?x=1`, `utm_*`, `fbclid`) chuyển 301 về địa chỉ chỉ còn tham số

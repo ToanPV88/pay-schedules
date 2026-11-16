@@ -18,9 +18,9 @@
   // riêng trong tài khoản Cloudflare (dùng chung với travienphi, hospital-price-ai): chọn dải 73xx
   // để không trùng bộ đếm của Worker khác. period chỉ được 10 hoặc 60.
   "ratelimits": [
-    { "name": "PAGE_LIMITER", "namespace_id": "7301", "simple": { "limit": 240, "period": 60 } },
-    { "name": "API_LIMITER", "namespace_id": "7302", "simple": { "limit": 120, "period": 60 } },
-    { "name": "DOWNLOAD_LIMITER", "namespace_id": "7303", "simple": { "limit": 30, "period": 60 } }
+    { "name": "PAGE_LIMITER", "namespace_id": "7301", "simple": { "limit": 120, "period": 60 } },
+    { "name": "API_LIMITER", "namespace_id": "7302", "simple": { "limit": 60, "period": 60 } },
+    { "name": "DOWNLOAD_LIMITER", "namespace_id": "7303", "simple": { "limit": 15, "period": 60 } }
   ],
   "vars": {
     "ENVIRONMENT": "production",
@@ -52,13 +52,13 @@
         {
           "name": "PAGE_LIMITER",
           "namespace_id": "7311",
-          "simple": { "limit": 240, "period": 60 }
+          "simple": { "limit": 120, "period": 60 }
         },
-        { "name": "API_LIMITER", "namespace_id": "7312", "simple": { "limit": 120, "period": 60 } },
+        { "name": "API_LIMITER", "namespace_id": "7312", "simple": { "limit": 60, "period": 60 } },
         {
           "name": "DOWNLOAD_LIMITER",
           "namespace_id": "7313",
-          "simple": { "limit": 30, "period": 60 }
+          "simple": { "limit": 15, "period": 60 }
         }
       ],
       "vars": {
