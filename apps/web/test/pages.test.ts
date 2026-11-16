@@ -366,6 +366,11 @@ describe("tải CSV và câu hỏi thường gặp", () => {
     expect(lines.some((l) => l.includes("Source: https://test-valley.example.invalid/"))).toBe(
       true,
     );
+    // Ghi nguồn (D-109): ngày tải tài liệu và trang của site đã tổng hợp bảng.
+    expect(lines.some((l) => l.includes("(retrieved 2026-11-12)"))).toBe(true);
+    expect(lines).toContain(
+      "Compiled by Pay Schedules: https://example.invalid/test-state/test-valley-unified",
+    );
     expect((await request(`/schedules/${c.scheduleId}.csv`)).status).toBe(404);
     expect((await request("/schedules/abc.csv")).status).toBe(404);
     expect((await request("/schedules/999999.csv")).status).toBe(404);
@@ -393,6 +398,15 @@ describe("tải CSV và câu hỏi thường gặp", () => {
     // bậc đầu, lane đầu của bảng mẫu: 50.000 USD, định dạng tiền chẵn đô (kiểu 2)
     expect(text).toContain('<c r="B2" s="2"><v>50000</v></c>');
     expect(text).toContain("Source: https://test-valley.example.invalid/");
+    expect(text).toContain(
+      "Compiled by Pay Schedules: https://example.invalid/test-state/test-valley-unified",
+    );
+    // Thuộc tính tệp: người tạo và trang gốc.
+    expect(text).toContain("docProps/core.xml");
+    expect(text).toContain("<dc:creator>Pay Schedules</dc:creator>");
+    expect(text).toContain(
+      "<dc:identifier>https://example.invalid/test-state/test-valley-unified</dc:identifier>",
+    );
     expect((await request(`/schedules/${c.scheduleId}.xlsx`)).status).toBe(404);
     expect((await request("/schedules/1.xls")).status).toBe(404);
   });

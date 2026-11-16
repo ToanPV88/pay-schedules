@@ -1113,3 +1113,20 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   - ghép các trang đó thành một bảng, mỗi trang một lane; bỏ trang của nhân viên khác (counselor,
     psych, speech, nurse…).
 - Bộ đọc văn bản lên @13.
+
+## D-109: Ghi nguồn trong tệp tải, dòng bản quyền, giới hạn và thời hạn lưu báo lỗi
+
+- Ngày: 2026-11-16. Chủ dự án duyệt danh sách chống sao chép và bảo mật (mục C6, S8).
+- CSV và Excel: dưới bảng có tiêu đề bảng, tài liệu gốc kèm ngày tải ("retrieved"), dòng "Compiled
+  by Pay Schedules: <URL trang học khu>" (theo origin của request, nên đổi theo tên miền) và lời nhắc
+  đối chiếu tài liệu gốc. Excel thêm thuộc tính tệp (`docProps/core.xml`): tiêu đề, người tạo, mô tả,
+  URL trang. Không chèn dữ liệu giả hay "bẫy" để dò người chép.
+- Footer: "© <năm> Pay Schedules. Pay figures come from public district documents; the compilation,
+  checks and site text are our own." Điều khoản dùng lại chi tiết nằm ở trang Terms (mục C7).
+- Form báo lỗi: độ dài 10–2000 ký tự đã có (D-104, ràng buộc trong D1); thêm giới hạn 5 lượt gửi mỗi
+  phút mỗi IP (đếm trong isolate, D-108). Báo lỗi bị xóa 180 ngày sau khi gửi: Worker web chạy việc
+  định kỳ hằng ngày lúc 09:41 UTC (`triggers.crons`); bản preview không chạy. Trang Privacy ghi cùng
+  thời hạn và việc đếm request theo IP trong bộ nhớ.
+- Bỏ các export dạng số, chuỗi khỏi `src/index.ts` (MENU_STATE_LIMIT, SUGGEST_LIMIT, SITE_NAME):
+  `wrangler dev` từ chối module chính có export không phải handler, nên trước đây không chạy được
+  Worker ở máy.

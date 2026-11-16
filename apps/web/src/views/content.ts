@@ -2,6 +2,7 @@
  * Trang tin cậy và pháp lý. Đây là bản đầu của Công đoạn 6; Công đoạn 8 rà lại privacy và terms
  * trước khi gắn quảng cáo (cookie, nền tảng quản lý đồng ý).
  */
+import { REPORT_RETENTION_DAYS } from "@pay-schedules/db";
 import { html } from "hono/html";
 import { SITE_NAME } from "../env";
 import type { Html } from "./layout";
@@ -65,10 +66,11 @@ const privacy: ContentPage = {
 <h2>Approximate location</h2>
 <p>On the calculator and compare pages, the site may suggest districts near you. It uses the approximate location (city and state) that our hosting provider, Cloudflare, derives from your connection for each request. This location is not stored and is not linked to you. Suggestions are only shown for visitors in the United States.</p>
 <h2>Error reports</h2>
-<p>If you send an error report, we store the text you write and the page it refers to. We do not store your name, email address or IP address with the report. Please do not include personal information in the message.</p>
+<p>If you send an error report, we store the text you write and the page it refers to. We do not store your name, email address or IP address with the report. Please do not include personal information in the message. Reports are deleted ${REPORT_RETENTION_DAYS} days after they are sent.</p>
 <p>The report form uses Cloudflare Turnstile to block spam. Turnstile runs a check in your browser and is covered by <a href="https://www.cloudflare.com/turnstile-privacy-policy/" rel="noopener">Cloudflare’s Turnstile privacy addendum</a>.</p>
 <h2>Server logs</h2>
 <p>The site runs on Cloudflare, which processes requests and keeps operational logs as described in <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare’s privacy policy</a>.</p>
+<p>To limit automated bulk downloading, the site counts requests from each IP address for one minute at a time. The count is kept in memory only and is not stored.</p>
 <h2>Advertising</h2>
 <p>The site does not show advertising yet. This page will be updated, including how to opt out of advertising cookies, before any advertising is added.</p>`,
 };

@@ -17,6 +17,8 @@
   // Giới hạn tần suất theo IP, chỉ tính lần trượt cache (src/guard.ts, D-108). namespace_id là số
   // riêng trong tài khoản Cloudflare (dùng chung với travienphi, hospital-price-ai): chọn dải 73xx
   // để không trùng bộ đếm của Worker khác. period chỉ được 10 hoặc 60.
+  // Việc định kỳ (UTC): xóa báo lỗi quá 180 ngày (src/index.ts `scheduled`, D-109).
+  "triggers": { "crons": ["41 9 * * *"] },
   "ratelimits": [
     { "name": "PAGE_LIMITER", "namespace_id": "7301", "simple": { "limit": 120, "period": 60 } },
     { "name": "API_LIMITER", "namespace_id": "7302", "simple": { "limit": 60, "period": 60 } },
@@ -47,6 +49,8 @@
       "name": "pay-schedules-preview",
       "workers_dev": true,
       "preview_urls": true,
+      // Bản xem trước không chạy việc định kỳ.
+      "triggers": { "crons": [] },
       // Bộ đếm riêng cho bản xem trước.
       "ratelimits": [
         {

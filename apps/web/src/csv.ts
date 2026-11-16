@@ -1,6 +1,6 @@
 /** Tải một bảng lương dạng CSV (mở được bằng Excel, Google Sheets). */
 import type { District, Schedule } from "@pay-schedules/db";
-import { sourceLanding } from "./format";
+import { sourceLines } from "./attribution";
 
 /** Một ô CSV theo RFC 4180; chặn công thức khi mở bằng bảng tính (=, +, -, @ ở đầu). */
 export function csvField(value: string): string {
@@ -21,9 +21,9 @@ export function csvAmount(cents: number): string {
 
 /**
  * Hàng đầu: "Step" và nhãn lane; mỗi hàng sau: nhãn bậc và số tiền. Ô trống có ghi chú thì ghi
- * ghi chú; ô không có trong nguồn để trống. Dòng cuối ghi nguồn.
+ * ghi chú; ô không có trong nguồn để trống. Các dòng cuối ghi nguồn và trang đã tổng hợp (`pageUrl`).
  */
-export function scheduleCsv(district: District, schedule: Schedule): string {
+export function scheduleCsv(district: District, schedule: Schedule, pageUrl: string): string {
   const lanes = schedule.lanes.length > 0 ? schedule.lanes.map((l) => l.labelRaw) : ["Salary"];
   const lines = [["Step", ...lanes].map(csvField).join(",")];
   for (const [i, step] of schedule.steps.entries()) {
@@ -36,12 +36,10 @@ export function scheduleCsv(district: District, schedule: Schedule): string {
     lines.push([csvField(step.labelRaw), ...cells].join(","));
   }
   lines.push("");
-  const title = schedule.title ? `${schedule.title}, ` : "";
-  lines.push(csvField(`${district.name}, ${title}${schedule.schoolYear}`));
-  const source = sourceLanding(schedule.source.url)?.href ?? schedule.source.url;
-  const page = schedule.source.page === null ? "" : `, page ${schedule.source.page}`;
-  lines.push(csvField(`Source: ${source}${page}`));
-  lines.push(csvField("Verify against the source document before relying on these figures."));
+  const notes = sourceLines(district, schedule, pageUrl);
+  for (const line of [notes.heading, notes.source, notes.compiled, notes.verify]) {
+    lines.push(csvField(line));
+  }
   return `${lines.join("\r\n")}\r\n`;
 }
 

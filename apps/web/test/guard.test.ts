@@ -72,7 +72,8 @@ describe("giới hạn tần suất", () => {
   it("phân loại trang, API, file tải", () => {
     expect(limitKind("GET", "/texas")).toBe("page");
     expect(limitKind("GET", "/api/suggest")).toBe("api");
-    expect(limitKind("POST", "/report")).toBe("api");
+    expect(limitKind("POST", "/report")).toBe("form");
+    expect(limitKind("POST", "/internal/purge")).toBe("api");
     expect(limitKind("GET", "/schedules/12.xlsx")).toBe("download");
   });
 

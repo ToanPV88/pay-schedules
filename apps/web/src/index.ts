@@ -8,6 +8,7 @@ import {
   DISTRICT_SORTS,
   type District,
   type DistrictSort,
+  deleteOldErrorReports,
   getCoverage,
   getDistrictById,
   getDistrictBySlug,
@@ -30,6 +31,7 @@ import {
   type PayOverview,
   REPORT_MAX_LENGTH,
   REPORT_MIN_LENGTH,
+  REPORT_RETENTION_DAYS,
   type Schedule,
   type SearchHit,
   type SortDirection,
@@ -62,7 +64,7 @@ import {
 } from "./compare";
 import { csvFileName, scheduleCsv } from "./csv";
 import { DEMO_DISTRICT, DEMO_HISTORY, DEMO_NEIGHBORS, DEMO_SCHEDULE, DEMO_SUMMARY } from "./demo";
-import { type AppEnv, isIndexable, isProduction, reportsEnabled, SITE_NAME } from "./env";
+import { type AppEnv, type Env, isIndexable, isProduction, reportsEnabled, SITE_NAME } from "./env";
 import { escapeXml, isSchoolYear } from "./format";
 import { guard } from "./guard";
 import {
@@ -104,7 +106,6 @@ import { calculatorPage, comparePage, type ReportError, reportPage } from "./vie
 import { scheduleXlsx, XLSX_TYPE, xlsxFileName } from "./xlsx";
 
 export type { Env } from "./env";
-export { isIndexable, SITE_NAME } from "./env";
 
 /** Số migration đã áp lên CSDL, đọc từ bảng `d1_migrations` do wrangler tạo. */
 export async function appliedMigrations(db: D1Database): Promise<number | null> {
@@ -145,7 +146,7 @@ interface Caching {
 }
 
 /** Số bang trong menu "States" ở header. */
-export const MENU_STATE_LIMIT = 8;
+const MENU_STATE_LIMIT = 8;
 const MENU_TTL_MS = 10 * 60 * 1000;
 let menuCache: { at: number; value: Promise<{ name: string; slug: string }[]> } | null = null;
 
@@ -338,7 +339,7 @@ app.get("/search", async (c) => {
 });
 
 /** Số gợi ý tối đa khi gõ vào ô tìm kiếm. */
-export const SUGGEST_LIMIT = 8;
+const SUGGEST_LIMIT = 8;
 
 /**
  * Gợi ý học khu khi gõ (site.js). Cùng truy vấn với /search, ít kết quả hơn, trả JSON. Dưới hai ký
@@ -644,12 +645,14 @@ app.get("/schedules/:file", async (c) => {
   c.header("Cache-Control", PAGE_CACHE);
   c.header("Cache-Tag", cacheTags(districtTag(district.id)));
   c.header("X-Robots-Tag", "noindex");
+  // Trang học khu ghi trong tệp (D-109); theo origin của request nên đổi theo tên miền.
+  const pageUrl = new URL(districtPath(district.state.slug, district.slug), c.req.url).href;
   if (match[2] === "xlsx") {
     c.header("Content-Disposition", `attachment; filename="${xlsxFileName(district, schedule)}"`);
-    return c.body(scheduleXlsx(district, schedule), 200, { "Content-Type": XLSX_TYPE });
+    return c.body(scheduleXlsx(district, schedule, pageUrl), 200, { "Content-Type": XLSX_TYPE });
   }
   c.header("Content-Disposition", `attachment; filename="${csvFileName(district, schedule)}"`);
-  return c.body(scheduleCsv(district, schedule), 200, {
+  return c.body(scheduleCsv(district, schedule, pageUrl), 200, {
     "Content-Type": "text/csv; charset=utf-8",
   });
 });
@@ -812,4 +815,13 @@ app.onError((err, c) => {
   return page(c, meta, errorPage(), { control: NO_STORE }, 500);
 });
 
-export default app;
+/** Việc định kỳ (wrangler.jsonc `triggers.crons`): xóa báo lỗi quá hạn lưu (D-109). */
+async function scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+  ctx.waitUntil(
+    deleteOldErrorReports(env.DB).then((n) => {
+      console.log(`deleted ${n} error reports older than ${REPORT_RETENTION_DAYS} days`);
+    }),
+  );
+}
+
+export default { fetch: app.fetch, scheduled } satisfies ExportedHandler<Env>;
