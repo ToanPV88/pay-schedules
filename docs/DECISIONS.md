@@ -1167,16 +1167,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   trước các link cũ trong `schedule-urls.csv` (tổng tối đa 3). Danh sách chạy:
   `pipeline/sources/snl-seeds-20261116.csv`.
 
-## D-112: Điều khoản sử dụng (bản nháp, chờ chủ dự án duyệt)
+## D-112: Điều khoản sử dụng; không chặn bot AI
 
-- Ngày: 2026-11-16. Mục C7 trong danh sách chống sao chép. Pull request để ở dạng nháp; chủ dự án
-  duyệt nội dung trước khi merge.
+- Ngày: 2026-11-16. Mục C5, C7 trong danh sách chống sao chép; chủ dự án duyệt.
 - Cho phép: tra cứu, so sánh, in để dùng riêng (tìm việc, thương lượng, báo chí, nghiên cứu); trích
-  từng số liệu hay một bảng kèm link về trang; tải CSV/Excel và dùng, giữ dòng nguồn cuối tệp.
-- Không cho phép: công cụ tự động chép phần lớn site (trừ máy tìm kiếm theo robots.txt); đăng lại
-  toàn bộ hoặc phần lớn các bảng thành site, app, bộ dữ liệu, sản phẩm khác, hoặc dùng để xây hay
-  huấn luyện chúng, khi chưa có văn bản cho phép; xóa dòng nguồn trong tệp tải; lách giới hạn tần suất.
-- Cần dữ liệu số lượng lớn thì liên hệ. Học khu, cơ quan, chủ quyền tài liệu xin sửa hay gỡ qua trang
-  Contact, được xử lý trước mọi việc khác.
-- Chưa có: luật áp dụng và nơi giải quyết tranh chấp, giới hạn trách nhiệm chi tiết; chủ dự án quyết,
-  nên hỏi luật sư. Số liệu lương là dữ kiện công khai; điều khoản chủ yếu chặn sao chép hàng loạt.
+  từng số liệu hay một bảng kèm link về trang; tải CSV/Excel và dùng, giữ dòng nguồn cuối tệp. Máy tìm
+  kiếm, trợ lý AI và crawler khác theo robots.txt được chào đón.
+- Không cho phép: công cụ tự động bỏ qua robots.txt hay giới hạn tần suất để chép phần lớn site; đăng
+  lại toàn bộ hoặc phần lớn các bảng thành site, app, bộ dữ liệu, sản phẩm khác khi chưa có văn bản
+  cho phép; xóa dòng nguồn trong tệp tải; lách giới hạn tần suất.
+- Không cấm dùng dữ liệu để huấn luyện AI, không chặn bot AI trong robots.txt (C5: chủ dự án chọn không
+  chặn).
+- Không thêm điều khoản luật áp dụng và nơi giải quyết tranh chấp (chủ dự án chọn không).
+- Cần dữ liệu số lượng lớn, hoặc học khu, cơ quan, chủ quyền tài liệu xin sửa hay gỡ: qua trang
+  Contact. Email liên hệ (`CONTACT_EMAIL`) thêm sau khi có tên miền riêng.

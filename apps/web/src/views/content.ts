@@ -75,7 +75,7 @@ const privacy: ContentPage = {
 <p>The site does not show advertising yet. This page will be updated, including how to opt out of advertising cookies, before any advertising is added.</p>`,
 };
 
-/** Bản nháp điều khoản (DECISIONS.md D-112): chủ dự án duyệt trước khi merge. */
+/** Điều khoản sử dụng (DECISIONS.md D-112). */
 export const TERMS_UPDATED = "2026-11-16";
 
 const terms: ContentPage = {
@@ -106,8 +106,8 @@ const terms: ContentPage = {
 
 <h2>What is not allowed</h2>
 <ul>
-<li>Using scrapers, crawlers or other automated tools to copy or download large parts of the site. Search engines that follow our robots.txt are welcome.</li>
-<li>Republishing all or a substantial part of the site’s tables, for example as another website, app, dataset or product, or using them to build or train one, without our written permission.</li>
+<li>Using scrapers or other automated tools that ignore our robots.txt or rate limits to copy or download large parts of the site. Search engines, AI assistants and other crawlers that follow robots.txt are welcome.</li>
+<li>Republishing all or a substantial part of the site’s tables, for example as another website, app, dataset or product, without our written permission.</li>
 <li>Removing or changing the source and attribution lines in downloaded files when you share them.</li>
 <li>Getting around rate limits or other measures that protect the site, or using it in a way that degrades it for others.</li>
 </ul>

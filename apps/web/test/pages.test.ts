@@ -293,7 +293,8 @@ describe("trang bang, tìm kiếm, so sánh, máy tính", () => {
     const html = await page("/terms");
     expect(html).toContain("What you can do");
     expect(html).toContain("What is not allowed");
-    expect(html).toContain("scrapers, crawlers or other automated tools");
+    expect(html).toContain("scrapers or other automated tools that ignore our robots.txt");
+    expect(html).toContain("AI assistants and other crawlers that follow robots.txt are welcome");
     expect(html).toContain('<time datetime="2026-11-16">');
   });
 
