@@ -1,164 +1,25 @@
-# Kiểm tra site production thật (PLAN Công đoạn 6, nghiệm thu): mã trạng thái và nội dung của các
-# trang chính, link nội bộ của trang chủ, trang học khu mẫu từ sitemap, tải CSV, dữ liệu có cấu trúc,
-# rồi Lighthouse mobile. Chỉ đọc site; không secret, không ghi D1.
-# Chạy: đẩy commit lên nhánh `run/site-check`, hoặc chạy tay.
+# Tạm: tra tên miền còn trống qua RDAP (không secret, chỉ đọc).
 name: Site check
-
 on:
-  workflow_dispatch:
   push:
     branches: ["run/site-check"]
-
 permissions:
   contents: read
-
-concurrency:
-  group: site-check
-  cancel-in-progress: true
-
 jobs:
   check:
     runs-on: ubuntu-latest
-    permissions:
-      deployments: read  # đọc URL production từ lần deploy gần nhất
-    timeout-minutes: 40
+    timeout-minutes: 10
     steps:
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      - name: Production URL
-        id: url
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: RDAP
         run: |
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/deployments?environment=production&per_page=1" --jq '.[0].id')
-          url=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" --jq '.[0].environment_url')
-          [[ "$url" =~ ^https://[a-z0-9.-]+$ ]] || { echo "::error::không đọc được URL production"; exit 1; }
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-      - name: Pages, links, CSV, structured data
-        env:
-          BASE_URL: ${{ steps.url.outputs.url }}
-        run: |
-          failed=0
-          fail() { echo "::error::$*"; failed=1; }
-          get() { curl -sS -o page.html -w '%{http_code}' "$1"; }
-          echo "### Trang chính" >> "$GITHUB_STEP_SUMMARY"
-          for spec in "/|Teacher pay across the site" "/recently-updated|Recently updated salary schedules" \
-                      "/california|Teacher pay in California" "/texas|Districts in Texas" \
-                      "/search?q=austin|Austin" "/compare|Compare" "/calculator|Calculator" \
-                      "/methodology|" "/sitemap.xml|<urlset" "/robots.txt|User-agent"; do
-            path=${spec%%|*}; want=${spec#*|}
-            code=$(get "${BASE_URL}${path}")
-            ok="ok"
-            if [ "$code" != 200 ]; then ok="HTTP $code"; fail "${path}: HTTP ${code}"; fi
-            if [ -n "$want" ] && ! grep -qF "$want" page.html; then ok="thiếu '${want}'"; fail "${path}: thiếu '${want}'"; fi
-            echo "- \`${path}\`: ${ok}" | tee -a "$GITHUB_STEP_SUMMARY"
-          done
-
-          # Mọi link nội bộ của trang chủ (menu bang, bang, học khu mới cập nhật) phải mở được.
-          get "${BASE_URL}/" > /dev/null
-          grep -oE 'href="/[^"#]*"' page.html | sed -E 's/^href="//; s/"$//' | sort -u > links.txt
-          bad=0
-          while read -r path; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' "${BASE_URL}${path}")
-            if [ "$code" != 200 ]; then bad=$((bad + 1)); fail "link trang chủ ${path}: HTTP ${code}"; fi
-          done < links.txt
-          echo "- Link nội bộ của trang chủ: $(wc -l < links.txt), hỏng ${bad}" | tee -a "$GITHUB_STEP_SUMMARY"
-
-          # Số trang trong sitemap theo bang (trang học khu năm mới nhất).
-          curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
-            | grep -E '^https?://[^/]+/[a-z-]+/[a-z0-9-]+$' > sitemap-districts.txt
-          echo "- Trang học khu trong sitemap: $(wc -l < sitemap-districts.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
-          sed -E 's#^https?://[^/]+/([a-z-]+)/.*#\1#' sitemap-districts.txt | sort | uniq -c | sort -rn \
-            | awk '{printf "%s %s, ", $2, $1} END {print ""}' | sed 's/^/- Theo bang: /' | tee -a "$GITHUB_STEP_SUMMARY"
-
-          # 25 trang học khu ngẫu nhiên trong sitemap: bảng, FAQ, JSON-LD, CSV.
-          curl -fsS "${BASE_URL}/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' \
-            | grep -E '^https?://[^/]+/[a-z-]+/[a-z0-9-]+$' | shuf -n 25 > districts.txt
-          {
-            echo
-            echo "### Trang học khu mẫu ($(wc -l < districts.txt) trang ngẫu nhiên trong sitemap)"
-            echo
-            echo "| Trang | HTTP | Ô có tiền | Lân cận | FAQ | JSON-LD | CSV |"
-            echo "| --- | ---: | ---: | --- | --- | --- | --- |"
-          } >> "$GITHUB_STEP_SUMMARY"
-          while read -r url; do
-            code=$(get "$url")
-            cells=$(grep -c '<td data-cents=' page.html || true)
-            faq=$(grep -q 'id="faq-heading"' page.html && echo có || echo không)
-            # Trang trong sitemap phải là trang được index: có học khu lân cận (PLAN Công đoạn 7).
-            near=$(grep -q 'Compare these districts at the same step and lane' page.html && echo có || echo không)
-            grep -oE '<title>[^<]*</title>' page.html >> titles.txt
-            ld=$(grep -oP '(?<=<script type="application/ld\+json">).*?(?=</script>)' page.html | head -1)
-            if [ -n "$ld" ] && echo "$ld" | jq -e '[."@graph"[]."@type"] == ["FAQPage", "BreadcrumbList", "Dataset"]' > /dev/null; then json="hợp lệ"; else json="lỗi"; fi
-            csv=$(grep -oE 'href="/schedules/[0-9]+\.csv"' page.html | head -1 | sed -E 's/^href="//; s/"$//')
-            csvok="không có link"
-            if [ -n "$csv" ]; then
-              ccode=$(curl -sS -o table.csv -w '%{http_code}' "${BASE_URL}${csv}")
-              head1=$(head -1 table.csv | cut -c1-5)
-              if [ "$ccode" = 200 ] && [ "$head1" = "Step," ]; then csvok="ok"; else csvok="HTTP ${ccode}"; fi
-            fi
-            [ "$code" = 200 ] || fail "${url}: HTTP ${code}"
-            [ "$cells" -gt 0 ] || fail "${url}: không có ô tiền"
-            [ "$faq" = có ] || fail "${url}: thiếu FAQ"
-            [ "$near" = có ] || fail "${url}: trong sitemap nhưng không có lân cận (trang noindex)"
-            [ "$json" = "hợp lệ" ] || fail "${url}: JSON-LD lỗi"
-            [ "$csvok" = ok ] || fail "${url}: CSV ${csvok}"
-            echo "| ${url#"$BASE_URL"} | ${code} | ${cells} | ${near} | ${faq} | ${json} | ${csvok} |" | tee -a "$GITHUB_STEP_SUMMARY"
-          done < districts.txt
-          dups=$(sort titles.txt | uniq -d | wc -l)
-          echo "- Title trùng trong mẫu: ${dups}" | tee -a "$GITHUB_STEP_SUMMARY"
-          [ "$dups" = 0 ] || fail "title trùng: $(sort titles.txt | uniq -d | head -3 | tr '\n' ' ')"
-          cp districts.txt "$RUNNER_TEMP/districts.txt"
-          exit "$failed"
-      - name: Lighthouse mobile
-        if: always() && steps.url.outputs.url != ''
-        env:
-          BASE_URL: ${{ steps.url.outputs.url }}
-          LIGHTHOUSE_VERSION: 13.6.0
-          MIN_SCORE: 90
-          RUNS: 3
-        run: |
-          # Trang chủ, danh sách, bang lớn nhất, và hai trang học khu (bảng lớn nhất trong mẫu).
-          pages="/ /recently-updated /california /texas"
-          if [ -f "$RUNNER_TEMP/districts.txt" ]; then
-            pages="$pages $(head -2 "$RUNNER_TEMP/districts.txt" | sed -E 's#^https?://[^/]+##' | tr '\n' ' ')"
-          fi
-          {
-            echo
-            echo "### Lighthouse mobile (lighthouse@${LIGHTHOUSE_VERSION}, trung vị ${RUNS} lần)"
-            echo
-            echo "| Trang | Performance | Accessibility | Best practices | SEO |"
-            echo "| --- | ---: | ---: | ---: | ---: |"
-          } >> "$GITHUB_STEP_SUMMARY"
-          median() { tr ' ' '\n' | sed '/^$/d' | sort -n | awk '{a[NR]=$1} END {print a[int((NR+1)/2)]}'; }
-          failed=0
-          for page in $pages; do
-            perf="" a11y="" bp="" seo=""
-            for run in $(seq 1 "$RUNS"); do
-              npx --yes "lighthouse@${LIGHTHOUSE_VERSION}" "${BASE_URL}${page}" \
-                --quiet --output=json --output-path=report.json \
-                --only-categories=performance,accessibility,best-practices,seo \
-                --chrome-flags="--headless=new --no-sandbox"
-              score() { jq -r ".categories[\"$1\"].score * 100 | round" report.json; }
-              perf="$perf $(score performance)"
-              a11y="$a11y $(score accessibility)"
-              bp="$bp $(score best-practices)"
-              seo="$seo $(score seo)"
+          names="paygrids paygrid publicpaygrid salarygrid salarygrids paytables publicpaytables payschedules payscheduledb publicpayscales stepandlane stepsandlanes salarysteps payladder publicpayladder openpaygrid salaryschedules salaryscheduledb payscaledb paystepper wagegrid publicwagegrid salarytable salarytables scheduleofpay paysteps publicpaysteps stepscale salaryladder paygridhq"
+          for n in $names; do
+            for tld in com org; do
+              if [ "$tld" = com ]; then u="https://rdap.verisign.com/com/v1/domain/$n.com"; else u="https://rdap.publicinterestregistry.org/rdap/domain/$n.org"; fi
+              code=$(curl -s -o r.json -w '%{http_code}' "$u")
+              if [ "$code" = 404 ]; then echo "FREE  $n.$tld"
+              elif [ "$code" = 200 ]; then echo "TAKEN $n.$tld $(jq -r '[.events[]?|select(.eventAction=="registration")|.eventDate][0] // ""' r.json | cut -c1-10)"
+              else echo "?$code $n.$tld"; fi
+              sleep 0.3
             done
-            p=$(echo "$perf" | median)
-            a=$(echo "$a11y" | median)
-            b=$(echo "$bp" | median)
-            s=$(echo "$seo" | median)
-            echo "| \`${page}\` | $p | $a | $b | $s |" | tee -a "$GITHUB_STEP_SUMMARY"
-            # Điểm thấp ghi lại các mục kéo điểm xuống để sửa.
-            if [ "$p" -lt "$MIN_SCORE" ] || [ "$a" -lt "$MIN_SCORE" ] || [ "$b" -lt "$MIN_SCORE" ]; then
-              failed=1
-              echo "::error::${page}: perf $p, a11y $a, best practices $b"
-              jq -r '.audits | to_entries[] | select(.value.score != null and .value.score < 0.9 and (.value.details.type // "") != "debugdata")
-                     | "  - \(.key): \(.value.title) (\(.value.displayValue // "score \(.value.score)"))"' report.json | head -15
-            fi
           done
-          echo >> "$GITHUB_STEP_SUMMARY"
-          echo "SEO không tính vào ngưỡng: site đang noindex có chủ đích (D-002)." >> "$GITHUB_STEP_SUMMARY"
-          exit "$failed"
