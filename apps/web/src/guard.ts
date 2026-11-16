@@ -64,11 +64,14 @@ export function canonicalSearch(url: URL): string | null {
   return `${url.pathname}${search ? `?${search}` : ""}${url.hash}`;
 }
 
-export type LimitKind = "page" | "api" | "download";
+export type LimitKind = "page" | "api" | "download" | "form";
 
 export function limitKind(method: string, pathname: string): LimitKind {
   if (pathname.startsWith("/schedules/")) {
     return "download";
+  }
+  if (method === "POST" && pathname === "/report") {
+    return "form";
   }
   if (pathname.startsWith("/api/") || method === "POST") {
     return "api";
@@ -80,11 +83,13 @@ function limiterOf(env: Env, kind: LimitKind): RateLimiter | undefined {
   if (kind === "download") {
     return env.DOWNLOAD_LIMITER;
   }
-  return kind === "api" ? env.API_LIMITER : env.PAGE_LIMITER;
+  return kind === "api" || kind === "form" ? env.API_LIMITER : env.PAGE_LIMITER;
 }
 
 /** Ngưỡng mỗi phút của mỗi loại; trùng với `ratelimits` trong wrangler.jsonc. */
-export const LIMITS: Record<LimitKind, number> = { page: 120, api: 60, download: 15 };
+/** Ngưỡng mỗi phút của mỗi loại; trùng với `ratelimits` trong wrangler.jsonc. Form báo lỗi chỉ đếm
+ * trong isolate (binding dùng chung bộ đếm API nhưng khóa riêng). */
+export const LIMITS: Record<LimitKind, number> = { page: 120, api: 60, download: 15, form: 5 };
 const WINDOW_MS = 60_000;
 /** Số khóa (loại + IP) giữ trong bộ nhớ của isolate; quá thì bỏ các cửa sổ đã hết hạn. */
 const MAX_KEYS = 5_000;

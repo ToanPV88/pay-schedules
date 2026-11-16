@@ -155,6 +155,7 @@ ${body}
 <footer class="site-footer">
 <div class="wrap">
 <p>Figures are for reference only. They are extracted automatically from public documents and may contain errors; the linked source document governs. Actual pay is set by each district. This site is not affiliated with any school district or government agency.</p>
+<p class="copyright">© ${new Date().getUTCFullYear()} ${SITE_NAME}. Pay figures come from public district documents; the compilation, checks and site text are our own.</p>
 <nav aria-label="Footer">
 <a href="/about">About</a>
 <a href="/methodology">Methodology</a>

@@ -4,7 +4,9 @@
  * (src/csv.ts), thêm định dạng tiền, hàng tiêu đề in đậm và độ rộng cột.
  */
 import type { District, Schedule } from "@pay-schedules/db";
-import { escapeXml, sourceLanding } from "./format";
+import { type SourceLines, sourceLines } from "./attribution";
+import { SITE_NAME } from "./env";
+import { escapeXml } from "./format";
 
 // ---------------------------------------------------------------- zip
 
@@ -176,13 +178,29 @@ const CONTENT_TYPES_XML =
   '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
   '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
   '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+  '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
   "</Types>";
 
 const ROOT_RELS_XML =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+  '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
   "</Relationships>";
+
+/** Thuộc tính tệp (File > Info trong Excel): tiêu đề, người tạo, mô tả kèm nguồn và trang gốc. */
+export function coreXml(notes: SourceLines, pageUrl: string): string {
+  const description = `${notes.source}. ${notes.compiled}. ${notes.verify}`;
+  return (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+    `<dc:title>${escapeXml(notes.heading)}</dc:title>` +
+    `<dc:creator>${escapeXml(SITE_NAME)}</dc:creator>` +
+    `<dc:description>${escapeXml(description)}</dc:description>` +
+    `<dc:identifier>${escapeXml(pageUrl)}</dc:identifier>` +
+    "</cp:coreProperties>"
+  );
+}
 
 const WORKBOOK_RELS_XML =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -203,7 +221,11 @@ function workbookXml(sheetName: string): string {
  * Hàng đầu: "Step" và nhãn lane; mỗi hàng sau: nhãn bậc và số tiền. Ô trống có ghi chú thì ghi
  * ghi chú (chữ nghiêng). Sau một hàng trống: tên bảng, nguồn và lời nhắc đối chiếu.
  */
-export function scheduleRows(district: District, schedule: Schedule): SheetCell[][] {
+export function scheduleRows(
+  district: District,
+  schedule: Schedule,
+  pageUrl: string,
+): SheetCell[][] {
   const lanes = schedule.lanes.length > 0 ? schedule.lanes.map((l) => l.labelRaw) : ["Salary"];
   const rows: SheetCell[][] = [
     [
@@ -224,18 +246,11 @@ export function scheduleRows(district: District, schedule: Schedule): SheetCell[
     rows.push([{ kind: "text", value: step.labelRaw, style: STYLE.bold }, ...cells]);
   }
   rows.push([]);
-  const title = schedule.title ? `${schedule.title}, ` : "";
-  rows.push([{ kind: "text", value: `${district.name}, ${title}${schedule.schoolYear}` }]);
-  const source = sourceLanding(schedule.source.url)?.href ?? schedule.source.url;
-  const page = schedule.source.page === null ? "" : `, page ${schedule.source.page}`;
-  rows.push([{ kind: "text", value: `Source: ${source}${page}` }]);
-  rows.push([
-    {
-      kind: "text",
-      value: "Verify against the source document before relying on these figures.",
-      style: STYLE.note,
-    },
-  ]);
+  const notes = sourceLines(district, schedule, pageUrl);
+  rows.push([{ kind: "text", value: notes.heading }]);
+  rows.push([{ kind: "text", value: notes.source }]);
+  rows.push([{ kind: "text", value: notes.compiled }]);
+  rows.push([{ kind: "text", value: notes.verify, style: STYLE.note }]);
   return rows;
 }
 
@@ -252,12 +267,18 @@ export function sheetName(schedule: Schedule): string {
   return name.slice(0, 31);
 }
 
-export function scheduleXlsx(district: District, schedule: Schedule): Uint8Array<ArrayBuffer> {
+export function scheduleXlsx(
+  district: District,
+  schedule: Schedule,
+  pageUrl: string,
+): Uint8Array<ArrayBuffer> {
   const encoder = new TextEncoder();
-  const rows = scheduleRows(district, schedule);
+  const rows = scheduleRows(district, schedule, pageUrl);
+  const notes = sourceLines(district, schedule, pageUrl);
   const files = [
     { name: "[Content_Types].xml", data: encoder.encode(CONTENT_TYPES_XML) },
     { name: "_rels/.rels", data: encoder.encode(ROOT_RELS_XML) },
+    { name: "docProps/core.xml", data: encoder.encode(coreXml(notes, pageUrl)) },
     { name: "xl/workbook.xml", data: encoder.encode(workbookXml(sheetName(schedule))) },
     { name: "xl/_rels/workbook.xml.rels", data: encoder.encode(WORKBOOK_RELS_XML) },
     { name: "xl/styles.xml", data: encoder.encode(STYLES_XML) },
