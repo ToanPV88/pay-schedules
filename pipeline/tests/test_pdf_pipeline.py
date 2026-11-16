@@ -784,6 +784,10 @@ class TestReader:
             steps=[Step("1")], cells={},
         )  # fmt: skip
         assert [i.code for i in pdf_checks({}, draft, NOW.date())] == ["lane_label"]
+        draft.lanes = [Lane("Column 1"), Lane("MA")]  # cột không tên: không tự publish (D-067)
+        assert [i.code for i in pdf_checks({}, draft, NOW.date())] == ["lane_label"]
+        draft.lanes = [Lane("Column 1")]  # một cột thì được (D-045)
+        assert pdf_checks({}, draft, NOW.date()) == []
         draft.lanes = [Lane("BA"), Lane("MA")]
         assert pdf_checks({}, draft, NOW.date()) == []
         assert [

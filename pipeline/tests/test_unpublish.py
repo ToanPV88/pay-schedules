@@ -77,3 +77,21 @@ def test_reject_closes_review_like_the_button() -> None:
     )
     # bảng đã published (10) không bị đụng tới
     assert db.execute("SELECT status FROM schedules WHERE id = 10").fetchone() == ("published",)
+
+
+def test_requeue_takes_published_back_to_review() -> None:
+    from pay_pipeline.pdf_pipeline.unpublish import requeue_sql
+
+    db = _db()
+    db.executescript(render_sql(requeue_sql([12], "[lane_label] Cột không có tên (D-067)")))
+    status = dict(db.execute("SELECT id, status FROM schedules").fetchall())
+    assert status == {10: "published", 11: "published", 12: "draft"}
+    assert db.execute("SELECT schedule_id, resolved_at FROM review_queue").fetchall() == [
+        (12, None)
+    ]
+    # bảng cũ 11 được publish lại nên học khu 2 vẫn có bảng
+    assert db.execute("SELECT status FROM district_pipeline WHERE district_id = 2").fetchone() == (
+        "published",
+    )
+    db.executescript(render_sql(requeue_sql([12], "x")))  # chạy lại: không thêm mục trùng
+    assert db.execute("SELECT COUNT(*) FROM review_queue").fetchone() == (1,)

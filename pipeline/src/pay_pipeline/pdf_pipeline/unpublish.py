@@ -20,12 +20,23 @@ from pay_pipeline.catalog.d1sql import quote
 
 
 def unpublish_sql(urls: list[str], reason: str, now: dt.datetime | None = None) -> list[str]:
-    stamp = (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%dT%H:%M:%SZ")
     in_urls = ", ".join(quote(u) for u in urls)
     picked = (
         "SELECT s.id FROM schedules s JOIN source_documents d ON d.id = s.source_document_id"
         f" WHERE d.url IN ({in_urls}) AND s.status IN ('published', 'draft')"
     )
+    return _take_back(picked, reason, requeue=False, now=now)
+
+
+def requeue_sql(schedule_ids: list[int], reason: str, now: dt.datetime | None = None) -> list[str]:
+    """Take published schedules off the site and back into the review queue (D-067)."""
+    ids = ", ".join(str(int(i)) for i in schedule_ids)
+    picked = f"SELECT id FROM schedules WHERE id IN ({ids}) AND status = 'published'"
+    return _take_back(picked, reason, requeue=True, now=now)
+
+
+def _take_back(picked: str, reason: str, *, requeue: bool, now: dt.datetime | None) -> list[str]:
+    stamp = (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%dT%H:%M:%SZ")
     sql = [
         "CREATE TABLE IF NOT EXISTS _unp (schedule_id INTEGER PRIMARY KEY, district_id INTEGER)",
         "DELETE FROM _unp",
@@ -36,11 +47,21 @@ def unpublish_sql(urls: list[str], reason: str, now: dt.datetime | None = None) 
         f"UPDATE schedules SET status = 'published', superseded_by = NULL,"
         f" published_at = COALESCE(published_at, {quote(stamp)})"
         " WHERE status = 'superseded' AND superseded_by IN (SELECT schedule_id FROM _unp)",
-        f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution = {quote(reason)}"
-        " WHERE resolved_at IS NULL AND schedule_id IN (SELECT schedule_id FROM _unp)",
+        (
+            "INSERT INTO review_queue (schedule_id, reason, created_at)"
+            f" SELECT schedule_id, {quote(reason)}, {quote(stamp)} FROM _unp u"
+            " WHERE NOT EXISTS (SELECT 1 FROM review_queue r WHERE r.schedule_id = u.schedule_id"
+            " AND r.resolved_at IS NULL)"
+            if requeue
+            else f"UPDATE review_queue SET resolved_at = {quote(stamp)},"
+            f" resolution = {quote(reason)}"
+            " WHERE resolved_at IS NULL AND schedule_id IN (SELECT schedule_id FROM _unp)"
+        ),
         "UPDATE district_pipeline SET status = CASE WHEN EXISTS (SELECT 1 FROM schedules x"
         " WHERE x.district_id = district_pipeline.district_id AND x.status = 'published'"
-        " AND x.schedule_type = 'teacher') THEN 'published' ELSE 'no_schedule' END,"
+        " AND x.schedule_type = 'teacher') THEN 'published' ELSE "
+        + ("'review'" if requeue else "'no_schedule'")
+        + " END,"
         f" detail = {quote(reason)}"
         " WHERE district_id IN (SELECT district_id FROM _unp)",
         "DELETE FROM district_summary WHERE district_id IN (SELECT district_id FROM _unp)",

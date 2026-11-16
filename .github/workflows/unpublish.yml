@@ -18,6 +18,8 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   URLS: pipeline/unpublish/shared-docs-20261116.txt
   REJECT_IDS: pipeline/unpublish/reject-20261116.txt
+  REQUEUE_IDS: pipeline/unpublish/requeue-unnamed-20261116.txt
+  REQUEUE_REASON: "[lane_label] Cột không có tên trong tài liệu (Column N): xem tài liệu gốc trước khi duyệt (D-067)"
   REJECT_REASON: "Loại khi rà hàng chờ 2026-11-16: bảng đọc sai hoặc không phải bảng hiện hành"
   REASON: "Gỡ: bảng đọc từ tài liệu tổng hợp nhiều học khu, không phải bảng của học khu (D-066)"
   TARGET: ${{ github.ref_name == 'run/unpublish-production' && 'production' || 'preview' }}
@@ -55,6 +57,9 @@ jobs:
       - name: Build reject SQL
         working-directory: pipeline
         run: uv run pay-pipeline reject-schedules --ids "../$REJECT_IDS" --reason "$REJECT_REASON" --sql "$GITHUB_WORKSPACE/reject.sql"
+      - name: Build requeue SQL
+        working-directory: pipeline
+        run: uv run pay-pipeline reject-schedules --requeue --ids "../$REQUEUE_IDS" --reason "$REQUEUE_REASON" --sql "$GITHUB_WORKSPACE/requeue.sql"
       - name: Apply to D1
         working-directory: apps/web
         env:
@@ -65,6 +70,7 @@ jobs:
             "SELECT d.url, s.status, COUNT(*) AS n FROM schedules s JOIN source_documents d ON d.id = s.source_document_id WHERE d.url IN (SELECT value FROM json_each('$(python3 -c 'import json,sys; print(json.dumps([l.strip() for l in open(sys.argv[1]) if l.strip()]))' "$GITHUB_WORKSPACE/$URLS")')) GROUP BY 1, 2"
           npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/unpublish.sql"
           npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/reject.sql"
+          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/requeue.sql"
           npx wrangler d1 execute "$db" $flag --remote --json --command \
             "SELECT COUNT(DISTINCT schedule_id) AS open_review FROM review_queue WHERE resolved_at IS NULL"
           npx wrangler d1 execute "$db" $flag --remote --json --command \

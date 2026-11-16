@@ -1224,3 +1224,14 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Web: `/federal-pay` (bảng GS cơ bản, danh sách vùng), `/federal-pay/gs/<vùng>`, `/va-nurse-pay`
   (cơ sở theo bang), `/va-nurse-pay/<cơ sở>`; có trong sitemap; menu có mục "Federal pay".
 - Sau này: USPS (APWU, NALC, NPMHU), bảng năm 2027 khi OPM công bố (thêm manifest mới).
+
+## D-067: Bảng nhiều cột mà cột không có tên thì không tự publish
+
+- Ngày: 2026-11-16. Lượt chạy lại D-064 publish 200 bảng, trong đó 36 bảng có cột mang nhãn bộ đọc
+  tự đặt "Column N" (tài liệu không có tiêu đề cột đọc được, thường là hợp đồng NY dạng scan): người
+  xem không biết cột nào là BA, MA. Rà toàn site: 352 bảng published (2,3 triệu học sinh) cũng vậy.
+- Chủ dự án chọn: gỡ 36 bảng của lượt mới về hàng chờ duyệt (`reject-schedules --requeue`, danh
+  sách `pipeline/unpublish/requeue-unnamed-20261116.txt`); giữ 316 bảng cũ trên site, sửa sau bằng bộ
+  đọc tên cột tốt hơn rồi đọc lại.
+- Từ nay pipeline PDF: bảng từ hai cột trở lên có cột "Column N" (hoặc nhãn chỉ có dấu gạch) bị
+  `lane_label`, không tự publish. Bảng một cột vẫn tự publish (D-045).
