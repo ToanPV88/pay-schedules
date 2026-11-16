@@ -1142,3 +1142,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   nhiều isolate. Không ghi D1, để kẻ dò mật khẩu không làm tốn lượt ghi.
 - Lớp bảo vệ chính vẫn là mật khẩu ngẫu nhiên dài. Chặn hẳn người lạ cần Cloudflare Access trước
   trang duyệt (miễn phí tới 50 người dùng), chủ dự án bật trong dashboard.
+
+## D-111: Dependabot và kiểm lỗ hổng phụ thuộc
+
+- Ngày: 2026-11-16. Chủ dự án duyệt danh sách bảo mật (mục S7).
+- `.github/dependabot.yml`: npm (gốc repo), uv (`pipeline/`), GitHub Actions; mỗi tháng, gom bản
+  minor/patch thành một pull request mỗi hệ sinh thái, tối đa 2 pull request mở. Bản vá bảo mật
+  (Dependabot security updates, alerts) chủ dự án bật ở Settings → Code security.
+- Pull request của Dependabot không có secret Cloudflare nên job preview, Lighthouse đỏ; xét theo job
+  web và pipeline. Phụ thuộc mới vẫn ghi vào DECISIONS.md như thường.
+- `.github/workflows/audit.yml`: `npm audit --audit-level=high` và `pip-audit` 2.10.1 trên
+  `uv export`. Chạy khi lockfile đổi, thứ Hai hằng tuần và khi gọi tay; không nằm trong CI để lỗ hổng
+  mới công bố không chặn mọi pull request. Lần chạy đầu (2026-11-16): 0 lỗ hổng npm, 0 lỗ hổng Python.

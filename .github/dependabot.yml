@@ -1,0 +1,35 @@
+# Cập nhật phụ thuộc (DECISIONS.md D-111). Mỗi tháng một lần, gom theo hệ sinh thái để ít pull
+# request. Bản vá bảo mật (Dependabot security updates) bật ở Settings của repo, không ở tệp này.
+# Pull request của Dependabot không có secret Cloudflare nên bước preview/Lighthouse sẽ đỏ: chỉ xem
+# job web, pipeline; merge theo quy trình thường (AGENTS.md), ghi phụ thuộc mới vào DECISIONS.md.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+
+  - package-ecosystem: uv
+    directory: /pipeline
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
+    labels: [dependencies]
