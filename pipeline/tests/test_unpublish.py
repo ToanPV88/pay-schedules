@@ -57,3 +57,23 @@ def test_long_raw_output_is_cut() -> None:
     stored = _stored_raw(raw)
     assert len(stored) < RAW_LIMIT + 200 and '"truncated": true' in stored
     assert _stored_raw("short") == "short"
+
+
+def test_reject_closes_review_like_the_button() -> None:
+    from pay_pipeline.pdf_pipeline.unpublish import reject_sql
+
+    db = _db()
+    db.executescript(
+        """
+        INSERT INTO schedules (id, district_id, school_year, source_document_id, status)
+          VALUES (20, 1, '2026-27', 1, 'draft');
+        INSERT INTO review_queue (schedule_id, reason) VALUES (20, '[lane_label] x');
+        """
+    )
+    db.executescript(render_sql(reject_sql([20, 10], "Loại")))
+    assert db.execute("SELECT resolution FROM review_queue").fetchone() == ("Loại",)
+    assert db.execute("SELECT status FROM district_pipeline WHERE district_id = 1").fetchone() == (
+        "no_schedule",
+    )
+    # bảng đã published (10) không bị đụng tới
+    assert db.execute("SELECT status FROM schedules WHERE id = 10").fetchone() == ("published",)

@@ -1,0 +1,32 @@
+5015 # Bradford FL: chỉ bảng Grandfathered
+5066 # Hernando FL: bảng cho người tuyển trước 2013
+5025 # Concord-Carlisle MA: lane thiếu tên, năm 2024-25
+5047 # Bangor ME: số sai, lane Column 1-4
+5062 # Edgewater NJ: lane thiếu tên
+5076 # Baldwin NY: lane theo năm tuyển lẫn lộn
+5006 # Baldwinsville NY: 2028-29, thiếu bậc đầu
+5109 # Bedford NY: thiếu bậc 8, nhãn MA+l5
+5031 # Bemus Point NY: một cột, thiếu bậc 1
+5097 # Bradford NY: nhãn lane rác
+5049 # Brewster NY: nhãn lane lẫn chữ
+5110 # Carthage NY: lane '-'
+5028 # Chatham NY: lane thiếu tên, thiếu bậc
+5023 # Cheektowaga-Sloan NY: bảng y tá, 2028-29
+5061 # Chester NY: số sai
+5096 # Clymer NY: nhãn lane rác
+5115 # Cohoes NY: lane thiếu tên
+5029 # Dolgeville NY: 2028-29, lane thiếu tên
+5060 # Herkimer NY: bốn lane cùng tên BASE
+5041 # Liverpool NY: 2028-29, thiếu bậc đầu
+5116 # Onteora NY: hai lần đọc khác năm, 44 ô lệch
+5022 # Putnam Valley NY: bốn lane cùng tên MA
+5026 # Sullivan West NY: 2023-24, nhãn lane rác
+5077 # Valley Central NY: nhãn lane lỗi
+5038 # Wappingers NY: nhãn lane rác, số giảm
+5034 # Willsboro NY: bắt đầu bậc 11
+5005 # Findlay OH: chỉ 3 bậc
+5102 # State College PA: hai hàng tiêu đề ghép
+4999 # Birdville TX: lương giảm theo bậc
+5067 # Lake Travis TX: nhãn lane ghép
+5084 # Salado TX: lẫn cột lương tối thiểu của bang
+5009 # Somerset TX: 2024-25, lương giảm ở bậc 25

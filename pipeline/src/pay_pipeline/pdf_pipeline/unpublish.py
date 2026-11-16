@@ -76,3 +76,24 @@ def unpublish_sql(urls: list[str], reason: str, now: dt.datetime | None = None) 
     )
     sql.append("DROP TABLE _unp")
     return sql
+
+
+REJECTED_RETRY_DAYS = 90
+"""Như nút "Loại" của trang duyệt (apps/review: REJECTED_RETRY_DAYS)."""
+
+
+def reject_sql(schedule_ids: list[int], reason: str, now: dt.datetime | None = None) -> list[str]:
+    """Close the review entries of draft schedules, as the review page's "Loại" button does."""
+    when = now or dt.datetime.now(dt.UTC)
+    stamp = when.strftime("%Y-%m-%dT%H:%M:%SZ")
+    retry = (when + dt.timedelta(days=REJECTED_RETRY_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ids = ", ".join(str(int(i)) for i in schedule_ids)
+    drafts = f"SELECT id FROM schedules WHERE id IN ({ids}) AND status = 'draft'"
+    return [
+        f"UPDATE district_pipeline SET status = 'no_schedule', detail = {quote(reason)},"
+        f" next_run_at = {quote(retry)} WHERE district_id IN (SELECT district_id FROM schedules"
+        f" WHERE id IN ({drafts}) AND id IN (SELECT schedule_id FROM review_queue"
+        " WHERE resolved_at IS NULL))",
+        f"UPDATE review_queue SET resolved_at = {quote(stamp)}, resolution = {quote(reason)}"
+        f" WHERE resolved_at IS NULL AND schedule_id IN ({drafts})",
+    ]
