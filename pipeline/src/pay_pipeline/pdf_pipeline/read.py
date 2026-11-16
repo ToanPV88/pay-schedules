@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@15"
-WORDS = "pdfplumber-words@15"
-XLSX = "xlsx-cells@15"
-DOCX = "docx-cells@15"
-HTML = "html-cells@15"
+LAYOUT = "layout-text@16"
+WORDS = "pdfplumber-words@16"
+XLSX = "xlsx-cells@16"
+DOCX = "docx-cells@16"
+HTML = "html-cells@16"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -129,6 +129,7 @@ class Table:
     step_header: str = ""
     transposed: bool = False  # lanes printed as rows (D-060)
     column_year: str | None = None  # columns were school years; this one was kept (D-068)
+    year_column: tuple[int, int] | None = None  # (kept column, columns printed) (D-068)
 
     @property
     def cells(self) -> int:
@@ -756,6 +757,7 @@ def _keep_year_column(table: Table, lanes: list[list[str]]) -> None:
     table.grid = [[r[j]] for r in table.grid]
     table.lanes = [name]
     table.column_year = year
+    table.year_column = (j, len(lanes))
 
 
 def _total_column(grid: list[list[float | None]]) -> bool:
@@ -1120,9 +1122,34 @@ def _join_pages(tables: list[Table]) -> list[Table]:
             prev.rows += t.rows
             prev.grid += t.grid
             continue
+        # A grid of school-year columns (D-068) that runs onto the next page without its heading
+        # (Attica, NY: steps 1-4 on page 25, 5-18 on page 26): the same column is taken there.
+        prev = next((o for o in reversed(out) if o.page == t.page - 1 and o.year_column), None)
+        if (
+            prev is not None
+            and prev.year_column is not None
+            and not t.year_column
+            and len(t.columns) == prev.year_column[1]
+            and all(re.fullmatch(r"Column \d+", ln) for ln in t.lanes)
+            and _next_label(prev.rows[-1].label, t.rows[0].label)
+        ):
+            j = prev.year_column[0]
+            prev.rows += t.rows
+            prev.grid += [[r[j]] for r in t.grid]
+            continue
         out.append(t)
     kept = {id(t) for t in out}
     return [t for t in tables if id(t) in kept]  # the order the pages were read in
+
+
+def _next_label(last: str, first: str) -> bool:
+    """True when ``first`` is the step right after ``last`` (12 → 13, H → I)."""
+    if last.isdigit() and first.isdigit():
+        return int(first) == int(last) + 1
+    if len(last) == len(first) == 1 and last.isalpha():
+        first = {"1": "I", "0": "O"}.get(first, first)  # step letters I and O printed as digits
+        return first.isalpha() and ord(first.upper()) == ord(last.upper()) + 1
+    return False
 
 
 def read_pdf(path: Path, prefer: list[int]) -> list[dict[str, Any]]:
