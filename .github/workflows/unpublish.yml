@@ -17,7 +17,7 @@ concurrency:
 env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   URLS: pipeline/unpublish/shared-docs-20261116.txt
-  REJECT_IDS: pipeline/unpublish/reject-20261116.txt
+  REJECT_IDS: pipeline/unpublish/reject-20261116-2.txt
   REQUEUE_IDS: pipeline/unpublish/requeue-unnamed-20261116.txt
   REQUEUE_REASON: "[lane_label] Cột không có tên trong tài liệu (Column N): xem tài liệu gốc trước khi duyệt (D-067)"
   REJECT_REASON: "Loại khi rà hàng chờ 2026-11-16: bảng đọc sai hoặc không phải bảng hiện hành"
