@@ -64,6 +64,7 @@ import { csvFileName, scheduleCsv } from "./csv";
 import { DEMO_DISTRICT, DEMO_HISTORY, DEMO_NEIGHBORS, DEMO_SCHEDULE, DEMO_SUMMARY } from "./demo";
 import { type AppEnv, isIndexable, isProduction, reportsEnabled, SITE_NAME } from "./env";
 import { escapeXml, isSchoolYear } from "./format";
+import { guard } from "./guard";
 import {
   type ApproxLocation,
   type CfLocation,
@@ -129,6 +130,10 @@ app.use("*", async (c, next) => {
     c.header("X-Robots-Tag", "noindex, nofollow");
   }
 });
+
+// Giới hạn tần suất và chuẩn hoá tham số (src/guard.ts). Đặt sau middleware header để phản hồi 429
+// và 301 cũng có header bảo mật.
+app.use("*", guard);
 
 function site(c: Context<AppEnv>): Site {
   return { env: c.env, origin: new URL(c.req.url).origin };

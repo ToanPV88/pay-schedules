@@ -1061,3 +1061,37 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   Crawford NE; Gilead, Upton ME nhận Bethel SD 403 WA; Lincoln Plt ME nhận Lincoln RI) hoặc trang tổng
   hợp, nên đã bỏ. Trang duyệt có thêm "Gỡ bảng đã publish" theo mã NCES: bảng về lại draft, không
   vào hàng chờ, bảng cũ bị nó thay được publish lại.
+
+## D-107: Header bảo mật và CSP của web và trang duyệt
+
+- Ngày: 2026-11-16. Chủ dự án duyệt danh sách bảo mật (mục S3).
+- Web: CSP chỉ cho script của site, script menu nội tuyến theo hash sha256 (test giữ hash khớp) và
+  Turnstile; `style-src-attr 'unsafe-inline'` cho thuộc tính style (thanh tỉ lệ, biểu đồ); không
+  `unsafe-inline` cho script, không `unsafe-eval`; `frame-ancestors 'none'`. Thêm X-Frame-Options,
+  HSTS `max-age=31536000` (includeSubDomains và preload quyết khi có tên miền riêng), Permissions-Policy.
+  Trang duyệt: `default-src 'none'`, có COOP.
+- Web không đặt Cross-Origin-Opener-Policy: với COOP, Lighthouse trong CI lỗi NO_NAVSTART ở mọi lần
+  chạy (PR #119); bỏ COOP thì qua. Site không có cửa sổ bật lên hay đăng nhập nên COOP gần như không
+  thêm gì.
+- Gắn Cloudflare Web Analytics hoặc AdSense (Công đoạn 8) phải sửa CSP trong `apps/web/src/security.ts`.
+
+## D-108: Giới hạn tần suất theo IP và chuẩn hoá tham số URL
+
+- Ngày: 2026-11-16. Chủ dự án duyệt danh sách chống sao chép (mục C2, C3).
+- Workers Cache phục vụ trang đã cache mà không gọi Worker, nên giới hạn trong Worker chỉ tính lần
+  trượt cache (dựng trang, đọc D1, sinh file). Khóa theo IP: trang 120, API 60, file tải 15 lượt mỗi
+  phút; vượt thì 429 kèm `Retry-After: 60`.
+- Đếm hai nơi: cửa sổ một phút trong bộ nhớ của isolate (chính xác trong từng isolate; một IP được
+  tối đa ngưỡng × số isolate phục vụ nó) và Workers Rate Limiting binding. Đo trên bản preview
+  workers.dev ngày 2026-11-16: binding không chặn lượt nào trong hơn 900 lượt API trong 2 phút (ngưỡng
+  120), đúng với tài liệu Cloudflare ("permissive, eventually consistent") và các báo cáo cùng loại;
+  40 lượt tuần tự từ một trình duyệt rơi vào 8 isolate. Vì vậy cả hai lớp chỉ là trần thô cho đợt tải
+  dồn dập, không phải giới hạn chính xác. Binding thiếu hoặc lỗi thì cho qua.
+- Giới hạn chính xác trong Worker cần Durable Object (thêm độ trễ và lượt gọi tính phí ở mỗi lần trượt
+  cache): chưa làm, chờ chủ dự án quyết cùng mục C4. namespace_id dải 73xx (tài khoản
+  dùng chung với travienphi và hospital-price-ai); bản preview dùng 731x.
+- Bản preview trả header `X-Rate-Limit: <loại> <kết quả>` để kiểm; production không có.
+- Tham số mà trang không dùng (vd. `?x=1`, `utm_*`, `fbclid`) chuyển 301 về địa chỉ chỉ còn tham số
+  hợp lệ, để tham số ngẫu nhiên không làm trượt cache và bắt D1 chạy lại.
+- Giới hạn chính xác cho cả site cần WAF rate limiting rule của zone, chỉ có khi có tên miền riêng
+  (mục C4); khi đó cũng chặn được theo loại bot (Googlebot đã xác minh…).
