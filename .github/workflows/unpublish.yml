@@ -1,0 +1,63 @@
+# Gỡ khỏi website các bảng đọc từ tài liệu dùng chung nhiều học khu (DECISIONS.md D-066).
+# Đẩy commit có tệp danh sách URL (biến URLS bên dưới) lên run/unpublish-preview hoặc
+# run/unpublish-production (production chỉ chạy từ commit đã merge vào main).
+name: Unpublish
+
+on:
+  push:
+    branches: ["run/unpublish-preview", "run/unpublish-production"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdf-pipeline
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  URLS: pipeline/unpublish/shared-docs-20261116.txt
+  REASON: "Gỡ: bảng đọc từ tài liệu tổng hợp nhiều học khu, không phải bảng của học khu (D-066)"
+  TARGET: ${{ github.ref_name == 'run/unpublish-production' && 'production' || 'preview' }}
+
+jobs:
+  unpublish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Production only from main
+        if: env.TARGET == 'production'
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Chỉ chạy production từ commit đã merge vào main."
+            exit 1
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          (cd pipeline && uv sync --locked --no-dev)
+      - name: Build SQL
+        working-directory: pipeline
+        run: uv run pay-pipeline unpublish-docs --urls "../$URLS" --reason "$REASON" --sql "$GITHUB_WORKSPACE/unpublish.sql"
+      - name: Apply to D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.url, s.status, COUNT(*) AS n FROM schedules s JOIN source_documents d ON d.id = s.source_document_id WHERE d.url IN (SELECT value FROM json_each('$(python3 -c 'import json,sys; print(json.dumps([l.strip() for l in open(sys.argv[1]) if l.strip()]))' "$GITHUB_WORKSPACE/$URLS")')) GROUP BY 1, 2"
+          npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/unpublish.sql"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT status, COUNT(*) AS n FROM district_pipeline WHERE detail LIKE '%D-066%' GROUP BY 1"
