@@ -1039,5 +1039,7 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   cuối bằng tổng các cột trước (Base Pay + Adjustment = Salary, Jordan UT) thì chỉ giữ cột cuối.
   Nhãn "Step N" không suy ra số năm kinh nghiệm.
 - Năm học: thêm khoảng ngày "July 1, 2026 to June 30, 2027" và, khi không có năm học nào khác,
-  "Effective August 1, 2026" (tháng 7 trở đi là đầu năm học).
+  "Effective August 1, 2026" (tháng 7 trở đi là đầu năm học). Bổ sung sau lần chạy 300 học khu lớn:
+  "School Year 2026_2027", "fiscal year ending June 30, 2026", và khi không có năm nào khác
+  "Fiscal Year 2027", "Effective 08/23/26"; khoảng ngày nhận cả gạch nối Unicode.
 - Bộ đọc văn bản lên @11 để các tài liệu "không đổi" được đọc lại.
