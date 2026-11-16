@@ -1017,5 +1017,8 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   hướng sang host khác thì fetcher bỏ header. Không có key thì giữ cách cũ (link vẫn bị chặn).
 - Secret mới `GOOGLE_API_KEY` (key Google Cloud, chỉ bật Google Drive API) chỉ nằm ở `env` của bước
   `pay-pipeline pdf-gather`; `test_repo_consistency.py` kiểm tra.
+- Thư mục Drive (`embeddedfolderview?id=`, `drive/folders/`) được liệt kê qua `files.list` của
+  Drive API, cùng tối đa 4 thư mục con giống bảng lương nhất. Thử tối đa 3 tệp có tên giống bảng
+  lương nhất, tính trên mọi thư mục của một học khu.
 - Chỉ áp dụng cho file công khai mà học khu đã đăng link. Link Docs dạng `/d/e/2PACX…` (bản
   "publish to web") không có id file nên chưa xử lý.
