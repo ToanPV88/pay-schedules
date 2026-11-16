@@ -18,7 +18,7 @@ from pay_pipeline.catalog.districts import build_catalog, render_report
 from pay_pipeline.federal import tables as federal
 from pay_pipeline.pdf_pipeline import gather as pdf_gather
 from pay_pipeline.pdf_pipeline import run as pdf_run
-from pay_pipeline.pdf_pipeline.unpublish import unpublish_sql
+from pay_pipeline.pdf_pipeline.unpublish import reject_sql, unpublish_sql
 from pay_pipeline.schedules import state_import
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
@@ -117,6 +117,17 @@ def _cmd_unpublish_docs(args: argparse.Namespace) -> int:
         return 1
     Path(args.sql).write_text(render_sql(unpublish_sql(urls, args.reason)), encoding="utf-8")
     print(f"SQL gỡ bảng từ {len(urls)} tài liệu")
+    return 0
+
+
+def _cmd_reject_schedules(args: argparse.Namespace) -> int:
+    lines = Path(args.ids).read_text(encoding="utf-8").splitlines()
+    ids = [int(x.split("#")[0]) for x in lines if x.split("#")[0].strip()]
+    if not ids:
+        print("Danh sách id trống", file=sys.stderr)
+        return 1
+    Path(args.sql).write_text(render_sql(reject_sql(ids, args.reason)), encoding="utf-8")
+    print(f"SQL loại {len(ids)} bảng chờ duyệt")
     return 0
 
 
@@ -274,6 +285,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reason", required=True, help="Lý do ghi vào district_pipeline/review_queue")
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.set_defaults(func=_cmd_unpublish_docs)
+    p = sub.add_parser("reject-schedules", help="Loại bảng chờ duyệt theo id (như nút Loại)")
+    p.add_argument("--ids", required=True, help="Tệp id bảng, mỗi dòng một id (# ghi chú)")
+    p.add_argument("--reason", required=True, help="Lý do loại")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
+    p.set_defaults(func=_cmd_reject_schedules)
+
     p = sub.add_parser("federal-build", help="Bảng lương liên bang: OPM GS, y tá VA (D-065)")
     p.add_argument("--sources", required=True, help="Thư mục tệp của Release src-federal-pay-*")
     p.add_argument("--release-tag", required=True, help="Tag Release chứa tệp nguồn")
