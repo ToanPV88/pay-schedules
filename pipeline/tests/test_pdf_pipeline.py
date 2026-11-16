@@ -326,6 +326,10 @@ class TestDiscoverUnits:
         assert school_years("2 0 2 5 \u2013 2026 Pay Schedule") == ["2025-26"]  # letter-spaced
         assert school_years("Teachers Salary Scales FY26-27") == ["2026-27"]
         assert school_years("FY25/26 and FY 2026") == ["2025-26"]
+        assert school_years("July 1, 2026 to June 30, 2027") == ["2026-27"]
+        assert school_years("August 10, 2026 \u2013 June 7, 2027") == ["2026-27"]
+        assert school_years("Certified Scale Effective August 1, 2026") == ["2026-27"]
+        assert school_years("Effective January 1, 2027") == ["2026-27"]
 
     def test_shared_throttle_spaces_requests_per_host(self) -> None:
         clock = [0.0]
@@ -806,6 +810,78 @@ class TestReader:
         assert len(tables) == 1
         assert [r.label for r in tables[0].rows] == ["1", "2", "3", "6", "7"]
         assert tables[0].grid[-2] == [None, 57500]
+
+    def test_lanes_printed_as_rows(self) -> None:
+        # DC Public Schools / Knox County: steps across, one line per lane (D-060)
+        lines = [L("", "Teacher Salary Schedule"), L("Education", "1", "2", "3", "4", "5")]
+        lines += [
+            L(lane, *[f"${base + 1000 * s:,}" for s in range(5)])
+            for lane, base in (("Bachelors", 60000), ("Masters", 65000), ("Doctorate", 70000))
+        ]
+        lines[-1].words.append(rd.Word("N/A", 65, 68))
+        t = rd.pick_table(rd.find_tables(lines, 1))
+        assert t is not None and t.transposed
+        assert t.lanes == ["Bachelors", "Masters", "Doctorate"]
+        assert [r.label for r in t.rows] == ["1", "2", "3", "4", "5"]
+        assert t.grid[0] == [60000, 65000, 70000] and t.grid[4] == [64000, 69000, 74000]
+        # an ordinary table on the page is preferred
+        normal = [L("Step", "BA", "MA")] + [
+            L(str(s), f"{50000 + s * 900:,}", f"{52000 + s * 900:,}") for s in range(1, 6)
+        ]
+        picked = rd.pick_table(rd.find_tables(normal + [rd.Line([])] * 3 + lines, 1))
+        assert picked is not None and not picked.transposed
+
+    def test_step_after_years_and_small_stipend(self) -> None:
+        # DeKalb: "0  Step 1  $315.79  $60,000.00"; Fort Bend: "$515" retention allotment
+        lines = [L("Years", "Step", "BA", "MA")]
+        lines += [
+            L(str(s - 1), f"Step {s}", f"${60000 + s * 750:,}.00", "$515", f"${63000 + s * 750:,}")
+            for s in range(1, 5)
+        ]
+        tables = rd.find_tables(lines, 1)
+        assert [r.label for r in tables[0].rows] == ["Step 1", "Step 2", "Step 3", "Step 4"]
+        assert tables[0].grid[0] == [60750, 63750]
+
+    def test_total_column_alone(self) -> None:
+        # Jordan, UT: Base Pay | Educator Salary Adjustment | Lane Z Salary (the sum)
+        lines = [L("Level", "Base", "Adjustment", "Salary")] + [
+            L(str(s), f"${53000 + 900 * s:,}", "$10,661", f"${63661 + 900 * s:,}")
+            for s in range(1, 6)
+        ]
+        t = rd.find_tables(lines, 1)[0]
+        assert t.lanes == ["Salary"] and t.grid[0] == [64561]
+
+    def test_listed_steps_across_pages(self) -> None:
+        # Chesterfield, VA: one bullet per step, continued on the next page
+        def page(steps: range) -> list[rd.Line]:
+            out = [L("", "Teacher Salary Scale 2026-2027")]
+            for s in steps:
+                out.append(L(f"Step {s}: Bachelor's: ${57000 + 700 * s:,} | Master's: "
+                             f"${60000 + 700 * s:,}"))  # fmt: skip
+                out.append(L(f"| Doctorate: ${63000 + 700 * s:,}"))
+            return out
+
+        pages = [page(range(0, 4)), page(range(4, 8))]
+        answer = rd.read_pages(pages, [1, 2], rd.LAYOUT)
+        assert answer["lanes"] == ["Bachelor's", "Master's", "Doctorate"]
+        assert [s["label"] for s in answer["steps"]] == [str(s) for s in range(8)]
+        assert answer["cells"][7] == [61900, 64900, 67900]
+
+    def test_lane_blocks_with_years_line(self) -> None:
+        # Forsyth County, GA: title, STEP, YEARS, TOTAL, DAILY for each lane
+        lines: list[rd.Line] = [L("", "2026-2027 Teacher Compensation Schedule")]
+        for lane, base in (("T-4 Bachelor", 56000), ("T-5 Master", 62000)):
+            lines += [
+                L("", lane),
+                L("STEP", "E", "1", "2", "3", "4", "4"),
+                L("YEARS", "0,1,2", "3", "4", "5", "6", "7+"),
+                L("TOTAL", *[f"{base + 1000 * s:,}" for s in range(6)]),
+                L("DAILY", *[f"{(base + 1000 * s) / 190:.2f}" for s in range(6)]),
+            ]
+        t = rd.pick_table(rd.find_tables(lines, 1))
+        assert t is not None and t.lanes == ["T-4 Bachelor", "T-5 Master"]
+        assert [r.label for r in t.rows] == ["0,1,2", "3", "4", "5", "6", "7+"]
+        assert t.grid[5] == [61000, 67000]
 
 
 class TestShards:

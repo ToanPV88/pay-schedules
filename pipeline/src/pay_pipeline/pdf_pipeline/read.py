@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@10"
-WORDS = "pdfplumber-words@10"
-XLSX = "xlsx-cells@10"
-DOCX = "docx-cells@10"
-HTML = "html-cells@10"
+LAYOUT = "layout-text@11"
+WORDS = "pdfplumber-words@11"
+XLSX = "xlsx-cells@11"
+DOCX = "docx-cells@11"
+HTML = "html-cells@11"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -69,7 +69,9 @@ _CODE = re.compile(r"^(?:[A-Z]{1,2}|[IVX]{1,5})$")
 _NUMBER = re.compile(r"^\(?\$?\d[\d,]*\.\d{1,5}\)?\**$")
 # Figures that sit beside the annual amounts without being one: a daily rate ("336.90"), a stipend
 # below MIN_AMOUNT ("2,500", Garland ISD's retention allotment) or an empty cell ("-").
-_SIDE = re.compile(r"^(?:\(?\$?\d[\d,]*\.\d{1,5}\)?\**|\$?\d,\d{3}|\$0|-|–|—|--)$")
+_SIDE = re.compile(
+    r"^(?:\(?\$?\d[\d,]*\.\d{1,5}\)?\**|\$?\d,\d{3}|\$\d{1,3}|[+-]?\d{1,2}(?:\.\d{1,2})?%|-|–|—|--)$"
+)
 _TITLE = re.compile(
     r"salary|salaries|schedule|district|schools?\b|board|approved|adopted|effective|revised|"
     r"unified|county|fiscal|\b20\d\d\b",
@@ -123,6 +125,7 @@ class Table:
     grid: list[list[float | None]] = field(default_factory=list)
     lanes: list[str] = field(default_factory=list)
     step_header: str = ""
+    transposed: bool = False  # lanes printed as rows (D-060)
 
     @property
     def cells(self) -> int:
@@ -233,6 +236,14 @@ def parse_row(line: Line, index: int) -> Row | None:
         and all(_PLACEMENT.match(w.text) for w in head[:-1])
     ):
         label = head[-1].text
+    # "0   Step 1   $315.79  $60,000.00": years of experience, then "Step N" (DeKalb County)
+    if (
+        not _LABEL.match(label)
+        and len(head) >= 3
+        and _LABEL.match(f"{head[-2].text} {head[-1].text}")
+        and all(_PLACEMENT.match(w.text) for w in head[:-2])
+    ):
+        label = f"{head[-2].text} {head[-1].text}"
     if not _LABEL.match(label) and not _LETTER.match(label):
         # "1  A  $57,471 ...": a step number followed by one short code (letter or roman numeral)
         if len(head) == 2 and _LABEL.match(head[0].text) and _CODE.match(head[1].text):
@@ -281,7 +292,9 @@ def _label_number(label: str) -> int | None:
 
 
 def _years_number(label: str) -> int | None:
-    """Years of experience in a numeric step label; letters carry none."""
+    """Years of experience in a numeric step label; letters and "Step N" carry none."""
+    if re.match(r"(?:step|level)\b", label, re.I):
+        return None
     m = _LABEL.match(label)
     return int(m.group(1)) if m else None
 
@@ -384,7 +397,245 @@ def find_tables(lines: list[Line], page: int) -> list[Table]:
             if gap > 1:
                 close()
     close()
-    return [t for t in (_build(t) for t in tables) if t is not None]
+    built = [t for t in (_build(t) for t in tables) if t is not None]
+    other = find_transposed(lines, page) + find_listed(lines, page) + find_blocks(lines, page)
+    return built + other
+
+
+def find_blocks(lines: list[Line], page: int) -> list[Table]:
+    """One block per lane, steps across (Georgia: Forsyth County) (D-060).
+
+        T-4 Bachelor
+        STEP    E      1      2   ...
+        YEARS   0,1,2  3      4   ...
+        TOTAL   56,784 57,794 58,804 ...
+        DAILY   298.86 304.18 ...
+
+    The lane is the title line above the block; steps are named by the YEARS line (the STEP line
+    repeats names such as "L6"). Blocks with the same number of steps form one table.
+    """
+    blocks: list[tuple[str, list[str], list[float], int]] = []
+    for i, line in enumerate(lines):
+        words = [w.text for w in _normalise(line.words)]
+        if not words or not _TOTAL.match(words[0]):
+            continue
+        values = [money(w) for w in words[1:]]
+        if len(values) < 5 or any(v is None for v in values):
+            continue
+        years = next(
+            (
+                [w.text for w in ln.words[1:]]
+                for ln in lines[max(0, i - 3) : i]
+                if ln.words and ln.words[0].text.lower() in ("years", "yrs", "experience")
+            ),
+            None,
+        )
+        if years is None or len(years) != len(values):
+            continue
+        title = next(
+            (
+                ln.text.strip()
+                for ln in reversed(lines[max(0, i - 5) : i])
+                if ln.words
+                and ln.words[0].text.lower() not in ("step", "steps", "years", "yrs")
+                and re.search(r"[A-Za-z]{3}", ln.text)
+            ),
+            "",
+        )
+        if title:
+            blocks.append((title, years, [v for v in values if v is not None], i))
+    if len(blocks) < 2:
+        return []
+    steps = blocks[0][1]
+    same = [b for b in blocks if len(b[1]) == len(steps)]
+    if len(same) < 2 or len(set(steps)) != len(steps):
+        return []
+    first = same[0][3]
+    table = Table(
+        page,
+        [Row(s, [], first) for s in steps],
+        [],
+        "\n".join(ln.text for ln in lines[max(0, first - 18) : first]),
+    )
+    table.columns = list(range(len(same)))
+    table.grid = [[b[2][j] for b in same] for j in range(len(steps))]
+    table.lanes = [b[0] for b in same]
+    table.step_header = "Years"
+    table.transposed = True
+    return [table]
+
+
+_LISTED_STEP = re.compile(r"^\W*step\s+(\d{1,2})\s*:\s*(.+)$", re.I)
+_LISTED_CELL = re.compile(r"^(.*?[A-Za-z)].*?):?\s*\$\s?(\d{1,3}(?:,\d{3})+|\d{5,6})(?:\.\d{2})?$")
+
+
+def find_listed(lines: list[Line], page: int) -> list[Table]:
+    """Schedules written as a list, one step per bullet (D-060).
+
+    "• Step 0: Bachelor's Teacher: $57,227 | Master's Teacher: $60,660 | Doctorate ...: $63,693"
+    (Chesterfield County, VA); a bullet may run onto the next line, which starts with "|".
+    """
+    items: list[tuple[int, str, int]] = []  # (step, text, line index)
+    for i, line in enumerate(lines):
+        text = line.text.strip()
+        m = _LISTED_STEP.match(text)
+        if m:
+            items.append((int(m.group(1)), m.group(2), i))
+        elif items and text.startswith("|") and items[-1][2] >= i - 2:
+            n, prev, at = items[-1]
+            items[-1] = (n, f"{prev} {text}", at)
+    rows: list[tuple[int, int, dict[str, float]]] = []
+    for n, text, at in items:
+        cells: dict[str, float] = {}
+        for part in text.split("|"):
+            m = _LISTED_CELL.match(part.strip())
+            if m:
+                value = money(m.group(2))
+                if value is not None:
+                    cells[" ".join(m.group(1).split())] = value
+        if len(cells) >= 1:
+            rows.append((n, at, cells))
+    # runs of consecutive steps with the same lanes
+    tables: list[Table] = []
+    run: list[tuple[int, int, dict[str, float]]] = []
+    for row in [*rows, (-1, -1, {})]:
+        if run and (row[0] != run[-1][0] + 1 or list(row[2]) != list(run[0][2])):
+            if len(run) >= MIN_ROWS and len(run) * len(run[0][2]) >= MIN_CELLS:
+                lanes = list(run[0][2])
+                first = run[0][1]
+                t = Table(
+                    page,
+                    [Row(str(n), [], at) for n, at, _ in run],
+                    [],
+                    "\n".join(ln.text for ln in lines[max(0, first - 14) : first]),
+                )
+                t.columns = list(range(len(lanes)))
+                t.grid = [[c[k] for k in lanes] for _, _, c in run]
+                t.lanes = lanes
+                t.step_header = "Step"
+                t.transposed = True  # read only when no ordinary table is found
+                tables.append(t)
+            run = []
+        if row[0] >= 0:
+            run.append(row)
+    return tables
+
+
+# A cell left empty in a lane printed as a row ("N/A", "-").
+_STEP_HEAD = re.compile(r"^\d{1,2}(?:[-‐–]\d{1,2})?\+?$")
+_EMPTY_CELL = re.compile(r"^(?:n/?a|-|–|—|--)$", re.I)
+
+
+def _lane_row(line: Line, index: int) -> Row | None:
+    """A lane printed as a row: a lane name, then its amounts step by step (D-060)."""
+    words = _normalise(line.words)
+    first = next((i for i, w in enumerate(words) if money(w.text) is not None), None)
+    if not first:
+        return None
+    label = " ".join(w.text for w in words[:first]).strip()
+    if (
+        _LABEL.match(label)
+        or _LETTER.match(label)
+        or not re.search(r"[A-Za-z]{2}", label)
+        or len(label) > 60
+        or _TOTAL.match(label)
+    ):
+        return None
+    amounts: list[tuple[float, float, float]] = []
+    for w in words[first:]:
+        value = money(w.text)
+        if value is not None:
+            amounts.append((w.x0, w.x1, value))
+        elif not _EMPTY_CELL.match(w.text):
+            return None
+    return Row(label, amounts, index) if len(amounts) >= 4 else None
+
+
+def _rising(values: list[float]) -> bool:
+    pairs = list(pairwise(values))
+    return bool(pairs) and sum(b >= a for a, b in pairs) >= 0.8 * len(pairs)
+
+
+def find_transposed(lines: list[Line], page: int) -> list[Table]:
+    """Tables printed with steps across and lanes down (D-060).
+
+    Each lane is one line: its name, then one amount per step ("Bachelors $64,640 $64,863 ...",
+    "CERT1 50,089.83 ..."). Steps are taken from the line of step numbers above the first lane;
+    without one they are numbered 1, 2, 3... The grid is turned so that it has the same shape as
+    every other table (rows are steps, columns are lanes).
+    """
+    groups: list[list[Row]] = []
+    current: list[Row] = []
+    gap = 0
+    for i, line in enumerate(lines):
+        row = _lane_row(line, i)
+        if row is not None:
+            if current and gap > 1:
+                groups.append(current)
+                current = []
+            current.append(row)
+            gap = 0
+        elif line.words:
+            gap += 1
+    if current:
+        groups.append(current)
+    tables = []
+    for rows in groups:
+        rows = [r for r in rows if _rising([v for _, _, v in r.amounts])]
+        if len(rows) < 2:
+            continue
+        table = _build_transposed(rows, lines, page)
+        if table is not None:
+            tables.append(table)
+    return tables
+
+
+def _build_transposed(rows: list[Row], lines: list[Line], page: int) -> Table | None:
+    edges = [x1 for r in rows for _, x1, _ in r.amounts]
+    widths = [x1 - x0 for r in rows for x0, x1, _ in r.amounts]
+    tolerance = max(1.5, statistics.median(widths) * 0.45)
+    columns = _cluster(edges, tolerance)
+    by_lane: list[list[float | None]] = []
+    for r in rows:
+        cells: list[float | None] = [None] * len(columns)
+        for _, x1, value in r.amounts:
+            j = min(range(len(columns)), key=lambda k: abs(columns[k] - x1))
+            if cells[j] is not None:
+                return None
+            cells[j] = value
+        by_lane.append(cells)
+    width = statistics.median(widths)
+    steps = [""] * len(columns)
+    first = rows[0].line_index
+    used = 0
+    for line in reversed(lines[max(0, first - 6) : first]):
+        labels = [w for w in line.words if _STEP_HEAD.match(w.text)]
+        if len(labels) < 2:
+            continue
+        for w in labels:
+            # step numbers sit at the right of their column, like the amounts below them
+            j = min(range(len(columns)), key=lambda k: abs(columns[k] - w.x1))
+            if not steps[j] and abs(columns[j] - w.x1) <= 1.5 * width:
+                steps[j] = w.text.replace("‐", "-")
+        used += 1
+        if all(steps) or used == 2:
+            break
+    if not any(steps):
+        steps = [str(j + 1) for j in range(len(columns))]
+    if not all(steps) or len(set(steps)) != len(steps):
+        return None
+    table = Table(
+        page,
+        [Row(s, [], first) for s in steps],
+        [],
+        "\n".join(ln.text for ln in lines[max(0, first - 14) : first]),
+    )
+    table.columns = list(range(len(rows)))
+    table.grid = [[lane[j] for lane in by_lane] for j in range(len(columns))]
+    table.lanes = [r.label for r in rows]
+    table.step_header = "Step"
+    table.transposed = True
+    return table if table.cells >= MIN_CELLS else None
 
 
 def _cluster(edges: list[float], tolerance: float) -> list[float]:
@@ -414,6 +665,7 @@ def _build(table: Table) -> Table | None:
     table.columns, table.grid = columns, grid
     if table.cells < MIN_CELLS:
         return None
+    total_only = _total_column(grid)
     # Header words: nearest column by horizontal centre; words left of the first column (minus
     # half a column width) label the step column.
     lefts = [
@@ -439,7 +691,26 @@ def _build(table: Table) -> Table | None:
         for j, words in enumerate(lanes)
     ]
     table.step_header = " ".join(step_words)
+    if total_only:
+        # "Base Pay | Educator Salary Adjustment | Lane Z Annual Salary" (Jordan, UT): the last
+        # column is the sum of the others, so it alone is the salary (D-060).
+        table.columns = table.columns[-1:]
+        table.grid = [r[-1:] for r in table.grid]
+        table.lanes = table.lanes[-1:]
     return table
+
+
+def _total_column(grid: list[list[float | None]]) -> bool:
+    """True when every row's last amount is the sum of the amounts before it (3+ columns)."""
+    if not grid or len(grid[0]) < 3:
+        return False
+    for row in grid:
+        if any(v is None for v in row):
+            return False
+        *parts, total = row
+        if abs(sum(v for v in parts if v is not None) - (total or 0)) > 1.0:
+            return False
+    return True
 
 
 def _header_lines(candidates: list[Line], centres: list[float], width: float) -> list[Line]:
@@ -511,6 +782,9 @@ def pick_table(tables: list[Table]) -> Table | None:
     usable = [t for t in tables if _score(t) > 0]
     if not usable:
         return None
+    # A table read the usual way (steps down) beats one with lanes printed as rows (D-060).
+    if any(not t.transposed for t in usable):
+        usable = [t for t in usable if not t.transposed]
     # A schedule for the whole staff beats one for part of it (hired before a date, non-classroom).
     if any(not scope_note(t) for t in usable):
         usable = [t for t in usable if not scope_note(t)]
@@ -662,9 +936,32 @@ def read_pages(pages: list[list[Line]], prefer: list[int], reader: str) -> dict[
     tables: list[Table] = []
     for p in order[:12]:
         tables += find_tables(pages[p - 1], p)
+    tables = _join_pages(tables)
     table = pick_table(tables)
     text = "\n".join(ln.text for ln in pages[table.page - 1]) if table else ""
     return to_answer(table, text, reader)
+
+
+def _join_pages(tables: list[Table]) -> list[Table]:
+    """A listed schedule that runs onto the next page continues there (Chesterfield: steps 0-13
+    on page 16, 14-30 on page 17) and is read as one table (D-060)."""
+    out: list[Table] = []
+    for t in sorted(tables, key=lambda t: t.page):
+        prev = next((o for o in reversed(out) if o.page == t.page - 1 and o.transposed), None)
+        if (
+            prev is not None
+            and t.transposed
+            and prev.lanes == t.lanes
+            and prev.rows[-1].label.isdigit()
+            and t.rows[0].label.isdigit()
+            and int(t.rows[0].label) == int(prev.rows[-1].label) + 1
+        ):
+            prev.rows += t.rows
+            prev.grid += t.grid
+            continue
+        out.append(t)
+    kept = {id(t) for t in out}
+    return [t for t in tables if id(t) in kept]  # the order the pages were read in
 
 
 def read_pdf(path: Path, prefer: list[int]) -> list[dict[str, Any]]:

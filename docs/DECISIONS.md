@@ -1022,3 +1022,22 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   lương nhất, tính trên mọi thư mục của một học khu.
 - Chỉ áp dụng cho file công khai mà học khu đã đăng link. Link Docs dạng `/d/e/2PACX…` (bản
   "publish to web") không có id file nên chưa xử lý.
+
+## D-060: Thêm ba dạng bảng lương; năm học từ ngày hiệu lực; bộ đọc phiên bản 11
+
+- Ngày: 2026-11-16. Chủ dự án đồng ý làm riêng từng học khu lớn còn thiếu. Trong 30 học khu lớn
+  nhất, phần lớn đã có đúng tệp nhưng bộ đọc không nhận ra bảng. Thêm:
+  - **Lane in theo hàng, bậc theo cột** (DC Public Schools, Knox County): mỗi dòng là tên lane rồi
+    lương từng bậc; tên bậc lấy từ dòng số bậc ngay trên. Bảng được xoay về dạng chung.
+  - **Danh sách từng bậc** (Chesterfield, VA): "Step 0: Bachelor's Teacher: $57,227 | Master's …";
+    bảng chạy sang trang sau thì nối lại.
+  - **Mỗi lane một khối** (Forsyth County, GA): dòng tên lane, STEP, YEARS, TOTAL, DAILY. Tên bậc
+    lấy từ dòng YEARS vì dòng STEP lặp tên (L6, L6…).
+  - Ba dạng trên chỉ được chọn khi trong tài liệu không có bảng dạng thường.
+- Bảng dạng thường: nhận "0  Step 1  $315.79  $60,000.00" (năm kinh nghiệm rồi "Step N", DeKalb);
+  bỏ qua phụ cấp nhỏ "$515" và phần trăm "6.00%" nằm giữa các ô lương (Fort Bend, Miami-Dade); cột
+  cuối bằng tổng các cột trước (Base Pay + Adjustment = Salary, Jordan UT) thì chỉ giữ cột cuối.
+  Nhãn "Step N" không suy ra số năm kinh nghiệm.
+- Năm học: thêm khoảng ngày "July 1, 2026 to June 30, 2027" và, khi không có năm học nào khác,
+  "Effective August 1, 2026" (tháng 7 trở đi là đầu năm học).
+- Bộ đọc văn bản lên @11 để các tài liệu "không đổi" được đọc lại.
