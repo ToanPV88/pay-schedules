@@ -206,8 +206,30 @@ def school_years(text: str) -> list[str]:
     for m in YEAR_PATTERNS[2].finditer(text):
         end = 2000 + int(m.group(2))
         found.add(end - 1)  # FY26 = 2025-26
+    for m in _DATE_RANGE.finditer(text):
+        # "July 1, 2026 to June 30, 2027" (Anne Arundel), "August 10, 2026 – June 7, 2027"
+        a, b = int(m.group(1)), int(m.group(2))
+        if b == a + 1:
+            found.add(a)
+    if not found:
+        # "Effective August 1, 2026": no school year written, only the start date (Knox County)
+        for m in _EFFECTIVE.finditer(text):
+            month = _MONTHS.index(m.group(1)[:3].lower()) + 1
+            found.add(int(m.group(2)) - (month < 7))
     years = sorted((y for y in found if 2015 <= y <= 2030), reverse=True)
     return [f"{y}-{(y + 1) % 100:02d}" for y in years]
+
+
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+_MONTH_DAY = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+"
+_DATE_RANGE = re.compile(
+    _MONTH_DAY + r"(20\d\d)\s*(?:-|–|—|to|through|thru)\s*" + _MONTH_DAY + r"(20\d\d)\b", re.I
+)
+_EFFECTIVE = re.compile(
+    r"\beffective:?\s+(?:on\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
+    r"\s+\d{1,2},?\s+(20\d\d)\b",
+    re.I,
+)
 
 
 def score_page(text: str, page: int) -> PageScore:
