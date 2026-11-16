@@ -35,5 +35,7 @@ export const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
-  "Cross-Origin-Opener-Policy": "same-origin",
+  // Không đặt Cross-Origin-Opener-Policy: với COOP, Lighthouse trong CI lỗi NO_NAVSTART (Chrome đổi
+  // tiến trình khi điều hướng từ about:blank). Site không có cửa sổ bật lên hay đăng nhập nên COOP
+  // gần như không thêm gì.
 };
