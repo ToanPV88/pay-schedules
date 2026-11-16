@@ -330,6 +330,11 @@ class TestDiscoverUnits:
         assert school_years("August 10, 2026 \u2013 June 7, 2027") == ["2026-27"]
         assert school_years("Certified Scale Effective August 1, 2026") == ["2026-27"]
         assert school_years("Effective January 1, 2027") == ["2026-27"]
+        assert school_years("School Year 2026_2027") == ["2026-27"]
+        assert school_years("FOR THE FISCAL YEAR ENDING JUNE 30, 2026") == ["2025-26"]
+        assert school_years("Salary Scale Fiscal Year 2027") == ["2026-27"]
+        assert school_years("Teachers Salary Scale Effective 08/23/26") == ["2026-27"]
+        assert school_years("JULY 1, 2024 \u2010 JUNE 30, 2025") == ["2024-25"]
 
     def test_shared_throttle_spaces_requests_per_host(self) -> None:
         clock = [0.0]

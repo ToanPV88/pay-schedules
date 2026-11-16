@@ -187,6 +187,7 @@ def school_years(text: str) -> list[str]:
     """School years written in the text, as 'YYYY-YY', most recent first."""
     found: set[int] = set()
     text = _SPACED_YEAR.sub(r"20\1\2", text)
+    text = re.sub(r"\b(20\d\d)_(20\d\d)\b", r"\1-\2", text)  # "School Year 2026_2027"
     for m in YEAR_PATTERNS[0].finditer(text):
         a, b = int(m.group(1)), int(m.group(2))
         if b == a + 1:
@@ -211,6 +212,16 @@ def school_years(text: str) -> list[str]:
         a, b = int(m.group(1)), int(m.group(2))
         if b == a + 1:
             found.add(a)
+    for m in _FY_ENDING.finditer(text):
+        found.add(int(m.group(1)) - 1)  # "fiscal year ending June 30, 2026" = 2025-26
+    if not found:
+        for m in _FISCAL_YEAR.finditer(text):
+            found.add(int(m.group(1)) - 1)  # "Fiscal Year 2027" = 2026-27
+        for m in _EFFECTIVE_NUMERIC.finditer(text):
+            month, year = int(m.group(1)), int(m.group(2))
+            year += 2000 if year < 100 else 0
+            if 1 <= month <= 12:
+                found.add(year - (month < 7))  # "Effective 08/23/26" = 2026-27
     if not found:
         # "Effective August 1, 2026": no school year written, only the start date (Knox County)
         for m in _EFFECTIVE.finditer(text):
@@ -223,8 +234,11 @@ def school_years(text: str) -> list[str]:
 _MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 _MONTH_DAY = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+"
 _DATE_RANGE = re.compile(
-    _MONTH_DAY + r"(20\d\d)\s*(?:-|–|—|to|through|thru)\s*" + _MONTH_DAY + r"(20\d\d)\b", re.I
+    _MONTH_DAY + r"(20\d\d)\s*(?:[-‐‑–—]|to|through|thru)\s*" + _MONTH_DAY + r"(20\d\d)\b", re.I
 )
+_FY_ENDING = re.compile(r"\bfiscal\s+year\s+ending:?\s+(?:june|jun\.?)\s+30,?\s+(20\d\d)\b", re.I)
+_FISCAL_YEAR = re.compile(r"\bfiscal\s+year\s+(20\d\d)\b(?!\s*[-‐‑–—/_]\s*\d)", re.I)
+_EFFECTIVE_NUMERIC = re.compile(r"\beffective:?\s+(\d{1,2})/\d{1,2}/(\d{2}|20\d\d)\b", re.I)
 _EFFECTIVE = re.compile(
     r"\beffective:?\s+(?:on\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
     r"\s+\d{1,2},?\s+(20\d\d)\b",
