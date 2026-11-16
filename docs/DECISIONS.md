@@ -1095,3 +1095,21 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   hợp lệ, để tham số ngẫu nhiên không làm trượt cache và bắt D1 chạy lại.
 - Giới hạn chính xác cho cả site cần WAF rate limiting rule của zone, chỉ có khi có tên miền riêng
   (mục C4); khi đó cũng chặn được theo loại bot (Googlebot đã xác minh…).
+
+## D-062: North Carolina: mỗi lane một trang, cột tổng là lương; bộ đọc phiên bản 13
+
+- Ngày: 2026-11-16. Chủ dự án đồng ý. North Carolina có 114 học khu chưa có bảng (1,17 triệu học
+  sinh), trong đó có Charlotte-Mecklenburg, Guilford, Cumberland, Winston-Salem/Forsyth. Lương giáo
+  viên là bảng của bang cộng phụ cấp của học khu. Theo D-031, bảng của bang không được dùng thay bảng
+  học khu.
+- Nhiều học khu NC in **mỗi lane một trang** ("Bachelor's "A" Schedule", "MASTER "M" SCHEDULE"),
+  với các cột là phần lương: lương bang theo tháng/năm, phụ cấp địa phương, tổng 10/11/12 tháng.
+  Bộ đọc nay:
+  - nhận mã bậc của bang `A00`, `M12` (chữ lane rồi số bậc) và các số theo tháng đứng trước tổng năm
+    ("0 4800 340 300 640 5,440 54,400");
+  - với một trang chỉ có cột phần lương (state, base, supplement, monthly…) và cột "Total": lấy cột
+    tổng năm, ưu tiên "10 Month"; tên lane là tiêu đề trang, có "National Board" nếu trang thuộc phần
+    NBPTS;
+  - ghép các trang đó thành một bảng, mỗi trang một lane; bỏ trang của nhân viên khác (counselor,
+    psych, speech, nurse…).
+- Bộ đọc văn bản lên @13.

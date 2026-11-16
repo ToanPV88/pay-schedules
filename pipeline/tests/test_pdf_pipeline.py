@@ -872,6 +872,53 @@ class TestReader:
         assert [s["label"] for s in answer["steps"]] == [str(s) for s in range(8)]
         assert answer["cells"][7] == [61900, 64900, 67900]
 
+    def test_north_carolina_component_pages(self) -> None:
+        # Charlotte-Mecklenburg: one page per lane, state rate code, pay parts, totals (D-062)
+        def page(title: str, code: str, base: int) -> list[rd.Line]:
+            out = [
+                L("", "2026-2027 Certified Salary Schedules"),
+                L("", title),
+                L(
+                    "State Rate",
+                    "State Monthly",
+                    "State Base",
+                    "Local Supplement",
+                    "Total 10 Month",
+                    "Total 11 Month",
+                ),
+            ]
+            for s in range(5):
+                state = base + 250 * s
+                out.append(L(f"{code}{s:02d}", f"${state // 10:,}.00", f"${state:,}.00",
+                             f"${8341 + 10 * s:,}.00", f"${state + 8341 + 10 * s:,}.00",
+                             f"${state + 13141 + 10 * s:,}.00"))  # fmt: skip
+            return out
+
+        pages = [page('BACHELOR "A" SCHEDULE', "A", 48000), page('MASTER "M" SCHEDULE', "M", 52800)]
+        pages.append(page('PSYCH, SPCH, AUDIO "S" SCHEDULE', "S", 59210))
+        answer = rd.read_pages(pages, [1, 2, 3], rd.LAYOUT)
+        assert answer["lanes"] == ['BACHELOR "A" SCHEDULE', 'MASTER "M" SCHEDULE']
+        assert [s["label"] for s in answer["steps"]] == ["0", "1", "2", "3", "4"]
+        assert answer["cells"][0] == [56341, 61141]
+
+    def test_monthly_parts_before_the_annual_total(self) -> None:
+        # Winston-Salem/Forsyth: "0  4800  340  300  640  5,440  54,400"
+        lines = [L("", 'Bachelor\'s "A" Schedule'), L("Exp.", "Base", "Supp", "Total Annual")]
+        lines += [
+            L(
+                str(s),
+                str(4800 + 25 * s),
+                "340",
+                "640",
+                f"{5440 + 25 * s:,}",
+                f"{54400 + 250 * s:,}",
+            )
+            for s in range(8)
+        ]
+        t = rd.find_tables(lines, 1)[0]
+        assert [r.label for r in t.rows] == [str(s) for s in range(8)]
+        assert t.grid[3] == [55150]
+
     def test_lane_blocks_with_years_line(self) -> None:
         # Forsyth County, GA: title, STEP, YEARS, TOTAL, DAILY for each lane
         lines: list[rd.Line] = [L("", "2026-2027 Teacher Compensation Schedule")]
