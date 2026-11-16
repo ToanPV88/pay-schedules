@@ -232,6 +232,33 @@ describe("xem và duyệt", () => {
     expect(s?.status).toBe("draft");
   });
 
+  it("gỡ bảng đã publish theo mã NCES", async () => {
+    await req("/s/10/approve", { method: "POST" });
+    expect((await req("/unpublish", form({ nces_id: "123", reason: "x" }))).status).toBe(400);
+    expect((await req("/unpublish", form({ nces_id: "0600001", reason: " " }))).status).toBe(400);
+    const res = await req(
+      "/unpublish",
+      form({ nces_id: "0600001", reason: "Website của học khu khác" }),
+    );
+    expect(await res.text()).toContain("Đã gỡ 1 bảng");
+    const s = await db
+      .prepare("SELECT status, published_at FROM schedules WHERE id = 10")
+      .first<{ status: string; published_at: string | null }>();
+    expect(s).toEqual({ status: "draft", published_at: null });
+    const p = await db
+      .prepare("SELECT status, detail FROM district_pipeline WHERE district_id = 1")
+      .first<{ status: string; detail: string }>();
+    expect(p).toEqual({ status: "no_schedule", detail: "Gỡ khỏi site: Website của học khu khác" });
+    const sum = await db
+      .prepare("SELECT COUNT(*) AS n FROM district_summary WHERE district_id = 1")
+      .first<{ n: number }>();
+    expect(sum?.n).toBe(0);
+    // không vào lại hàng chờ, nên "Duyệt hết" không publish lại
+    expect(await (await req("/approve-all", form({ state: "" }))).text()).toContain(
+      "Đã duyệt và publish 0 bảng",
+    );
+  });
+
   it("loại cần lý do", async () => {
     expect((await req("/s/10/reject", form({ reason: " " }))).status).toBe(400);
     expect((await req("/s/10/reject", form({ reason: "Không phải bảng giáo viên" }))).status).toBe(

@@ -1057,3 +1057,7 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - 619/786 học khu có website, ghi vào `district-websites.csv` với nguồn "Tìm DuckDuckGo 2026-11-16
   (D-061)". Website sai thì pipeline chỉ không tìm ra bảng; trang chủ vẫn phải qua robots.txt.
 - Cùng lần chạy: bộ đọc lên @12 để đọc lại 15 bảng nháp thiếu năm học (D-060).
+- Sau lần chạy: 6 website là của học khu khác cùng tên (Crawford Public Schools ME nhận trang
+  Crawford NE; Gilead, Upton ME nhận Bethel SD 403 WA; Lincoln Plt ME nhận Lincoln RI) hoặc trang tổng
+  hợp, nên đã bỏ. Trang duyệt có thêm "Gỡ bảng đã publish" theo mã NCES: bảng về lại draft, không
+  vào hàng chờ, bảng cũ bị nó thay được publish lại.
