@@ -7,6 +7,14 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
+import {
+  bindingBlocks,
+  clearFailures,
+  LOCK_MS,
+  lockedUntil,
+  type RateLimiter,
+  recordFailure,
+} from "./lockout";
 import { sameOriginPost } from "./origin";
 import { SINGLE_SALARY_LANE, TRIAGE_PUBLISHED, TRIAGE_REJECTED, triage } from "./triage";
 
@@ -16,6 +24,8 @@ export type Env = {
   REVIEW_PASSWORD?: string;
   PURGE_TOKEN?: string;
   WEB?: Fetcher;
+  /** Đếm lần đăng nhập sai theo IP (lockout.ts, D-110). */
+  AUTH_LIMITER?: RateLimiter;
 };
 
 type AppEnv = { Bindings: Env };
@@ -143,6 +153,17 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", "same-origin");
   const expected = c.env.REVIEW_PASSWORD;
   if (!expected) return c.text("Review is not configured.", 503);
+  // Không có IP (chạy ở máy) thì không khóa.
+  const ip = c.req.header("cf-connecting-ip") ?? "";
+  const tooMany = () => {
+    const until = lockedUntil(ip);
+    const seconds = until > 0 ? Math.ceil((until - Date.now()) / 1000) : LOCK_MS / 1000;
+    c.header("Retry-After", String(seconds));
+    return c.text("Too many failed sign-in attempts. Try again later.", 429);
+  };
+  if (ip && lockedUntil(ip) > 0) {
+    return tooMany();
+  }
   const header = c.req.header("authorization") ?? "";
   let password = "";
   if (header.startsWith("Basic ")) {
@@ -153,8 +174,18 @@ app.use("*", async (c, next) => {
     }
   }
   if (!password || !(await sameSecret(password, expected))) {
+    // Chỉ tính lần gửi mật khẩu sai; lần đầu trình duyệt gọi chưa kèm mật khẩu thì không tính.
+    if (ip && password) {
+      const locked = recordFailure(ip);
+      if (locked || (await bindingBlocks(c.env.AUTH_LIMITER, ip))) {
+        return tooMany();
+      }
+    }
     c.header("WWW-Authenticate", 'Basic realm="pay-schedules review", charset="UTF-8"');
     return c.text("Authentication required.", 401);
+  }
+  if (ip) {
+    clearFailures(ip);
   }
   if (
     c.req.method === "POST" &&
