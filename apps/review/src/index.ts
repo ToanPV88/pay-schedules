@@ -129,6 +129,15 @@ app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
   c.header("Cache-Control", "no-store");
   c.header("X-Frame-Options", "DENY");
+  // Trang duyệt chỉ có HTML, một khối <style> và form; không script, không nhúng gì từ ngoài.
+  c.header(
+    "Content-Security-Policy",
+    "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; " +
+      "frame-ancestors 'none'; base-uri 'none'",
+  );
+  c.header("Strict-Transport-Security", "max-age=31536000");
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("Cross-Origin-Opener-Policy", "same-origin");
   // "same-origin": browsers then send the real Origin on the page's own form posts ("no-referrer"
   // made them send "Origin: null", which the check below refused).
   c.header("Referrer-Policy", "same-origin");
