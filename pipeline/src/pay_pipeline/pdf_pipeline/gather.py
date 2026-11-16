@@ -167,10 +167,65 @@ def export_url(url: str) -> str:
     return url
 
 
+_DRIVE_FOLDER = re.compile(
+    r"^https://drive\.google\.com/(?:embeddedfolderview\?(?:[^#]*&)?id=|"
+    r"drive/(?:u/\d+/)?folders/)([\w-]{10,})"
+)
+_GOOGLE_EDITORS = {
+    "application/vnd.google-apps.document": "https://docs.google.com/document/d/{}",
+    "application/vnd.google-apps.spreadsheet": "https://docs.google.com/spreadsheets/d/{}",
+    "application/vnd.google-apps.presentation": "https://docs.google.com/presentation/d/{}",
+}
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+MAX_DRIVE_SUBFOLDERS = 4
+MAX_DRIVE_FOLDER_DOCS = 3
+
+
+def drive_folder_id(url: str) -> str | None:
+    """Id of a Google Drive folder link (embedded folder view or ``drive/folders``)."""
+    m = _DRIVE_FOLDER.match(url)
+    return m.group(1) if m and _drive_api_key() else None
+
+
+def _drive_children(fetcher: PoliteFetcher, folder: str) -> list[dict[str, str]]:
+    query = quote(f"'{folder}' in parents and trashed = false", safe="")
+    url = (
+        f"{DRIVE_API}?q={query}&fields=files(id%2Cname%2CmimeType)&pageSize=200"
+        "&supportsAllDrives=true&includeItemsFromAllDrives=true"
+    )
+    response = fetcher.get(url, headers=fetch_headers(url))
+    files = json.loads(response.content.decode("utf-8")).get("files", [])
+    return [f for f in files if isinstance(f, dict) and f.get("id")]
+
+
+def drive_folder_files(fetcher: PoliteFetcher, folder: str) -> list[Link]:
+    """Files in a public Drive folder (and its most salary-like subfolders), best first (D-059).
+
+    Each file is given as a viewer link, which ``export_url`` turns into a Drive API download.
+    """
+    files: list[Link] = []
+    entries = _drive_children(fetcher, folder)
+    subfolders = [e for e in entries if e.get("mimeType") == _FOLDER_MIME]
+    subfolders.sort(key=lambda e: -score_document(Link("", str(e.get("name", "")))))
+    for sub in subfolders[:MAX_DRIVE_SUBFOLDERS]:
+        entries += [
+            {**e, "name": f"{sub.get('name', '')} {e.get('name', '')}"}
+            for e in _drive_children(fetcher, str(sub["id"]))
+        ]
+    for e in entries:
+        mime = str(e.get("mimeType", ""))
+        if mime == _FOLDER_MIME:
+            continue
+        template = _GOOGLE_EDITORS.get(mime, "https://drive.google.com/file/d/{}/view")
+        files.append(Link(template.format(e["id"]), str(e.get("name", ""))))
+    good = [f for f in files if score_document(f) >= MIN_CANDIDATE_SCORE]
+    return sorted(good, key=lambda f: (-score_document(f), f.url))
+
+
 def fetch_headers(url: str) -> dict[str, str] | None:
     """The Drive API key, only for Drive API requests."""
     key = _drive_api_key()
-    if key and url.startswith(DRIVE_API + "/"):
+    if key and url.startswith((DRIVE_API + "/", DRIVE_API + "?")):
         return {"X-goog-api-key": key}
     return None
 
@@ -400,8 +455,25 @@ def gather_one(
     pending = list(picked[:MAX_DOCS_PER_DISTRICT])
     folder_budget = MAX_FOLDER_DOCS
     seed_budget = MAX_SEED_PAGE_DOCS
+    drive_budget = MAX_DRIVE_FOLDER_DOCS
     while pending:
         cand = pending.pop(0)
+        folder = drive_folder_id(cand.url)
+        if folder is not None:
+            # A Drive folder (a district's "Salary Schedules" folder): list it through the Drive
+            # API and try its most salary-like files (D-059).
+            try:
+                kids = drive_folder_files(fetcher, folder)[:drive_budget] if drive_budget else []
+            except (FetchError, ValueError) as exc:
+                errors.append(f"{cand.url}: {exc}"[:200])
+                continue
+            drive_budget -= len(kids)
+            pending[0:0] = [
+                Candidate(k.url, cand.url, k.text, "folder", score_document(k)) for k in kids
+            ]
+            if not kids:
+                errors.append(f"{cand.url}: thư mục Drive không có tệp giống bảng lương")
+            continue
         url = export_url(cand.url)
         try:
             response = fetcher.get(url, headers=fetch_headers(url))

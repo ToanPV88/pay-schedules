@@ -273,6 +273,51 @@ class TestDiscoverUnits:
         assert f"{site}/f/salary-schedule-2025-26.pdf" in urls  # document listed in the sitemap
         assert f"{site}/about" not in seen  # sitemap pages without salary words are not fetched
 
+    def test_drive_folder_listed_through_drive_api(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A district's "Salary Schedules" Drive folder: list it (and its best subfolder) through
+        # the Drive API and keep the salary-like files, best first (D-059).
+        from urllib.parse import parse_qs, urlsplit
+
+        from pay_pipeline.acquisition.http import PoliteFetcher
+        from pay_pipeline.pdf_pipeline.gather import drive_folder_files, drive_folder_id
+
+        monkeypatch.setenv("GOOGLE_API_KEY", "k-123")
+        listing = {
+            "FOLDER0000": [
+                {"id": "SUB0000001", "name": "2026-27", "mimeType": "application/vnd.google-apps.folder"},
+                {"id": "FILE000001", "name": "Lunch menu.pdf", "mimeType": "application/pdf"},
+                {"id": "DOC0000001", "name": "Classified Salary Schedule", "mimeType": "application/vnd.google-apps.document"},
+            ],
+            "SUB0000001": [
+                {"id": "FILE000002", "name": "Teacher Salary Schedule.pdf", "mimeType": "application/pdf"},
+            ],
+        }  # fmt: skip
+        keys: list[str | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/robots.txt":
+                return httpx.Response(404)
+            keys.append(request.headers.get("x-goog-api-key"))
+            q = parse_qs(urlsplit(str(request.url)).query)["q"][0]
+            return httpx.Response(200, json={"files": listing[q.split("'")[1]]})
+
+        fetcher = PoliteFetcher(
+            CrawlPolicy(user_agent=UA, min_delay_seconds=1.0),
+            transport=httpx.MockTransport(handler),
+            sleep=lambda _: None,
+        )
+        folder = drive_folder_id("https://drive.google.com/embeddedfolderview?id=FOLDER0000#list")
+        assert folder == "FOLDER0000"
+        assert drive_folder_id("https://drive.google.com/drive/u/0/folders/FOLDER0000") == folder
+        files = drive_folder_files(fetcher, folder)
+        assert [f.url for f in files] == [
+            "https://drive.google.com/file/d/FILE000002/view",
+            "https://docs.google.com/document/d/DOC0000001",
+        ]
+        assert keys == ["k-123", "k-123"]
+        monkeypatch.delenv("GOOGLE_API_KEY")
+        assert drive_folder_id("https://drive.google.com/drive/folders/FOLDER0000") is None
+
     def test_school_years(self) -> None:
         assert school_years("Salary Schedule 2025-2026 and 2024-25, FY26") == ["2025-26", "2024-25"]
         assert school_years("Effective 7/1/2021 - 6/30/2022") == ["2021-22"]
