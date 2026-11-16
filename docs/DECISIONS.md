@@ -1154,3 +1154,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - `.github/workflows/audit.yml`: `npm audit --audit-level=high` và `pip-audit` 2.10.1 trên
   `uv export`. Chạy khi lockfile đổi, thứ Hai hằng tuần và khi gọi tay; không nằm trong CI để lỗ hổng
   mới công bố không chặn mọi pull request. Lần chạy đầu (2026-11-16): 0 lỗ hổng npm, 0 lỗ hổng Python.
+
+## D-064: Link tài liệu gốc từ danh sách nguồn của Step & Lane
+
+- Ngày: 2026-11-16. Chủ dự án yêu cầu. Step & Lane (stepandlane.com) đăng lại bảng lương giáo viên
+  của khoảng 3.970 học khu, mỗi bảng kèm link tài liệu gốc. Họ công khai `data/schedules.csv` và
+  `data/districts.csv` (mã NCES, link nguồn), robots.txt cho phép mọi bot.
+- Chỉ lấy **link tài liệu gốc** (học khu, cơ quan bang như PERC NJ, SERB Ohio, WVDE; công đoàn như
+  MNEA, CEA; kho hợp đồng như SeeThroughNY), không lấy số liệu họ đã đọc. Pipeline tự tải tài liệu
+  từ host gốc (vẫn theo robots.txt của host đó) và tự đọc, kiểm tra như mọi tài liệu khác (D-038).
+- 1.739 học khu đang thiếu bảng có link năm học 2024-25 trở đi; tối đa 2 link mỗi học khu, đặt
+  trước các link cũ trong `schedule-urls.csv` (tổng tối đa 3). Danh sách chạy:
+  `pipeline/sources/snl-seeds-20261116.csv`.
