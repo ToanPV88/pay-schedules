@@ -3,10 +3,10 @@
   "limit": 200,
   "state": "",
   "rerun": [],
-  "shards": 12,
+  "shards": 2,
   "deadline_minutes": 60,
   "seeded_only": false,
-  "ids_file": "pipeline/sources/pass2-seeds.csv",
+  "ids_file": "pipeline/sources/rerun-drive-folders-20261116.csv",
   "manual_release": "",
   "reread_drafts": false
 }
