@@ -641,6 +641,21 @@ class TestReader:
             [53000, 55000, 57500],
         ]
 
+    def test_year_columns_are_one_lane(self) -> None:
+        # New York contracts: one grid per lane, its columns are the contract's school years.
+        lines = [
+            L("Bachelor Salaries 2020-2023", step=12),
+            L("Step", "2020-2021", "2021-2022", "2022-2023", step=12),
+            L("1", "42,139", "43,614", "45,031", step=12),
+            L("2", "43,709", "45,239", "46,708", step=12),
+            L("3", "45,710", "47,310", "48,848", step=12),
+        ]
+        t = rd.pick_table(rd.find_tables(lines, 1))
+        assert t is not None
+        assert t.lanes == ["Bachelor"]
+        assert t.grid == [[45031], [46708], [48848]]
+        assert rd.to_answer(t, "", rd.LAYOUT)["school_year"] == "2022-23"
+
     def test_side_figures_and_dashes(self) -> None:
         # Garland ISD: daily rate, a stipend below the salary range and "-" for no stipend sit
         # between the annual amounts; they are skipped, not taken as words inside the row.
