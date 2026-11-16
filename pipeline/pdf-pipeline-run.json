@@ -6,7 +6,7 @@
   "shards": 20,
   "deadline_minutes": 60,
   "seeded_only": false,
-  "ids_file": "pipeline/sources/snl-seeds-20261116.csv",
+  "ids_file": "pipeline/sources/snl-seeds-2-20261116.csv",
   "manual_release": "",
   "reread_drafts": false
 }
