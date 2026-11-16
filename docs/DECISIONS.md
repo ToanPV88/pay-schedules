@@ -1043,3 +1043,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   "School Year 2026_2027", "fiscal year ending June 30, 2026", và khi không có năm nào khác
   "Fiscal Year 2027", "Effective 08/23/26"; khoảng ngày nhận cả gạch nối Unicode.
 - Bộ đọc văn bản lên @11 để các tài liệu "không đổi" được đọc lại.
+
+## D-061: Website học khu tìm qua DuckDuckGo cho học khu NCES bỏ trống
+
+- Ngày: 2026-11-16. Chủ dự án đồng ý (bước 3). 786 học khu chưa có bảng mà cả NCES lẫn danh bạ bang
+  (D-037) và website trường (D-035) đều không cho website, phần lớn ở Nebraska, Idaho, Washington,
+  Montana, Georgia, New Hampshire, Maine, Vermont.
+- Tìm bằng trình duyệt của chủ dự án trên DuckDuckGo (bản HTML, cách 1,5–2,5 giây một truy vấn):
+  "<tên học khu> <bang> <thành phố> school district". Lấy kết quả đầu tiên có tên miền không thuộc
+  trang tổng hợp (Wikipedia, GreatSchools, U.S. News, trang báo cáo của bang, trang việc làm…),
+  không phải trang một trường (High/Middle/Elementary School), có một từ riêng của tên học khu
+  trong tên miền hoặc tiêu đề. Chỉ giữ trang chủ (scheme + host).
+- 619/786 học khu có website, ghi vào `district-websites.csv` với nguồn "Tìm DuckDuckGo 2026-11-16
+  (D-061)". Website sai thì pipeline chỉ không tìm ra bảng; trang chủ vẫn phải qua robots.txt.
+- Cùng lần chạy: bộ đọc lên @12 để đọc lại 15 bảng nháp thiếu năm học (D-060).
