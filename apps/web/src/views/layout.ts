@@ -60,9 +60,10 @@ const MENU_ICON = raw(
  * Menu thu gọn trên điện thoại. Script nằm ngay sau nav, chạy trước lần vẽ đầu nên không nháy.
  * Tắt JavaScript thì header không có lớp js-nav: nút Menu bị ẩn và mọi liên kết vẫn hiện như cũ.
  */
-const NAV_SCRIPT = raw(
-  '<script>(()=>{const b=document.querySelector(".nav-toggle");const h=b&&b.closest(".site-header");if(!h)return;h.classList.add("js-nav");b.addEventListener("click",()=>{const o=h.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(o));});})();</script>',
-);
+/** Mã của NAV_SCRIPT (không kể thẻ), để security.ts tính hash cho CSP. */
+export const NAV_SCRIPT_BODY =
+  '(()=>{const b=document.querySelector(".nav-toggle");const h=b&&b.closest(".site-header");if(!h)return;h.classList.add("js-nav");b.addEventListener("click",()=>{const o=h.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(o));});})();';
+const NAV_SCRIPT = raw(`<script>${NAV_SCRIPT_BODY}</script>`);
 
 export interface Crumb {
   label: string;

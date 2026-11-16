@@ -71,6 +71,7 @@ import {
   locationFromParam,
   nearbyHits,
 } from "./nearby";
+import { SECURITY_HEADERS } from "./security";
 import { verifyTurnstile } from "./turnstile";
 import { CONTENT_PAGES } from "./views/content";
 import {
@@ -121,8 +122,9 @@ export const app = new Hono<AppEnv>();
 
 app.use("*", async (c, next) => {
   await next();
-  c.header("X-Content-Type-Options", "nosniff");
-  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    c.header(name, value);
+  }
   if (!isIndexable(c.env)) {
     c.header("X-Robots-Tag", "noindex, nofollow");
   }
