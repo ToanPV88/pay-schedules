@@ -12,14 +12,14 @@ jobs:
     steps:
       - name: RDAP
         run: |
-          names="paygrids paygrid publicpaygrid salarygrid salarygrids paytables publicpaytables payschedules payscheduledb publicpayscales stepandlane stepsandlanes salarysteps payladder publicpayladder openpaygrid salaryschedules salaryscheduledb payscaledb paystepper wagegrid publicwagegrid salarytable salarytables scheduleofpay paysteps publicpaysteps stepscale salaryladder paygridhq"
+          names="publicpaygrid salarygrid salarygrids paytables publicpaytables payschedules payscheduledb publicpayscales stepandlane stepsandlanes salarysteps payladder publicpayladder openpaygrid salaryschedules salaryscheduledb payscaledb paystepper wagegrid publicwagegrid salarytable salarytables scheduleofpay paysteps publicpaysteps stepscale salaryladder paygridhq"
           for n in $names; do
             for tld in com org; do
               if [ "$tld" = com ]; then u="https://rdap.verisign.com/com/v1/domain/$n.com"; else u="https://rdap.publicinterestregistry.org/rdap/domain/$n.org"; fi
-              code=$(curl -s -o r.json -w '%{http_code}' "$u")
+              code=$(curl -s --retry 3 --retry-all-errors -o r.json -w "%{http_code}" "$u" || echo ERR)
               if [ "$code" = 404 ]; then echo "FREE  $n.$tld"
               elif [ "$code" = 200 ]; then echo "TAKEN $n.$tld $(jq -r '[.events[]?|select(.eventAction=="registration")|.eventDate][0] // ""' r.json | cut -c1-10)"
               else echo "?$code $n.$tld"; fi
-              sleep 0.3
+              sleep 1
             done
           done
