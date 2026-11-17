@@ -1399,3 +1399,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Bổ sung 2026-11-17: zone payschedules.org tự chèn beacon Cloudflare Web Analytics
   (`static.cloudflareinsights.com`, gửi về `cloudflareinsights.com`, không cookie); CSP cho phép
   để không báo lỗi trong console, trang Privacy ghi thêm.
+
+## D-118: Trang so sánh hai học khu có URL riêng
+
+- Ngày: 2026-11-17. Tính năng rút ra từ phân tích đối thủ (Step & Lane có 87 trang cặp so sánh).
+- `/compare/<mã bang>-<slug>-vs-<mã bang>-<slug>`, vd. `/compare/tx-houston-isd-vs-tx-dallas-isd`.
+  Học khu nhiều học sinh hơn đứng trước; thứ tự ngược chuyển 301. Học khu chưa có mốc lương thì 404.
+- Nội dung: câu tóm tắt chênh lệch lương khởi điểm và mức tối đa (sinh từ số liệu), bảng "Head to
+  head" (ba mốc, hạng lương khởi điểm trong bang, số học sinh, năm học), rồi bảng cùng bậc, cùng
+  lane như `/compare`.
+- Cặp nổi bật (index, có liên kết): mọi cặp trong 12 học khu lớn nhất có đủ số liệu, và mỗi học khu
+  hạng 13–60 theo số học sinh ghép với học khu lớn nhất cùng bang. Cặp khác vẫn xem được, noindex.
+  `/compare` gợi ý 12 cặp đầu; trang học khu liệt kê tối đa 5 cặp có nó.
+- Không đưa vào sitemap (như D-116).
