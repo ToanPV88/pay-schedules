@@ -1269,3 +1269,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 
 - Ngày: 2026-11-17. Sửa D-058. Anh chọn hiển thị năm đang áp dụng thay vì năm sau: lấy năm mới
   nhất không quá năm học hiện tại; nếu mọi năm đều ở tương lai thì lấy năm gần nhất. Bộ đọc @17.
+
+## D-071: Nạp bảng lương Connecticut (CEA) và West Virginia (WVDE) qua importer của bang
+
+- Ngày: 2026-11-17. Hai tài liệu tổng hợp từng bị gỡ ở D-066 vì pipeline PDF gán cả tài liệu cho
+  mọi học khu. Nay đọc như tệp của bang (Công đoạn 4), tách từng học khu:
+  - `ct_cea`: sách CEA (Connecticut Education Association) tổng hợp từ hợp đồng, mỗi học khu một
+    lưới "TÊN  STEP  BA  MA ...". Ô trống là lane không có lương ở bậc đó, nên ô được gán theo vị trí
+    cột chứ không theo thứ tự. Chỉ nạp năm học tới năm đang áp dụng (D-070). 161/175 tên khớp NCES;
+    phần còn lại là trung tâm dịch vụ vùng (CREC, ACES…) và học viện, không có trong danh mục.
+  - `wv_wvde`: sách WVDE, mỗi county một trang cho mỗi hạng (4th class → doctorate); lấy cột Total
+    Salary. 55/55 county khớp.
+- Hai sách không in mã học khu của bang, nên importer khớp theo tên trong NCES CCD (`NAME_KEY`);
+  trùng tên thì học khu thường (LEA_TYPE 1) được ưu tiên.
+- MNEA Missouri không dùng được: chỉ có 3 mức lương mỗi lane, không phải bảng đầy đủ.
