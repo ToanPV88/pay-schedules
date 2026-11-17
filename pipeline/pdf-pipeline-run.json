@@ -8,5 +8,5 @@
   "seeded_only": false,
   "ids_file": "pipeline/sources/rerun-future-20261117.csv",
   "manual_release": "",
-  "reread_drafts": false
+  "reread_drafts": true
 }
