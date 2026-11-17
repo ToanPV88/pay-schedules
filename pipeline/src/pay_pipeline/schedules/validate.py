@@ -336,7 +336,13 @@ def check_school_year(
     issues = []
     if start > current_school_year_start(today) + 1:
         issues.append(Issue("school_year", f"Năm học {s.school_year} ở quá xa trong tương lai"))
-    if published_year and not allow_history and start < school_year_start(published_year):
+    current = current_school_year_start(today)
+    # A published table of a coming year (a multi-year contract read before D-070) does not make
+    # the table of the year in force an "older" one: compare with the year in force instead.
+    published_start = school_year_start(published_year) if published_year else None
+    if published_start is not None and published_start > current:
+        published_start = current
+    if published_start is not None and not allow_history and start < published_start:
         issues.append(
             Issue(
                 "school_year",

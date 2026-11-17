@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@17"
-WORDS = "pdfplumber-words@17"
-XLSX = "xlsx-cells@17"
-DOCX = "docx-cells@17"
-HTML = "html-cells@17"
+LAYOUT = "layout-text@18"
+WORDS = "pdfplumber-words@18"
+XLSX = "xlsx-cells@18"
+DOCX = "docx-cells@18"
+HTML = "html-cells@18"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})

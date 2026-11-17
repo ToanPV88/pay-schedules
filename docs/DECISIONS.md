@@ -1292,3 +1292,6 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   D-058): đặt 199 học khu đến hạn, đọc lại bằng bộ đọc @17; sau đó lệnh `retire-future` cho bảng năm
   tương lai thành superseded khi cùng tài liệu đã có bảng published của năm đang áp dụng. Tài liệu chỉ
   in năm sau thì bảng năm sau vẫn giữ.
+- Lượt đọc lại đầu tiên: 179 bảng 2026-27 bị kiểm tra năm học giữ lại vì "cũ hơn bảng đang published
+  (2027-28)". Kiểm tra này để chặn bảng lùi năm; khi bảng đang published là năm tương lai thì so với
+  năm đang áp dụng. Bộ đọc @18 để đọc lại các bảng nháp đó, rồi chạy lại `retire-future`.

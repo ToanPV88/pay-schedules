@@ -124,6 +124,10 @@ class TestChecks:
         older = grid(GOOD, year="2023-24")
         assert check_school_year(older, TODAY, published_year="2024-25")[0].code == "school_year"
         assert check_school_year(older, TODAY, "2024-25", allow_history=True) == []
+        # D-070: a published 2027-28 table does not hold back the 2026-27 one (year in force).
+        current = grid(GOOD, year="2026-27")
+        assert check_school_year(current, TODAY, published_year="2027-28") == []
+        assert check_school_year(older, TODAY, published_year="2027-28")[0].code == "school_year"
 
     def test_start_change(self) -> None:
         s = grid(GOOD)
