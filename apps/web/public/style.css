@@ -1883,6 +1883,7 @@ p.pairs span {
   .state-map .tile small {
     display: none;
   }
+}
 
 /* "Request this district" trên trang học khu chưa có bảng (D-121). */
 .request-box {
