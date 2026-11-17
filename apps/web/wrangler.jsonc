@@ -26,6 +26,9 @@
   ],
   "vars": {
     "ENVIRONMENT": "production",
+    // Tên miền chính (D-113): www và workers.dev chuyển 301 về đây. Tên miền gắn ở dashboard
+    // (Workers > pay-schedules > Domains), không khai `routes` ở đây.
+    "CANONICAL_ORIGIN": "https://payschedules.org",
     // D-002: chưa có tên miền thì không cho lập chỉ mục.
     "INDEXABLE": "false",
     // Chừa chỗ quảng cáo: bật ở Công đoạn 8 khi có mã quảng cáo.
