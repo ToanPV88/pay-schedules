@@ -21,7 +21,7 @@ env:
   REJECT_IDS: ""
   REQUEUE_IDS: ""
   # Districts to read again with the current reader even if they have a published table (D-069).
-  DUE_IDS: pipeline/sources/rerun-future-20261117.csv
+  DUE_IDS: ""
   # "true": retire tables of a later year read before D-070 once the same document has a
   # published table of the year in force.
   RETIRE_FUTURE: "true"
