@@ -38,7 +38,7 @@ ALIASES = {"AMITY": "REGION 5"}
 _YEAR = re.compile(r"(\d{4})\s*\D{1,3}\s*(\d{4})\s+SALARY\s+SCHEDULES")
 _HEADING = re.compile(r"^(\S.*?)\s{2,}STEP\b(.*)$")
 _ROW = re.compile(r"^\s+(\d{1,2}(?:\.\d)?[A-Z]?|[A-Z])\s+(\$.*)$")
-_AMOUNT = re.compile(r"\$\s?\d{1,3}(?:,\d{3})+(?:\.\d{2})?")
+_AMOUNT = re.compile(r"\$\s?\d{1,3}(?:[, ]\d{3})+(?:\.\d{2})?")  # "$69 018" too
 
 
 def district_key(name: str) -> str:
@@ -73,7 +73,7 @@ class _Grid:
 
     def add(self, line: str, step: str, rest_at: int) -> None:
         amounts = [
-            ((m.start() + m.end()) / 2, dollars_to_cents(m.group(0)))
+            ((m.start() + m.end()) / 2, dollars_to_cents(m.group(0).replace(" ", "")))
             for m in _AMOUNT.finditer(line, rest_at)
         ]
         if amounts:
