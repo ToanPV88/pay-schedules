@@ -81,11 +81,13 @@ import {
   locationFromParam,
   nearbyHits,
 } from "./nearby";
+import { latestSummaries, rankOf } from "./ranks";
 import { SECURITY_HEADERS } from "./security";
 import { verifyTurnstile } from "./turnstile";
 import { CONTENT_PAGES } from "./views/content";
 import {
   type DistrictPageData,
+  type DistrictRanks,
   districtDescription,
   districtDocumentTitle,
   districtPage,
@@ -859,6 +861,26 @@ function statePayOverview(db: D1Database, stateCode: string): Promise<PayOvervie
   return value;
 }
 
+/** Hạng của học khu ở mốc khởi điểm và tối đa, trong bang và toàn quốc (ranks.ts). */
+async function districtRanks(
+  db: D1Database,
+  districtId: number,
+  stateCode: string,
+): Promise<DistrictRanks | null> {
+  const all = await latestSummaries(db);
+  if (!all.some((e) => e.id === districtId)) {
+    return null;
+  }
+  const inState = all.filter((e) => e.stateCode === stateCode);
+  return {
+    start: {
+      state: rankOf(inState, districtId, "start"),
+      nation: rankOf(all, districtId, "start"),
+    },
+    max: { state: rankOf(inState, districtId, "max"), nation: rankOf(all, districtId, "max") },
+  };
+}
+
 async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
   const district = await getDistrictBySlug(
     c.env.DB,
@@ -901,7 +923,12 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
   }
   const path = yearParam === null ? base : `${base}/${year}`;
   const ids = schedules.map((s) => s.id);
-  const asReported = await listAsReportedChecks(c.env.DB, ids);
+  const [asReported, ranks] = await Promise.all([
+    listAsReportedChecks(c.env.DB, ids),
+    summary && summary.schoolYear === year
+      ? districtRanks(c.env.DB, district.id, district.state.code)
+      : null,
+  ]);
   const data: DistrictPageData = {
     district,
     year,
@@ -916,6 +943,7 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     path,
     demo: false,
     statePay,
+    ranks,
     sameNameInState: sameName > 1,
   };
   const meta = {

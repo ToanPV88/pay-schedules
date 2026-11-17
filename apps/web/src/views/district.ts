@@ -9,9 +9,11 @@ import type {
   YearHistory,
 } from "@pay-schedules/db";
 import { html, raw } from "hono/html";
+import { scheduleGrowth } from "../analysis";
 import { scheduleRange } from "../calc";
 import { csvPath } from "../csv";
 import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel, sourceLanding } from "../format";
+import { ordinal, type Rank, topPercent } from "../ranks";
 import { XLSX_TYPE, xlsxPath } from "../xlsx";
 import { payChart } from "./chart";
 import { faqSection } from "./faq";
@@ -30,6 +32,11 @@ export interface Selection {
   scheduleId: number;
   laneIndex: number;
   stepIndex: number;
+}
+
+export interface DistrictRanks {
+  start: { state: Rank | null; nation: Rank | null };
+  max: { state: Rank | null; nation: Rank | null };
 }
 
 export interface DistrictPageData {
@@ -54,6 +61,8 @@ export interface DistrictPageData {
   demo: boolean;
   /** Trung vị của bang để so sánh trong câu mô tả; null khi không có. */
   statePay?: PayOverview | null;
+  /** Hạng ở mốc khởi điểm và tối đa, trong bang và toàn quốc; chỉ có khi đang xem năm mới nhất. */
+  ranks?: DistrictRanks | null;
   /** Có học khu khác cùng tên trong bang: tiêu đề thêm thành phố. */
   sameNameInState?: boolean;
 }
@@ -253,6 +262,89 @@ ${items}</ul>
 </nav>`;
 }
 
+function laneName(schedule: Schedule, laneIndex: number): string {
+  return schedule.lanes[laneIndex]?.labelRaw ?? "Salary";
+}
+
+function stepName(schedule: Schedule, stepIndex: number): string {
+  return schedule.steps[stepIndex]?.labelRaw ?? String(stepIndex + 1);
+}
+
+/**
+ * "How pay moves up": mỗi cột từ bậc đầu tới đỉnh, số bậc, phần trăm tăng; câu tóm tắt cho cột
+ * đầu (thường là BA) kèm bước tăng lớn nhất. Không hiện khi bảng chỉ có một bậc.
+ */
+export function growthBlock(schedule: Schedule): Html {
+  const lanes = scheduleGrowth(schedule);
+  const first = lanes[0];
+  if (!first) {
+    return html``;
+  }
+  const lane = laneName(schedule, first.laneIndex);
+  const moves = `${first.stepMoves} ${first.stepMoves === 1 ? "step" : "steps"}`;
+  const years = first.years === null ? "" : ` (${first.years} years of experience)`;
+  let raise = "";
+  if (first.largestRaise) {
+    const r = first.largestRaise;
+    raise = ` The largest single raise is ${formatCents(r.cents)}, from step ${stepName(schedule, r.fromStepIndex)} to step ${stepName(schedule, r.toStepIndex)}.`;
+  }
+  const where = schedule.lanes.length > 0 ? `In the ${lane} column, pay` : "Pay";
+  const lead =
+    first.stepMoves === 0
+      ? `${where} is ${formatCents(first.startCents)} at every listed step.`
+      : `${where} rises from ${formatCents(first.startCents)} at step ${stepName(schedule, first.startStepIndex)} to ${formatCents(first.topCents)} at step ${stepName(schedule, first.topStepIndex)}: ${moves}${years}, an increase of ${first.growthPct.toLocaleString("en-US")}%.${raise}`;
+  if (lanes.length < 2) {
+    return html`<h3>How pay moves up this schedule</h3>
+<p class="growth">${lead}</p>`;
+  }
+  const rows = lanes.map(
+    (
+      g,
+    ) => html`<tr><th scope="row">${laneName(schedule, g.laneIndex)}</th><td>${formatCents(g.startCents)}</td><td>${formatCents(g.topCents)}</td><td>${g.stepMoves}</td><td>${g.growthPct.toLocaleString("en-US")}%</td></tr>
+`,
+  );
+  return html`<h3>How pay moves up this schedule</h3>
+<p class="growth">${lead}</p>
+<div class="table-scroll" role="region" aria-label="Pay growth by column" tabindex="0">
+<table class="growth-table">
+<caption>Each column from its first listed step to its top step.</caption>
+<thead><tr><th scope="col">Column</th><th scope="col">First step</th><th scope="col">Top step</th><th scope="col">Steps to top</th><th scope="col">Growth</th></tr></thead>
+<tbody>
+${rows}</tbody>
+</table>
+</div>`;
+}
+
+function rankPhrase(rank: Rank | null, where: string): string | null {
+  if (!rank || rank.total < 2) {
+    return null;
+  }
+  const pct = topPercent(rank);
+  return `${ordinal(rank.rank)} of ${rank.total.toLocaleString("en-US")} ${where}${pct ? ` (${pct})` : ""}`;
+}
+
+/** Câu xếp hạng: lương khởi điểm và mức tối đa đứng thứ mấy trong bang và toàn quốc. */
+export function rankText(data: DistrictPageData): string | null {
+  const ranks = data.ranks;
+  if (!ranks) {
+    return null;
+  }
+  const state = data.district.state.name;
+  const parts: string[] = [];
+  const describe = (label: string, r: DistrictRanks["start"]) => {
+    const places = [
+      rankPhrase(r.state, `${state} districts`),
+      rankPhrase(r.nation, "districts nationally"),
+    ].filter((p): p is string => p !== null);
+    if (places.length > 0) {
+      parts.push(`${label} ranks ${places.join(" and ")}`);
+    }
+  };
+  describe("Starting pay", ranks.start);
+  describe(parts.length > 0 ? "the top of the scale" : "The top of the scale", ranks.max);
+  return parts.length > 0 ? `${parts.join("; ")}, among districts on this site.` : null;
+}
+
 function chartBlock(schedule: Schedule): Html {
   const chart = payChart(schedule);
   return chart
@@ -282,6 +374,7 @@ function scheduleSections(data: DistrictPageData): Html {
 ${scheduleTable(schedule, caption)}
 ${download}
 ${chartBlock(schedule)}
+${growthBlock(schedule)}
 <h3 id="calc-heading-${schedule.id}">Salary calculator</h3>
 <p>${calcHint(schedule)}</p>
 ${calc}
@@ -291,6 +384,15 @@ ${many ? html`<p class="back-link"><a href="#picker-heading">↑ All salary sche
     sections.push(section);
   }
   return html`${sections}`;
+}
+
+/** Khoảng cách hiển thị theo dặm (người đọc ở Mỹ); null khi không có số. */
+export function distanceMiles(km: number | null): string | null {
+  if (km === null || !Number.isFinite(km)) {
+    return null;
+  }
+  const miles = km * 0.621371;
+  return miles < 1 ? "under 1 mi" : `${Math.round(miles).toLocaleString("en-US")} mi`;
 }
 
 function neighborSection(data: DistrictPageData): Html {
@@ -309,7 +411,10 @@ function neighborSection(data: DistrictPageData): Html {
   const keys = [`${district.state.slug}/${district.slug}`];
   for (const neighbor of neighbors) {
     const href = districtPath(neighbor.stateSlug, neighbor.slug);
-    const name = html`<a href="${href}">${neighbor.name}</a>`;
+    const miles = distanceMiles(neighbor.distanceKm);
+    const name = miles
+      ? html`<a href="${href}">${neighbor.name}</a> <span class="muted distance">${miles}</span>`
+      : html`<a href="${href}">${neighbor.name}</a>`;
     rows.push(benchmarkRow(name, neighbor.summary, false));
     if (keys.length < 4) {
       keys.push(`${neighbor.stateSlug}/${neighbor.slug}`);
@@ -323,7 +428,7 @@ function neighborSection(data: DistrictPageData): Html {
 <h2 id="nearby-heading">Nearby districts</h2>
 <div class="table-scroll" role="region" aria-label="Nearby districts" tabindex="0">
 <table>
-<caption>Three benchmarks from each district’s latest published schedule. A dash means the schedule has no such cell.</caption>
+<caption>Three benchmarks from each district’s latest published schedule, nearest districts first, with straight-line distance. A dash means the schedule has no such cell.</caption>
 <thead>
 <tr><th scope="col">District</th><th scope="col">School year</th><th scope="col">BA, step 1</th><th scope="col">MA, step 10</th><th scope="col">Maximum</th></tr>
 </thead>
@@ -477,11 +582,12 @@ export function datasetNode(origin: string, data: DistrictPageData): object {
 
 function comparisonLine(data: DistrictPageData): Html {
   const text = stateComparison(data);
-  if (!text) {
+  const ranks = rankText(data);
+  if (!text && !ranks) {
     return html``;
   }
   const state = data.district.state;
-  return html`<p class="comparison">${text} <a href="/${state.slug}">Compare ${state.name} districts</a>.</p>`;
+  return html`<p class="comparison">${[text, ranks].filter(Boolean).join(" ")} <a href="/${state.slug}">Compare ${state.name} districts</a>.</p>`;
 }
 
 /**
