@@ -73,6 +73,9 @@ jobs:
             "SELECT r.reason FROM review_queue r WHERE r.resolved_at IS NULL" > "$GITHUB_WORKSPACE/rev.json"
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); [print("REV\t"+x["reason"].replace("\n"," || ")[:600]) for x in d[0]["results"]]' "$GITHUB_WORKSPACE/rev.json"
           echo "MISSING_BEGIN"; python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=d[0]["results"] if isinstance(d,list) else d["results"]; [print("MISS\t"+"\t".join(str(x.get(k) or "") for k in ("nces_id","state","name","enrollment","website","status","detail"))) for x in r]' "$GITHUB_WORKSPACE/missing.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.nces_id, d.state, s.id, s.school_year, e.model, s.source_document_id AS doc, (SELECT group_concat(s2.school_year || ':' || s2.status) FROM schedules s2 WHERE s2.source_document_id = s.source_document_id AND s2.id <> s.id AND s2.schedule_type = s.schedule_type) AS siblings FROM schedules s JOIN districts d ON d.id = s.district_id LEFT JOIN extraction_runs e ON e.id = s.extraction_run_id WHERE s.status = 'published' AND s.schedule_type = 'teacher' AND s.school_year >= '2027-28'" > "$GITHUB_WORKSPACE/fut.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); [print("FUT\t"+json.dumps(x, ensure_ascii=False)) for x in d[0]["results"]]' "$GITHUB_WORKSPACE/fut.json"
       - name: Report
         run: |
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
