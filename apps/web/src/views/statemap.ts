@@ -92,10 +92,10 @@ export function stateMap(states: StateCount[]): Html {
     }
     const level = coverageLevel(state);
     const pct = coveragePercent(state);
-    const label = `${state.name}: ${state.withSchedule.toLocaleString("en-US")} of ${state.districts.toLocaleString("en-US")} districts have a schedule (${pct}%)`;
+    const label = `${state.name}: ${state.withSchedule.toLocaleString("en-US")} of ${state.districts.toLocaleString("en-US")} districts have a schedule (${pct === 0 && level > 0 ? "under 1" : pct}%)`;
     const style = `grid-column:${pos[0]};grid-row:${pos[1]}`;
     tiles.push(
-      html`<a class="tile cov-${level}" href="/${state.slug}" style="${style}" aria-label="${label}" title="${label}"><span>${state.code}</span><small>${level === 0 ? "" : `${pct}%`}</small></a>`,
+      html`<a class="tile cov-${level}" href="/${state.slug}" style="${style}" aria-label="${label}" title="${label}"><span>${state.code}</span><small>${level === 0 ? "" : pct === 0 ? "<1%" : `${pct}%`}</small></a>`,
     );
   }
   if (tiles.length === 0) {

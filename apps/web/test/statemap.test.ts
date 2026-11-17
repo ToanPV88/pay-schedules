@@ -27,6 +27,9 @@ describe("bản đồ ô các bang (D-120)", () => {
     const html = String(stateMap([state("TX", 1000, 300), state("ZZ", 5, 5)]));
     expect(html).toContain('class="tile cov-3" href="/tx" style="grid-column:5;grid-row:8"');
     expect(html).toContain("TX: 300 of 1,000 districts have a schedule (30%)");
+    const tiny = String(stateMap([state("MI", 1000, 2)]));
+    expect(tiny).toContain("<small>&lt;1%</small>");
+    expect(tiny).toContain("(under 1%)");
     // Mã không có vị trí (dữ liệu thử) thì bỏ qua.
     expect(html).not.toContain('href="/zz"');
   });
