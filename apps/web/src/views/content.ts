@@ -65,6 +65,7 @@ const privacy: ContentPage = {
 <p class="lede">This site does not use accounts. It uses Google Analytics to count visits, which sets cookies in your browser.</p>
 <h2>Analytics</h2>
 <p>We load Google Analytics through Google Tag Manager to learn which pages are visited and how people find the site. Google Analytics sets first-party cookies (such as <code>_ga</code>) and receives your IP address, browser details and the pages you view; we only see aggregated reports. Google processes this data as described in <a href="https://policies.google.com/technologies/partner-sites" rel="noopener">how Google uses information from sites that use its services</a>. You can block these cookies in your browser settings or install the <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener">Google Analytics opt-out browser add-on</a>; the site works the same without them.</p>
+<p>Our hosting provider’s analytics, Cloudflare Web Analytics, also counts page views. It does not set cookies or identify visitors.</p>
 <h2>Approximate location</h2>
 <p>On the calculator and compare pages, the site may suggest districts near you. It uses the approximate location (city and state) that our hosting provider, Cloudflare, derives from your connection for each request. This location is not stored and is not linked to you. Suggestions are only shown for visitors in the United States.</p>
 <h2>Error reports</h2>

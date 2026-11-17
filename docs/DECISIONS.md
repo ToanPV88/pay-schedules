@@ -1396,3 +1396,6 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   nội tuyến nên bị CSP chặn: dùng thẻ dựng sẵn (Google tag, GA4 Event).
 - Trang Privacy: thay câu "không đặt cookie" bằng mục Analytics (cookie `_ga`, dữ liệu Google nhận,
   cách tắt). Chưa có banner đồng ý cookie (khán giả chính ở Mỹ); cần nếu nhắm EU hoặc gắn quảng cáo.
+- Bổ sung 2026-11-17: zone payschedules.org tự chèn beacon Cloudflare Web Analytics
+  (`static.cloudflareinsights.com`, gửi về `cloudflareinsights.com`, không cookie); CSP cho phép
+  để không báo lỗi trong console, trang Privacy ghi thêm.

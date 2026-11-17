@@ -49,6 +49,7 @@ describe("Google Tag Manager (D-117)", () => {
     const csp = res.headers.get("Content-Security-Policy") ?? "";
     expect(csp).toContain("https://www.googletagmanager.com");
     expect(csp).toContain(GTM_SCRIPT_HASH);
+    expect(csp).toContain("https://static.cloudflareinsights.com");
     expect(await page("/privacy")).toContain("Google Analytics opt-out browser add-on");
   });
 });
