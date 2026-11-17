@@ -14,7 +14,16 @@ export default defineConfig(async () => {
         remoteBindings: false,
         wrangler: { configPath: "./wrangler.jsonc" },
         // Test gọi bằng https://example.invalid: tắt chuyển về tên miền chính (D-113).
-        miniflare: { bindings: { TEST_MIGRATIONS: migrations, CANONICAL_ORIGIN: "" } },
+        // Test giữ cấu hình trước khi ra mắt; từng test bật biến khi cần (D-114).
+        miniflare: {
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            CANONICAL_ORIGIN: "",
+            INDEXABLE: "false",
+            TURNSTILE_SITE_KEY: "",
+            CONTACT_EMAIL: "",
+          },
+        },
       }),
     ],
     test: { setupFiles: ["./test/apply-migrations.ts"] },

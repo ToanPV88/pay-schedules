@@ -29,13 +29,15 @@
     // Tên miền chính (D-113): www và workers.dev chuyển 301 về đây. Tên miền gắn ở dashboard
     // (Workers > pay-schedules > Domains), không khai `routes` ở đây.
     "CANONICAL_ORIGIN": "https://payschedules.org",
-    // D-002: chưa có tên miền thì không cho lập chỉ mục.
-    "INDEXABLE": "false",
+    // D-114: có tên miền payschedules.org, cho lập chỉ mục.
+    "INDEXABLE": "true",
     // Chừa chỗ quảng cáo: bật ở Công đoạn 8 khi có mã quảng cáo.
     "AD_SLOTS": "false",
-    // Form báo lỗi tắt cho tới khi có khóa Turnstile (D-104). Khóa bí mật đặt bằng wrangler secret.
-    "TURNSTILE_SITE_KEY": "",
-    "CONTACT_EMAIL": ""
+    // Turnstile widget "pay-schedules report form", hostname payschedules.org (D-114). Form báo lỗi
+    // chỉ bật khi có thêm secret TURNSTILE_SECRET_KEY (chủ dự án đặt; D-104).
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAGEtWF5BQCsp2laT",
+    // Email Routing: chuyển tiếp về hộp thư của chủ dự án (D-114).
+    "CONTACT_EMAIL": "contact@payschedules.org"
   },
   "d1_databases": [
     {
