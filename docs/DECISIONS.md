@@ -1343,3 +1343,19 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   `/healthz` và `/internal/*` (trang duyệt gọi qua service binding). Bản xem trước không chuyển.
 - Workflow `site-check.yml` đọc URL production từ deployment, nay là tên miền chính.
 - Chưa đổi: `INDEXABLE` vẫn `false` (D-002); bật khi chủ dự án quyết cho Google index.
+
+## D-114: Ra mắt trên payschedules.org: cho Google index, email liên hệ, Turnstile, giới hạn ở WAF
+
+- Ngày: 2026-11-17. Chủ dự án quyết bật index sau khi có tên miền (D-002, D-113).
+- `INDEXABLE=true` ở production: robots.txt cho phép, bỏ `X-Robots-Tag: noindex`. Bản xem trước
+  và địa chỉ workers.dev vẫn không index (workers.dev chuyển 301 về tên miền chính).
+- Bot AI: không chặn (D-112). AI Crawl Control của zone để mặc định, Bot Preference Sync tắt nên
+  Cloudflare không chèn gì vào robots.txt; không bật Bot Fight Mode.
+- Email: Email Routing của zone, `contact@payschedules.org` chuyển tiếp về hộp thư của chủ dự án
+  (đã xác minh). `CONTACT_EMAIL=contact@payschedules.org`.
+- Turnstile: widget "pay-schedules report form" (Managed, hostname payschedules.org),
+  `TURNSTILE_SITE_KEY` trong `wrangler.jsonc`. Khóa bí mật `TURNSTILE_SECRET_KEY` chủ dự án đặt
+  (Worker > Settings > Variables and Secrets); thiếu nó thì form báo lỗi vẫn tắt (D-104).
+- WAF (gói Free, 1 luật): "Limit bulk downloading per IP", `http.host eq "payschedules.org"`, quá 60
+  request trong 10 giây mỗi IP thì chặn 10 giây. Đếm cả lượt trúng cache, là giới hạn thật cho mục C4
+  (bộ đếm trong Worker của D-108 chỉ là trần thô). Sửa ở Security > Security rules của zone.
