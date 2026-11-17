@@ -42,9 +42,9 @@ on:
         default: "45"
   push:
     branches: ["run/pdf-pipeline-preview", "run/pdf-pipeline-production"]
-  schedule:
-    # Hằng tuần (D-032): chỉ học khu đã đến hạn chạy lại, tham số trong pdf-pipeline-weekly.json.
-    - cron: "17 19 * * 6"
+  # Lịch chạy hằng tuần (D-032) đã tắt từ 2026-11-17 (D-074). Bật lại: thêm
+  #   schedule:
+  #     - cron: "17 19 * * 6"
 
 permissions:
   contents: read
