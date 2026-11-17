@@ -65,6 +65,22 @@ export const NAV_SCRIPT_BODY =
   '(()=>{const b=document.querySelector(".nav-toggle");const h=b&&b.closest(".site-header");if(!h)return;h.classList.add("js-nav");b.addEventListener("click",()=>{const o=h.classList.toggle("nav-open");b.setAttribute("aria-expanded",String(o));});})();';
 const NAV_SCRIPT = raw(`<script>${NAV_SCRIPT_BODY}</script>`);
 
+/**
+ * Google Tag Manager (DECISIONS.md D-117), đúng đoạn mã chủ dự án đưa. Chỉ gắn khi có GTM_ID hợp lệ
+ * (production). Mã nội tuyến được CSP cho phép theo hash (security.ts GTM_SCRIPT_HASH).
+ */
+export const GTM_SCRIPT_BODY =
+  'window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());';
+
+export function gtmSnippet(id: string | undefined): Html {
+  if (!id || !/^GTM-[A-Z0-9]{4,12}$/.test(id)) {
+    return html``;
+  }
+  return html`<script async src="https://www.googletagmanager.com/gtm.js?id=${id}"></script>
+${raw(`<script>${GTM_SCRIPT_BODY}</script>`)}
+`;
+}
+
 export interface Crumb {
   label: string;
   href?: string;
@@ -131,7 +147,7 @@ ${head}${share}<meta name="theme-color" content="#9f224e">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="stylesheet" href="/style.css">
-</head>
+${gtmSnippet(site.env.GTM_ID)}</head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">

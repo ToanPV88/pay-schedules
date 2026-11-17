@@ -4,22 +4,29 @@
  * CSP: chỉ chạy script của chính site (site.js), script menu nội tuyến theo hash, và Turnstile của
  * Cloudflare ở trang báo lỗi. Thuộc tính style="" được phép (thanh tỉ lệ, biểu đồ); thẻ <style> và
  * script nội tuyến khác thì không. JSON-LD (type="application/ld+json") là khối dữ liệu, CSP không chặn.
- * Khi gắn Cloudflare Web Analytics hoặc AdSense (Công đoạn 8) phải thêm nguồn của chúng vào đây.
+ * Google Tag Manager và Google Analytics (D-117): script, kết nối, ảnh từ các domain của Google; mã
+ * khởi tạo nội tuyến theo hash. Thẻ "Custom HTML" trong GTM chạy mã nội tuyến nên sẽ bị CSP chặn.
+ * Khi gắn AdSense (Công đoạn 8) phải thêm nguồn của nó vào đây.
  */
 
 /** sha256 (base64) của NAV_SCRIPT_BODY trong views/layout.ts. Test kiểm tra giá trị này còn khớp. */
 export const NAV_SCRIPT_HASH = "sha256-S7agJCkbCA9eBnby9jOW+MzEngAlMEbHJuXU3HWXxy8=";
 
+/** sha256 (base64) của GTM_SCRIPT_BODY trong views/layout.ts. Test kiểm tra giá trị này còn khớp. */
+export const GTM_SCRIPT_HASH = "sha256-o3XbuMEMZBLa0wiDnS6Ueklm+7HhiQcocv7yJdGQKLE=";
+
 const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+const GOOGLE_TAG = "https://www.googletagmanager.com https://*.googletagmanager.com";
+const GOOGLE_ANALYTICS = "https://*.google-analytics.com https://*.analytics.google.com";
 
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  `script-src 'self' '${NAV_SCRIPT_HASH}' ${TURNSTILE_ORIGIN}`,
+  `script-src 'self' '${NAV_SCRIPT_HASH}' '${GTM_SCRIPT_HASH}' ${TURNSTILE_ORIGIN} ${GOOGLE_TAG}`,
   "style-src 'self'",
   "style-src-attr 'unsafe-inline'",
-  "img-src 'self' data:",
+  `img-src 'self' data: ${GOOGLE_TAG} ${GOOGLE_ANALYTICS}`,
   "font-src 'self'",
-  `connect-src 'self' ${TURNSTILE_ORIGIN}`,
+  `connect-src 'self' ${TURNSTILE_ORIGIN} ${GOOGLE_TAG} ${GOOGLE_ANALYTICS}`,
   `frame-src ${TURNSTILE_ORIGIN}`,
   "object-src 'none'",
   "base-uri 'none'",

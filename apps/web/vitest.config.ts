@@ -22,6 +22,7 @@ export default defineConfig(async () => {
             INDEXABLE: "false",
             TURNSTILE_SITE_KEY: "",
             CONTACT_EMAIL: "",
+            GTM_ID: "",
           },
         },
       }),
