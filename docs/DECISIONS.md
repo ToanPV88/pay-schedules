@@ -1359,3 +1359,16 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - WAF (gói Free, 1 luật): "Limit bulk downloading per IP", `http.host eq "payschedules.org"`, quá 60
   request trong 10 giây mỗi IP thì chặn 10 giây. Đếm cả lượt trúng cache, là giới hạn thật cho mục C4
   (bộ đếm trong Worker của D-108 chỉ là trần thô). Sửa ở Security > Security rules của zone.
+
+## D-115: Phân tích bảng lương, xếp hạng và khoảng cách trên trang học khu
+
+- Ngày: 2026-11-17. Chủ dự án duyệt các tính năng rút ra từ phân tích đối thủ (Step & Lane,
+  Teacher Pay Explorer).
+- "How pay moves up this schedule" dưới biểu đồ của mỗi bảng (`src/analysis.ts`): cột đầu đi từ bậc
+  nào tới bậc nào, mấy bậc, mấy năm kinh nghiệm (khi tài liệu ghi năm), tăng bao nhiêu phần trăm, bước
+  tăng lớn nhất; bảng từng cột khi có từ hai cột. Chỉ tính từ ô có số.
+- Câu xếp hạng cạnh câu so sánh trung vị: lương khởi điểm (BA bậc 1) và mức tối đa đứng thứ mấy trong
+  bang và toàn quốc, kèm "top N%" khi có từ 20 học khu và nằm ở nửa trên (`src/ranks.ts`). Chỉ khi
+  đang xem năm mới nhất. Nguồn: mốc năm mới nhất của mọi học khu (`listLatestSummaries`, chỉ bảng
+  giáo viên published tính theo năm), giữ trong bộ nhớ isolate 10 phút.
+- Bảng học khu lân cận ghi khoảng cách đường chim bay theo dặm.

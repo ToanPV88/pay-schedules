@@ -215,3 +215,75 @@ export async function countSameNameInState(db: D1Database, districtId: number): 
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
+
+/** Mốc lương mới nhất của một học khu, kèm thông tin để xếp hạng và so sánh. */
+export interface SummaryEntry {
+  id: number;
+  name: string;
+  slug: string;
+  city: string | null;
+  enrollment: number | null;
+  stateCode: string;
+  stateSlug: string;
+  stateName: string;
+  schoolYear: string;
+  startBaCents: number | null;
+  maStep10Cents: number | null;
+  maxSalaryCents: number | null;
+}
+
+interface SummaryEntryRow {
+  id: number;
+  name: string;
+  slug: string;
+  city: string | null;
+  enrollment: number | null;
+  state_code: string;
+  state_slug: string;
+  state_name: string;
+  school_year: string;
+  start_ba_cents: number | null;
+  ma_step10_cents: number | null;
+  max_salary_cents: number | null;
+}
+
+// Cùng điều kiện với SQL_LATEST_SUMMARY: năm mới nhất, bảng giáo viên published tính theo năm.
+const SQL_SUMMARY_ENTRIES = `
+  WITH latest AS (
+    SELECT ds.district_id, ds.school_year, ds.start_ba_cents, ds.ma_step10_cents,
+           ds.max_salary_cents,
+           ROW_NUMBER() OVER (PARTITION BY ds.district_id ORDER BY ds.school_year DESC) AS rn
+      FROM district_summary ds
+      JOIN schedules s ON s.id = ds.schedule_id
+     WHERE s.status = 'published' AND s.schedule_type = 'teacher' AND s.pay_basis = 'annual'
+  )
+  SELECT d.id, d.name, d.slug, d.city, d.enrollment, st.code AS state_code,
+         st.slug AS state_slug, st.name AS state_name, l.school_year,
+         l.start_ba_cents, l.ma_step10_cents, l.max_salary_cents
+    FROM latest l
+    JOIN districts d ON d.id = l.district_id AND d.active = 1
+         AND d.employer_type = 'school_district'
+    JOIN states st ON st.code = d.state
+   WHERE l.rn = 1`;
+
+/**
+ * Mốc lương mới nhất của mọi học khu (một dòng mỗi học khu). Dùng để xếp hạng trên trang học khu,
+ * trang xếp hạng và chọn cặp so sánh; nơi gọi nên giữ kết quả trong bộ nhớ ít phút.
+ */
+export async function listLatestSummaries(db: D1Database): Promise<SummaryEntry[]> {
+  const { results } = await db.prepare(SQL_SUMMARY_ENTRIES).all<SummaryEntryRow>();
+  return results.map((r) => ({
+    id: r.id,
+    name: displayName(r.name),
+    slug: r.slug,
+    city: displayNameOrNull(r.city),
+    enrollment: r.enrollment,
+    stateCode: r.state_code,
+    stateSlug: r.state_slug,
+    stateName: r.state_name,
+    schoolYear: r.school_year,
+    startBaCents: r.start_ba_cents,
+    maStep10Cents: r.ma_step10_cents,
+    maxSalaryCents: r.max_salary_cents,
+  }));
+}

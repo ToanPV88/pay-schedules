@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { oddLanes, standard, stepsOnly } from "../../../packages/db/test/fixtures";
 import { insertFixture, resetData } from "../../../packages/db/test/insert";
 import { app } from "../src/index";
+import { resetSummaryCache } from "../src/ranks";
 
 export const db = env.DB;
 export const BASE = "https://example.invalid";
@@ -12,6 +13,8 @@ const SUMMARY = `INSERT INTO district_summary (district_id, school_year, schedul
                  VALUES (?, ?, ?, ?, ?, ?, '2026-11-12T08:00:00Z')`;
 
 export async function reset(): Promise<void> {
+  // Danh sách mốc lương giữ trong bộ nhớ (ranks.ts) phải bỏ cùng dữ liệu.
+  resetSummaryCache();
   await db.prepare("DELETE FROM error_reports").run();
   await resetData(db);
 }
