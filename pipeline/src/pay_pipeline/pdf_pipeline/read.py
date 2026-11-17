@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@18"
-WORDS = "pdfplumber-words@18"
-XLSX = "xlsx-cells@18"
-DOCX = "docx-cells@18"
-HTML = "html-cells@18"
+LAYOUT = "layout-text@19"
+WORDS = "pdfplumber-words@19"
+XLSX = "xlsx-cells@19"
+DOCX = "docx-cells@19"
+HTML = "html-cells@19"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -58,7 +58,7 @@ STANDARD_DAYS = (175, 200)
 
 _MONEY = re.compile(r"^\(?\$?\(?(\d{1,3}(?:,\d{3})+|\d{5,6})(\.\d{1,2})?\)?\**$")
 _LABEL = re.compile(
-    r"^(?:(?:step|level|year|yrs?)\.?\s*)?(\d{1,2})(?:\s*(?:-|–|to)\s*(\d{1,2}))?\s*(\+|\*{1,3})?"
+    r"^(?:(?:step|level|year|yrs?)[.\-]?\s*)?(\d{1,2})(?:\s*(?:-|–|to)\s*(\d{1,2}))?\s*(\+|\*{1,3})?"
     r"(?:\s*(?:years?|yrs?\.?)(?:\s+and\s+(?:over|above|up))?)?\s*(\+)?$",
     re.I,
 )
@@ -218,7 +218,62 @@ def _normalise(words: list[Word]) -> list[Word]:
             out.append(Word(prev.text + w.text, prev.x0, w.x1))
         else:
             out.append(w)
+    # "( 56,729.00)( 57,513.00)": amounts in parentheses run together (Fall River, MA) (D-073)
+    out = [
+        Word(w.text.strip("()"), w.x0, w.x1)
+        if re.fullmatch(r"[()]*\$?\d[\d,]*(?:\.\d+)?[()]+|[()]+\$?\d[\d,]*(?:\.\d+)?[()]*", w.text)
+        and re.search(r"\d,\d{3}", w.text)
+        else w
+        for w in out
+    ]
     return [w for w in out if w.text not in ("$",)]
+
+
+_STEP_WORD = re.compile(r"^(?:step|level|row)$", re.I)
+
+
+def _head_label(head: list[Word]) -> list[Word]:
+    """Step labels printed in other ways, reduced to a plain step number or letter (D-073):
+    "0)" (Texas tables whose cell borders print as ")"), "Y(6)" (Baltimore County: letter and step
+    number), "Step 1  0" (step, then years of experience), "Level A", "Row A: 0-1 years", "1.00",
+    "A  0" (letter, then step), "4  Total" (the total line of a step)."""
+    if not head:
+        return head
+    words = [Word(w.text.rstrip(")") if re.fullmatch(r"\d{1,2}\)", w.text) else w.text, w.x0, w.x1)
+             for w in head]  # fmt: skip
+    first, last = words[0], words[-1]
+
+    def one(text: str) -> list[Word]:
+        return [Word(text, first.x0, last.x1)]
+
+    joined = " ".join(w.text for w in words)
+    if _LABEL.match(joined) or _LETTER.match(joined):
+        return words
+    if (
+        len(words) >= 2
+        and _TOTAL.match(last.text)
+        and _LABEL.match(" ".join(w.text for w in words[:-1]))
+    ):
+        return words[:-1]
+    m = re.fullmatch(r"[A-Z]{1,2}\((\d{1,2})\)", joined)
+    if m:
+        return one(m.group(1))
+    m = re.fullmatch(r"(\d{1,2})\.0{1,2}", joined)
+    if m:
+        return one(m.group(1))
+    if len(words) >= 2 and _STEP_WORD.match(first.text):
+        letter = words[1].text.rstrip(":")
+        if re.fullmatch(r"[A-Z]{1,2}", letter) and _LETTER.match(letter):
+            return one(letter)
+        if (
+            len(words) == 3
+            and _LABEL.match(f"{first.text} {words[1].text}")
+            and _PLACEMENT.match(last.text)
+        ):
+            return words[:2]
+    if len(words) == 2 and _CODE.match(first.text) and _LABEL.match(last.text):
+        return [last]
+    return words
 
 
 def parse_row(line: Line, index: int) -> Row | None:
@@ -228,6 +283,8 @@ def parse_row(line: Line, index: int) -> Row | None:
         return None
     head = words[:first]
     while head and (_NUMBER.match(head[-1].text) or _SIDE.match(head[-1].text)):
+        if len(head) == 1 and re.fullmatch(r"\d{1,2}\.0{1,2}", head[0].text):
+            break  # "1.00": the step, printed with decimals (Portage, MI) (D-073)
         # a daily/hourly/semi-monthly figure ("$2,521") or an increase ("$0") before the first
         # annual amount (D-054)
         head = head[:-1]
@@ -241,6 +298,7 @@ def parse_row(line: Line, index: int) -> Row | None:
     # "A00", "M12": North Carolina state rate codes, lane letter then step (D-062)
     if len(head) == 1 and _RATE_CODE.match(head[0].text):
         head = [Word(str(int(head[0].text[1:])), head[0].x0, head[0].x1)]
+    head = _head_label(head)
     label = " ".join(w.text for w in head).strip()
     # "0,1,2   1   $27,175": a placement column (years of experience) before the step
     if (
@@ -273,6 +331,9 @@ def parse_row(line: Line, index: int) -> Row | None:
             width = statistics.median(x1 - x0 for x0, x1, _ in amounts)
             if w.x0 - amounts[-1][1] > 1.5 * width:
                 break
+            rest = words[words.index(w) :]
+            if len(amounts) >= 3 and all(re.fullmatch(r"[A-Za-z][A-Za-z.]*", x.text) for x in rest):
+                break  # "... 74,220  Base Annual Salary": a caption after the row (Yakima) (D-073)
         if value is not None:
             amounts.append((w.x0, w.x1, value))
         elif _SIDE.match(w.text):
@@ -335,7 +396,14 @@ def collapse_components(lines: list[Line]) -> list[Line]:
     """
 
     def label_of(line: Line) -> str:
-        words = [w.text for w in line.words if money(w.text) is None and not _SIDE.match(w.text)]
+        words = [
+            w.text
+            for w in line.words
+            if money(w.text) is None and not _SIDE.match(w.text) and w.text not in ("$", "($")
+        ]
+        # "0  1  Total": years and step before the component name (Issaquah) (D-073)
+        while len(words) > 1 and re.fullmatch(r"\d{1,2}", words[0]):
+            words = words[1:]
         return " ".join(words)
 
     totals = [ln for ln in lines if ln.words and _TOTAL.match(label_of(ln))]
@@ -351,7 +419,13 @@ def collapse_components(lines: list[Line]) -> list[Line]:
         component = (
             step is not None and len(words) > 1 and re.match(r"[A-Za-z]", words[1].text) is not None
         )
-        if words and has_money and (_LABEL.match(words[0].text) or base) and not component:
+        if (
+            words
+            and has_money
+            and (_LABEL.match(words[0].text) or base)
+            and not component
+            and not (step is not None and _TOTAL.match(label_of(line)))
+        ):
             step = words[0]  # "1  Base Pay  180.00  $63,117 ..."
             if base:
                 step = Word(base.group(1), step.x0, step.x1)

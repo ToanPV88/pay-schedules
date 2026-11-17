@@ -1310,3 +1310,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - 426 học khu có link; 337 link mới đặt đầu danh sách của học khu trong `schedule-urls.csv` (tối đa
   3 link mỗi học khu như D-064). Pipeline tự tải, theo robots.txt, tự đọc và kiểm tra như mọi tài
   liệu. Danh sách chạy: `pipeline/sources/ddg-big-seeds-20261117.csv`.
+
+## D-073: Bộ đọc nhận thêm các cách in nhãn bậc và số tiền; bộ đọc @19
+
+- Ngày: 2026-11-17. 95 tài liệu của học khu lớn (D-072) tải được nhưng không đọc ra bảng. Trong đó
+  nhiều tài liệu là báo cáo lương cá nhân, ngân sách, bảng của nhân viên khác (không đọc là đúng);
+  phần còn lại in bảng theo cách bộ đọc chưa biết:
+  - Texas: viền ô in thành ")" ("0) $64,500)");
+  - nhãn bậc "Y(6)" (Baltimore County), "Step 1  0" (bậc rồi số năm, Atlanta), "Level A", "Row A:",
+    "1.00", "A  0" (chữ rồi bậc), "4  Total", "Step-0";
+  - số trong ngoặc dính nhau "( 56,729.00)( 57,513.00)" (Fall River);
+  - chữ chú thích sau hàng ("... 74,220  Base Annual Salary", Yakima);
+  - hàng Base/Total có số năm và bậc đứng trước ("0 1 Total", Issaquah) hoặc "$" tách rời
+    (North Thurston).
+- 18/95 tài liệu nay đọc ra bảng; bảng vẫn qua mọi kiểm tra như thường.

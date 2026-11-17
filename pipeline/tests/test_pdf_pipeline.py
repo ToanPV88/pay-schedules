@@ -674,6 +674,39 @@ class TestReader:
         assert t.lanes == ["Salary"]
         assert t.grid == [[45031], [46708], [48848], [49848], [50848], [51848]]
 
+    def test_other_step_label_forms(self) -> None:
+        # D-073: Texas "0) $64,500)", Baltimore County "Y(6)", Atlanta "Step 1  0", Kenosha
+        # "Level A", Portage "1.00", Lafayette "A  0", Johnston "4  Total".
+        cases = {
+            ("0)", "$64,500)", "$66,000)"): "0",
+            ("Y(6)", "62,252", "2,908.97", "67,508"): "6",
+            ("Step", "1", "0", "$309.08", "$62,434.16", "$68,775.95"): "Step 1",
+            ("Level", "A", "$52,081", "$53,000"): "A",
+            ("1.00", "$40,043", "$42,445"): "1",
+            ("A", "0", "$45,000", "$46,500"): "0",
+            ("4", "Total", "53,832", "54,732"): "4",
+            ("Step-2", "$", "51,405", "$", "51,936"): "Step-2",
+        }
+        for words, label in cases.items():
+            row = rd.parse_row(L(*words, step=10.0), 0)
+            assert row is not None, words
+            assert row.label == label, words
+            assert all(a[2] >= 10_000 for a in row.amounts), words
+
+    def test_parenthesised_amounts_and_caption(self) -> None:
+        fall_river = rd.parse_row(
+            L("1", "(", "56,729.00)(", "57,513.00)(", "58,307.00)", step=12.0), 0
+        )
+        assert fall_river is not None and [a[2] for a in fall_river.amounts] == [
+            56729,
+            57513,
+            58307,
+        ]
+        yakima = rd.parse_row(
+            L("0", "55,274", "57,651", "60,131", "Base", "Annual", "Salary", step=8.0), 0
+        )
+        assert yakima is not None and len(yakima.amounts) == 3
+
     def test_side_figures_and_dashes(self) -> None:
         # Garland ISD: daily rate, a stipend below the salary range and "-" for no stipend sit
         # between the annual amounts; they are skipped, not taken as words inside the row.
