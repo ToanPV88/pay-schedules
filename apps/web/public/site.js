@@ -94,6 +94,41 @@
     return text;
   }
 
+  // Như nextStepsText và projectionText trong src/views/schedule.ts (D-119).
+  const NEXT_STEPS = 5;
+  const PROJECTION_YEARS = 10;
+
+  function nextStepsText(rows, laneIndex, stepIndex) {
+    if (amountOf(rows[stepIndex], laneIndex) === null) {
+      return "—";
+    }
+    const parts = [];
+    for (let i = stepIndex + 1; i < rows.length && parts.length < NEXT_STEPS; i++) {
+      const amount = amountOf(rows[i], laneIndex);
+      if (amount !== null) {
+        parts.push(`${stepLabel(rows[i], i)} ${formatCents(amount)}`);
+      }
+    }
+    return parts.length > 0 ? parts.join(" · ") : "This is the top of the lane";
+  }
+
+  function projectionText(table, rows, laneIndex, stepIndex) {
+    let last = amountOf(rows[stepIndex], laneIndex);
+    if (last === null || table.dataset.basis !== "annual") {
+      return "—";
+    }
+    let total = 0;
+    for (let k = 0; k < PROJECTION_YEARS; k++) {
+      const i = stepIndex + k;
+      const amount = i < rows.length ? amountOf(rows[i], laneIndex) : null;
+      if (amount !== null) {
+        last = amount;
+      }
+      total += last;
+    }
+    return `${formatCents(total)} over ${PROJECTION_YEARS} years`;
+  }
+
   for (const form of document.querySelectorAll("form[data-calc-table]")) {
     const table = document.getElementById(form.dataset.calcTable);
     const result = document.getElementById(form.dataset.calcResult);
@@ -134,6 +169,8 @@
         "per-day": text.perDay,
         raise: text.raise,
         top: text.top,
+        next: nextStepsText(table.tBodies[0]?.rows ?? [], laneIndex, stepIndex),
+        projection: projectionText(table, table.tBodies[0]?.rows ?? [], laneIndex, stepIndex),
       };
       for (const [key, value] of Object.entries(outputs)) {
         const out = result.querySelector(`[data-out="${key}"]`);
