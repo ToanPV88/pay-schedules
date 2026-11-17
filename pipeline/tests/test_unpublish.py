@@ -104,3 +104,27 @@ def test_due_sql_makes_districts_due() -> None:
         "UPDATE district_pipeline SET next_run_at = '2026-11-16T00:00:00Z'"
         " WHERE district_id IN (SELECT id FROM districts WHERE nces_id IN ('3600009', '4812120'))"
     ]
+
+
+def test_retire_future_year_read_before_d070() -> None:
+    from pay_pipeline.pdf_pipeline.unpublish import retire_future_sql
+
+    db = _db()
+    db.executescript(
+        """
+        INSERT INTO schedules (id, district_id, school_year, source_document_id, status,
+                               published_at) VALUES
+          (30, 1, '2027-28', 1, 'published', '2026-11-15T00:00:00Z'),
+          (31, 1, '2026-27', 1, 'published', '2026-11-17T00:00:00Z'),
+          (32, 2, '2027-28', 1, 'published', '2026-11-15T00:00:00Z');
+        """
+    )
+    sql = retire_future_sql(dt.date(2026, 11, 17))
+    db.executescript(render_sql(sql))
+    rows = {r[0]: r[1:] for r in db.execute("SELECT id, status, superseded_by FROM schedules")}
+    assert rows[30] == ("superseded", 31)
+    assert rows[31] == ("published", None)
+    assert rows[32] == ("published", None)  # district 2 has no table of the year in force
+    assert db.execute("SELECT district_id FROM cache_purge_queue").fetchall() == [(1,)]
+    db.executescript(render_sql(sql))  # running again changes nothing
+    assert db.execute("SELECT status FROM schedules WHERE id = 30").fetchone() == ("superseded",)

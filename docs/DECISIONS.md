@@ -1288,3 +1288,7 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   nên được ghi chú "No pay at this step in this lane"; ô trống nằm giữa hai số của cùng lane vẫn để
   thiếu cho người xem. Với CT, `step_start` được publish như nguồn (D-028): sách in mọi hàng hợp đồng
   có (Bridgeport bắt đầu ở bậc 6).
+- Áp dụng D-070 cho 199 bảng đang publish năm 2027-28 trở đi (hầu hết là hợp đồng nhiều năm đọc theo
+  D-058): đặt 199 học khu đến hạn, đọc lại bằng bộ đọc @17; sau đó lệnh `retire-future` cho bảng năm
+  tương lai thành superseded khi cùng tài liệu đã có bảng published của năm đang áp dụng. Tài liệu chỉ
+  in năm sau thì bảng năm sau vẫn giữ.
