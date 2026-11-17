@@ -587,7 +587,13 @@ function comparisonLine(data: DistrictPageData): Html {
     return html``;
   }
   const state = data.district.state;
-  return html`<p class="comparison">${[text, ranks].filter(Boolean).join(" ")} <a href="/${state.slug}">Compare ${state.name} districts</a>.</p>`;
+  const rankLine = ranks
+    ? html`<p class="comparison">${ranks} <a href="/rankings">See the rankings</a>.</p>`
+    : html``;
+  const medianLine = text
+    ? html`<p class="comparison">${text} <a href="/${state.slug}">Compare ${state.name} districts</a>.</p>`
+    : html``;
+  return html`${medianLine}${rankLine}`;
 }
 
 /**
