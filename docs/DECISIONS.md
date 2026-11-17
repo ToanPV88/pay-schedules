@@ -1324,3 +1324,10 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   - hàng Base/Total có số năm và bậc đứng trước ("0 1 Total", Issaquah) hoặc "$" tách rời
     (North Thurston).
 - 18/95 tài liệu nay đọc ra bảng; bảng vẫn qua mọi kiểm tra như thường.
+
+## D-074: Dừng lấy dữ liệu, tắt các lịch chạy tự động
+
+- Ngày: 2026-11-17. Chủ dự án dừng lượt lấy dữ liệu ở 3.822/13.289 học khu (~50% học sinh) và
+  chuyển repo sang private (phút GitHub Actions tính phí). Tắt lịch hằng tuần của
+  `pdf-pipeline.yml` (D-032) và `audit.yml`. Các workflow vẫn chạy khi đẩy nhánh `run/...` hoặc chạy
+  tay; muốn bật lại thì thêm lại khối `schedule` đã ghi trong chú thích.

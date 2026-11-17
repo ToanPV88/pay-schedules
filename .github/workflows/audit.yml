@@ -15,8 +15,7 @@ on:
       - "package-lock.json"
       - "pipeline/uv.lock"
       - ".github/workflows/audit.yml"
-  schedule:
-    - cron: "37 7 * * 1"
+  # Lịch chạy hằng tuần đã tắt từ 2026-11-17 (D-074); vẫn chạy khi có push hoặc chạy tay.
   workflow_dispatch:
 
 permissions:
