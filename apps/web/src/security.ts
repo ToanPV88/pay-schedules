@@ -18,15 +18,18 @@ export const GTM_SCRIPT_HASH = "sha256-o3XbuMEMZBLa0wiDnS6Ueklm+7HhiQcocv7yJdGQK
 const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 const GOOGLE_TAG = "https://www.googletagmanager.com https://*.googletagmanager.com";
 const GOOGLE_ANALYTICS = "https://*.google-analytics.com https://*.analytics.google.com";
+/** Cloudflare Web Analytics: zone tự chèn beacon vào trang (không cookie). */
+const CF_INSIGHTS_SCRIPT = "https://static.cloudflareinsights.com";
+const CF_INSIGHTS_REPORT = "https://cloudflareinsights.com";
 
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  `script-src 'self' '${NAV_SCRIPT_HASH}' '${GTM_SCRIPT_HASH}' ${TURNSTILE_ORIGIN} ${GOOGLE_TAG}`,
+  `script-src 'self' '${NAV_SCRIPT_HASH}' '${GTM_SCRIPT_HASH}' ${TURNSTILE_ORIGIN} ${GOOGLE_TAG} ${CF_INSIGHTS_SCRIPT}`,
   "style-src 'self'",
   "style-src-attr 'unsafe-inline'",
   `img-src 'self' data: ${GOOGLE_TAG} ${GOOGLE_ANALYTICS}`,
   "font-src 'self'",
-  `connect-src 'self' ${TURNSTILE_ORIGIN} ${GOOGLE_TAG} ${GOOGLE_ANALYTICS}`,
+  `connect-src 'self' ${TURNSTILE_ORIGIN} ${GOOGLE_TAG} ${GOOGLE_ANALYTICS} ${CF_INSIGHTS_REPORT}`,
   `frame-src ${TURNSTILE_ORIGIN}`,
   "object-src 'none'",
   "base-uri 'none'",
