@@ -1,15 +1,59 @@
 {
   "release_prefix": "src-state-salaries-2425",
-  "description": "Bảng lương giáo viên do Sở Giáo dục bang công bố: California J-90 (2024-25, 2023-24), Kentucky certified salary schedules và Oklahoma Local Salary Schedules (2025-26, 2024-25), Hawaii bảng lương giáo viên 10 tháng của Bộ Giáo dục bang (một học khu, 2026-27). Công đoạn 4. Không tải tệp lương cá nhân (vd. lương superintendent).",
+  "description": "Bảng lương giáo viên do Sở Giáo dục bang công bố: California J-90 (2024-25, 2023-24), Kentucky certified salary schedules và Oklahoma Local Salary Schedules (2025-26, 2024-25), Hawaii bảng lương giáo viên 10 tháng của Bộ Giáo dục bang (một học khu, 2026-27). Công đoạn 4. Không tải tệp lương cá nhân (vd. lương superintendent). Connecticut: bảng lương từng học khu do CEA tổng hợp từ hợp đồng (2025-29); West Virginia: bảng lương giáo viên từng county của WVDE (2025-26).",
   "files": [
-    {"url": "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902425.exe", "note": "CA J-90 2024-25 (gói tự giải nén, không chạy)"},
-    {"url": "https://www.cde.ca.gov/ds/fd/cs/documents/j902425readme.docx", "note": "Readme J-90 2024-25"},
-    {"url": "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902324.exe", "note": "CA J-90 2023-24, để kiểm tra lệch giữa hai năm và lịch sử"},
-    {"url": "https://www.cde.ca.gov/ds/fd/cs/documents/j902324readme.docx", "note": "Readme J-90 2023-24"},
-    {"url": "https://www.education.ky.gov/districts/FinRept/Documents/Certified%20Salary%20Schedule%20%282014-2026%29.xlsx", "name": "ky_certified_salary_schedule_2014-2026.xlsx", "note": "KY certified salary schedules"},
-    {"url": "https://www.education.ky.gov/districts/FinRept/Documents/Kentucky%27s%20Historical%20Minimum%20Salary%20Schedules.xlsx", "name": "ky_historical_minimum_salary_schedules.xlsx", "note": "KY lương tối thiểu theo luật bang (tham khảo)", "optional": true},
-    {"url": "https://oklahoma.gov/content/dam/ok/en/osde/documents/services/school-personnel-records/FY26%20Statewide%20Local%20Salary%20Schedules.pdf", "name": "ok_local_salary_schedules_2025-26.pdf", "note": "OK Local Salary Schedules 2025-26 (Office of School Personnel Records)"},
-    {"url": "https://oklahoma.gov/content/dam/ok/en/osde/documents/services/school-personnel-records/FY25%20Salary%20Schedule%20Book.pdf", "name": "ok_local_salary_schedules_2024-25.pdf", "note": "OK Local Salary Schedules 2024-25", "optional": true},
-    {"url": "https://hawaiipublicschools.org/wp-content/uploads/10-Month-Teacher-Salary-SY2026-27.pdf", "name": "hi_teacher_10_month_2026-27.pdf", "note": "HI DOE 10-month teacher salary schedule (BU 05) SY2026-27"}
+    {
+      "url": "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902425.exe",
+      "note": "CA J-90 2024-25 (gói tự giải nén, không chạy)"
+    },
+    {
+      "url": "https://www.cde.ca.gov/ds/fd/cs/documents/j902425readme.docx",
+      "note": "Readme J-90 2024-25"
+    },
+    {
+      "url": "https://www3.cde.ca.gov/ds-downloads/fd/cs/j902324.exe",
+      "note": "CA J-90 2023-24, để kiểm tra lệch giữa hai năm và lịch sử"
+    },
+    {
+      "url": "https://www.cde.ca.gov/ds/fd/cs/documents/j902324readme.docx",
+      "note": "Readme J-90 2023-24"
+    },
+    {
+      "url": "https://www.education.ky.gov/districts/FinRept/Documents/Certified%20Salary%20Schedule%20%282014-2026%29.xlsx",
+      "name": "ky_certified_salary_schedule_2014-2026.xlsx",
+      "note": "KY certified salary schedules"
+    },
+    {
+      "url": "https://www.education.ky.gov/districts/FinRept/Documents/Kentucky%27s%20Historical%20Minimum%20Salary%20Schedules.xlsx",
+      "name": "ky_historical_minimum_salary_schedules.xlsx",
+      "note": "KY lương tối thiểu theo luật bang (tham khảo)",
+      "optional": true
+    },
+    {
+      "url": "https://oklahoma.gov/content/dam/ok/en/osde/documents/services/school-personnel-records/FY26%20Statewide%20Local%20Salary%20Schedules.pdf",
+      "name": "ok_local_salary_schedules_2025-26.pdf",
+      "note": "OK Local Salary Schedules 2025-26 (Office of School Personnel Records)"
+    },
+    {
+      "url": "https://oklahoma.gov/content/dam/ok/en/osde/documents/services/school-personnel-records/FY25%20Salary%20Schedule%20Book.pdf",
+      "name": "ok_local_salary_schedules_2024-25.pdf",
+      "note": "OK Local Salary Schedules 2024-25",
+      "optional": true
+    },
+    {
+      "url": "https://hawaiipublicschools.org/wp-content/uploads/10-Month-Teacher-Salary-SY2026-27.pdf",
+      "name": "hi_teacher_10_month_2026-27.pdf",
+      "note": "HI DOE 10-month teacher salary schedule (BU 05) SY2026-27"
+    },
+    {
+      "url": "https://cea.org/wp-content/uploads/2025/06/CT-Teacher-Salary-Schedules-2025-2029.pdf",
+      "name": "ct_cea_teacher_salary_schedules_2025-2029.pdf",
+      "note": "CT: bảng lương giáo viên từng học khu, CEA tổng hợp từ hợp đồng"
+    },
+    {
+      "url": "https://wvde.us/media/10045/professional-salary-schedules-county-26",
+      "name": "wv_professional_salary_schedules_2025-26.pdf",
+      "note": "WV: bảng lương giáo viên từng county, WVDE 2025-26"
+    }
   ]
 }
