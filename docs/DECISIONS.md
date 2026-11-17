@@ -1331,3 +1331,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   chuyển repo sang private (phút GitHub Actions tính phí). Tắt lịch hằng tuần của
   `pdf-pipeline.yml` (D-032) và `audit.yml`. Các workflow vẫn chạy khi đẩy nhánh `run/...` hoặc chạy
   tay; muốn bật lại thì thêm lại khối `schedule` đã ghi trong chú thích.
+
+## D-113: Tên miền payschedules.org
+
+- Ngày: 2026-11-17. Chủ dự án mua `payschedules.org` qua Cloudflare Registrar (zone cùng tài khoản).
+- `payschedules.org` và `www.payschedules.org` là Custom Domain của Worker `pay-schedules`, gắn ở
+  dashboard (Workers > pay-schedules > Domains). Không khai `routes` trong `wrangler.jsonc`: không
+  khai thì `wrangler deploy` không đụng tới tên miền đã gắn, và token CI không cần quyền zone.
+- Tên miền chính là `https://payschedules.org` (biến `CANONICAL_ORIGIN`). `www` và địa chỉ
+  `workers.dev` của production chuyển 301 về đó, giữ đường dẫn và tham số (GET, HEAD); trừ
+  `/healthz` và `/internal/*` (trang duyệt gọi qua service binding). Bản xem trước không chuyển.
+- Workflow `site-check.yml` đọc URL production từ deployment, nay là tên miền chính.
+- Chưa đổi: `INDEXABLE` vẫn `false` (D-002); bật khi chủ dự án quyết cho Google index.

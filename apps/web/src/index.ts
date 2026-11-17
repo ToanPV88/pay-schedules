@@ -60,6 +60,7 @@ import {
   tokensMatch,
 } from "./cache";
 import { laneCount, positionToIndex } from "./calc";
+import { canonicalRedirect } from "./canonical";
 import {
   type CompareEntry,
   laneOptions,
@@ -139,6 +140,12 @@ const NEIGHBOR_LIMIT = 10;
 export const app = new Hono<AppEnv>();
 
 app.use("*", async (c, next) => {
+  // Một tên miền chính (canonical.ts, D-113); chạy trước mọi việc khác.
+  const target = canonicalRedirect(c.req.url, c.req.method, c.env.CANONICAL_ORIGIN);
+  if (target !== null) {
+    c.header("Cache-Control", "public, max-age=86400");
+    return c.redirect(target, 301);
+  }
   await next();
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     c.header(name, value);

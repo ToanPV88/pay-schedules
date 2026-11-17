@@ -227,7 +227,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           npx wrangler deploy | tee deploy.log
-          url=$(grep -oE "https://pay-schedules\.[a-z0-9.-]+\.workers\.dev" deploy.log | head -1)
+          # Tên miền chính (D-113); địa chỉ workers.dev chuyển 301 về đây.
+          url=$(grep -oE '"CANONICAL_ORIGIN": "https://[a-z0-9.-]+"' wrangler.jsonc | grep -oE 'https://[a-z0-9.-]+')
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Production: $url" >> "$GITHUB_STEP_SUMMARY"
       # Token cho POST /internal/purge (D-102). Pipeline không gọi thẳng: Worker xem tay gọi qua

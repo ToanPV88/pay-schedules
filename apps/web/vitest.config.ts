@@ -13,7 +13,8 @@ export default defineConfig(async () => {
         // Không bao giờ gọi tài nguyên Cloudflare thật trong test.
         remoteBindings: false,
         wrangler: { configPath: "./wrangler.jsonc" },
-        miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+        // Test gọi bằng https://example.invalid: tắt chuyển về tên miền chính (D-113).
+        miniflare: { bindings: { TEST_MIGRATIONS: migrations, CANONICAL_ORIGIN: "" } },
       }),
     ],
     test: { setupFiles: ["./test/apply-migrations.ts"] },

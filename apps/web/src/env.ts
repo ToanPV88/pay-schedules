@@ -17,6 +17,8 @@ export type Env = {
   TURNSTILE_SECRET_KEY?: string;
   /** Bí mật: cho phép pipeline gọi POST /internal/purge (DECISIONS.md D-102). */
   PURGE_TOKEN?: string;
+  /** Tên miền chính, vd. https://payschedules.org; địa chỉ khác chuyển 301 về đây (D-113). */
+  CANONICAL_ORIGIN?: string;
   /** Địa chỉ liên hệ hiện ở trang /contact. Rỗng cho tới khi chủ dự án chọn. */
   CONTACT_EMAIL?: string;
   /** Giới hạn tần suất theo IP (guard.ts, D-108): trang, API, file tải. */
