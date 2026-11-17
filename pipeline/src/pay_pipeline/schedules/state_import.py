@@ -22,15 +22,28 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from pay_pipeline.catalog.ccd import StateLea, find_file, read_state_ids
-from pay_pipeline.schedules import ca_j90, hi_doe, ky_kde, ok_sde
+from pay_pipeline.schedules import ca_j90, ct_cea, hi_doe, ky_kde, ok_sde, wv_wvde
 from pay_pipeline.schedules.model import ScheduleDraft, school_year_from_start, school_year_start
-from pay_pipeline.schedules.validate import Issue, start_salary, summarize, validate
+from pay_pipeline.schedules.validate import (
+    Issue,
+    current_school_year_start,
+    start_salary,
+    summarize,
+    validate,
+)
 
 KY_YEARS = 2
 """Kentucky: import the latest N fiscal years of the workbook (California: every J-90 file)."""
 CROSS_CHECK_SAMPLE = 10
 
-IMPORTERS = {"CA": "ca_j90@1", "HI": "hi_doe@1", "KY": "ky_kde@1", "OK": "ok_sde@1"}
+IMPORTERS = {
+    "CA": "ca_j90@1",
+    "CT": "ct_cea@1",
+    "HI": "hi_doe@1",
+    "KY": "ky_kde@1",
+    "OK": "ok_sde@1",
+    "WV": "wv_wvde@1",
+}
 # A state file is what each district reported to the state: odd figures (pay falling between two
 # steps or lanes, a big change from last year) are published as reported, not held for a person
 # (D-028). Holds from a manual cross-check and structural problems still wait for review.
@@ -45,6 +58,11 @@ STATE_KEY: dict[str, Callable[[str], str | None]] = {
     "OK": lambda st: st[3:5] + st[6:] if re.fullmatch(r"OK-\d{2}-[A-Z]\d{3}", st) else None,
     # 'HI-001' -> '001' (Hawaii is one statewide district)
     "HI": lambda st: st[3:] if re.fullmatch(r"HI-\d{3}", st) else None,
+}
+NAME_KEY: dict[str, Callable[[str], str]] = {
+    # Books that name districts but print no state code: matched by the CCD name (D-071).
+    "CT": ct_cea.district_key,
+    "WV": wv_wvde.district_key,
 }
 
 
@@ -246,6 +264,16 @@ def read_drafts(
     for pdf in sorted(sources.glob("hi_teacher_10_month_*.pdf")):
         for draft in hi_doe.read_pdf(pdf):
             out.append((draft, docs[pdf.name]))
+    # Books that print the coming years of multi-year contracts: up to the school year in
+    # force (D-070, D-071).
+    current = current_school_year_start(dt.datetime.now(dt.UTC).date())
+    for pdf in sorted(sources.glob("ct_cea_teacher_salary_schedules_*.pdf")):
+        for draft in ct_cea.read_pdf(pdf):
+            if school_year_start(draft.school_year) <= current:
+                out.append((draft, docs[pdf.name]))
+    for pdf in sorted(sources.glob("wv_professional_salary_schedules_*.pdf")):
+        for draft in wv_wvde.read_pdf(pdf):
+            out.append((draft, docs[pdf.name]))
     return out
 
 
@@ -280,7 +308,13 @@ def build_import(
     by_state_key: dict[tuple[str, str], StateLea] = {}
     for state, rows in leas.items():
         for row in rows:
-            key = STATE_KEY[state](row.st_leaid)
+            if state in NAME_KEY:
+                key: str | None = NAME_KEY[state](row.name)
+                held = by_state_key.get((state, key or ""))
+                if held is not None and held.lea_type == "1" and row.lea_type != "1":
+                    continue  # a name shared with a charter or agency: the regular district wins
+            else:
+                key = STATE_KEY[state](row.st_leaid)
             if key is not None:
                 by_state_key[(state, key)] = row
 

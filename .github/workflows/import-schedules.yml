@@ -29,7 +29,7 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   STATE_MANIFEST: pipeline/sources/state-salaries-2425.json
   # Bang có importer (pipeline/src/pay_pipeline/schedules/state_import.py IMPORTERS).
-  STATES: "'CA', 'HI', 'KY', 'OK'"
+  STATES: "'CA', 'CT', 'HI', 'KY', 'OK', 'WV'"
   CCD_MANIFEST: pipeline/sources/nces-ccd-2425.json
   TARGET: ${{ inputs.target || (github.ref_name == 'run/import-schedules-production' && 'production' || 'preview') }}
 
