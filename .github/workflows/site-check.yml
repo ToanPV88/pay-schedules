@@ -41,7 +41,8 @@ jobs:
         run: |
           failed=0
           fail() { echo "::error::$*"; failed=1; }
-          get() { curl -sS -o page.html -w '%{http_code}' "$1"; }
+          # Luật WAF chặn quá 60 request/10 giây mỗi IP (D-114): mỗi request cách nhau 0,25 giây.
+          get() { sleep 0.25; curl -sS -o page.html -w '%{http_code}' "$1"; }
           echo "### Trang chính" >> "$GITHUB_STEP_SUMMARY"
           for spec in "/|Teacher pay across the site" "/recently-updated|Recently updated salary schedules" \
                       "/california|Teacher pay in California" "/texas|Districts in Texas" \
@@ -60,6 +61,7 @@ jobs:
           grep -oE 'href="/[^"#]*"' page.html | sed -E 's/^href="//; s/"$//' | sort -u > links.txt
           bad=0
           while read -r path; do
+            sleep 0.25
             code=$(curl -sS -o /dev/null -w '%{http_code}' "${BASE_URL}${path}")
             if [ "$code" != 200 ]; then bad=$((bad + 1)); fail "link trang chủ ${path}: HTTP ${code}"; fi
           done < links.txt
@@ -94,6 +96,7 @@ jobs:
             csv=$(grep -oE 'href="/schedules/[0-9]+\.csv"' page.html | head -1 | sed -E 's/^href="//; s/"$//')
             csvok="không có link"
             if [ -n "$csv" ]; then
+              sleep 0.25
               ccode=$(curl -sS -o table.csv -w '%{http_code}' "${BASE_URL}${csv}")
               head1=$(head -1 table.csv | cut -c1-5)
               if [ "$ccode" = 200 ] && [ "$head1" = "Step," ]; then csvok="ok"; else csvok="HTTP ${ccode}"; fi

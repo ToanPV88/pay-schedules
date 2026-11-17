@@ -1420,3 +1420,6 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   tính theo năm, "Earnings at one step a year": tổng 10 năm nếu lên một bậc mỗi năm trên bảng hiện
   tại, ghi rõ chưa tính tăng bảng lương. Ô trống giữ lương năm trước; hết bậc giữ lương đỉnh.
 - Server (`views/schedule.ts`) và `site.js` tính cùng một cách; tắt JavaScript vẫn có số.
+- Bổ sung D-114 (2026-11-17): luật WAF bỏ qua bot đã xác minh (`and not cf.client.bot`) để không
+  chặn Googlebot, Bingbot khi crawl. `site-check.yml` cách mỗi request 0,25 giây, vì chạy liền mạch
+  thì chính nó vượt 60 request/10 giây và nhận 429.
