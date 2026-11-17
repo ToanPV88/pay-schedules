@@ -140,6 +140,51 @@ export function calculationText(schedule: Schedule, result: Calculation | null):
   return { amount, perMonth, perDay, raise, top };
 }
 
+/** Số bậc kế tiếp và số năm dự báo của máy tính (D-119); site.js dùng cùng số. */
+export const NEXT_STEPS = 5;
+export const PROJECTION_YEARS = 10;
+
+function laneAmount(schedule: Schedule, stepIndex: number, laneIndex: number): number | null {
+  return schedule.cells[stepIndex]?.[laneIndex]?.amountCents ?? null;
+}
+
+/** "Step 2 $51,500 · Step 3 $53,000 …": các bậc kế tiếp có số trong cùng cột. */
+export function nextStepsText(schedule: Schedule, laneIndex: number, stepIndex: number): string {
+  if (laneAmount(schedule, stepIndex, laneIndex) === null) {
+    return "—";
+  }
+  const parts: string[] = [];
+  for (let i = stepIndex + 1; i < schedule.steps.length && parts.length < NEXT_STEPS; i++) {
+    const amount = laneAmount(schedule, i, laneIndex);
+    const step = schedule.steps[i];
+    if (amount !== null && step) {
+      parts.push(`${stepLabel(step)} ${formatCents(amount)}`);
+    }
+  }
+  return parts.length > 0 ? parts.join(" · ") : "This is the top of the lane";
+}
+
+/**
+ * Tổng lương PROJECTION_YEARS năm tới nếu lên một bậc mỗi năm trên bảng hiện tại (không tính tăng
+ * bảng lương). Bậc không có số thì giữ lương năm trước; hết bậc thì giữ lương đỉnh.
+ */
+export function projectionText(schedule: Schedule, laneIndex: number, stepIndex: number): string {
+  let last = laneAmount(schedule, stepIndex, laneIndex);
+  if (last === null || schedule.payBasis !== "annual") {
+    return "—";
+  }
+  let total = 0;
+  for (let k = 0; k < PROJECTION_YEARS; k++) {
+    const i = stepIndex + k;
+    const amount = i < schedule.steps.length ? laneAmount(schedule, i, laneIndex) : null;
+    if (amount !== null) {
+      last = amount;
+    }
+    total += last;
+  }
+  return `${formatCents(total)} over ${PROJECTION_YEARS} years`;
+}
+
 export interface CalculatorOptions {
   /** Đường dẫn nhận form GET, ví dụ trang học khu hoặc /calculator. */
   action: string;
@@ -225,6 +270,8 @@ ${laneField}
 <div><dt>Salary on schedule</dt><dd data-out="amount">${text.amount}</dd></div>
 ${perMonth}${perDay}<div><dt>Raise at next step</dt><dd data-out="raise">${text.raise}</dd></div>
 <div><dt>Top of this lane</dt><dd data-out="top">${text.top}</dd></div>
+<div class="wide"><dt>Next steps in this lane</dt><dd data-out="next">${nextStepsText(schedule, options.laneIndex, options.stepIndex)}</dd></div>
+${annual ? html`<div class="wide"><dt>Earnings at one step a year</dt><dd><span data-out="projection">${projectionText(schedule, options.laneIndex, options.stepIndex)}</span> <span class="muted">on this schedule, before any raises to the schedule itself</span></dd></div>` : html``}
 </dl>`;
 }
 

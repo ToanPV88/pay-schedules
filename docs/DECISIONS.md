@@ -1412,3 +1412,11 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   hạng 13–60 theo số học sinh ghép với học khu lớn nhất cùng bang. Cặp khác vẫn xem được, noindex.
   `/compare` gợi ý 12 cặp đầu; trang học khu liệt kê tối đa 5 cặp có nó.
 - Không đưa vào sitemap (như D-116).
+
+## D-119: Máy tính lương: các bậc kế tiếp và tổng thu nhập 10 năm
+
+- Ngày: 2026-11-17. Tính năng rút ra từ phân tích đối thủ (Step & Lane hiện 5 bậc kế tiếp).
+- Kết quả máy tính thêm "Next steps in this lane" (tối đa 5 bậc kế tiếp có số, cùng cột) và, với bảng
+  tính theo năm, "Earnings at one step a year": tổng 10 năm nếu lên một bậc mỗi năm trên bảng hiện
+  tại, ghi rõ chưa tính tăng bảng lương. Ô trống giữ lương năm trước; hết bậc giữ lương đỉnh.
+- Server (`views/schedule.ts`) và `site.js` tính cùng một cách; tắt JavaScript vẫn có số.

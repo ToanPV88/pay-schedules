@@ -1796,3 +1796,8 @@ p.pairs span {
   color: var(--muted);
   margin-right: 0.25rem;
 }
+
+/* Máy tính: các bậc kế tiếp và dự báo chiếm cả hàng (D-119). */
+.facts .wide {
+  grid-column: 1 / -1;
+}
