@@ -1372,3 +1372,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   đang xem năm mới nhất. Nguồn: mốc năm mới nhất của mọi học khu (`listLatestSummaries`, chỉ bảng
   giáo viên published tính theo năm), giữ trong bộ nhớ isolate 10 phút.
 - Bảng học khu lân cận ghi khoảng cách đường chim bay theo dặm.
+
+## D-116: Trang xếp hạng theo ba mốc lương
+
+- Ngày: 2026-11-17. Tính năng rút ra từ phân tích đối thủ (Teacher Pay Explorer xếp hạng theo
+  mốc năm 1 BA, năm 10 MA, đỉnh thang lương).
+- `/rankings`: top 10 toàn quốc mỗi mốc. `/rankings/<mốc>` (`starting-pay`, `masters-step-10`,
+  `top-of-scale`): top 100 toàn quốc, danh sách bang. `/rankings/<mốc>/<bang>`: mọi học khu của
+  bang; bang dưới 5 học khu thì noindex. Menu header có "Rankings".
+- Số liệu: mốc năm mới nhất mỗi học khu (D-115, `district_summary`), chỉ bảng giáo viên published
+  tính theo năm; bằng nhau cùng hạng.
+- Không đưa vào sitemap: sitemap chỉ gồm trang học khu có bảng published (nghiệm thu Công đoạn 7);
+  trang xếp hạng được tìm thấy qua menu và liên kết.

@@ -121,6 +121,15 @@ import {
   TOP_LIMIT,
 } from "./views/pages";
 import { districtPath, placeLine } from "./views/parts";
+import {
+  MILESTONE_INFO,
+  MIN_INDEXED_STATE,
+  milestoneBySlug,
+  NATIONAL_LIMIT,
+  rankingPage,
+  rankingPath,
+  rankingsOverviewPage,
+} from "./views/rankings";
 import { calculatorPage, comparePage, type ReportError, reportPage } from "./views/tools";
 import { scheduleXlsx, XLSX_TYPE, xlsxFileName } from "./xlsx";
 
@@ -788,6 +797,62 @@ app.get(`${VA_NURSE_PATH}/:station`, async (c) => {
     noindex: hasQuery(c),
   };
   return page(c, meta, vaStationPage(name, tables), { control: PAGE_CACHE, tags: [TAG_FEDERAL] });
+});
+
+// ---------------------------------------------------------------- xếp hạng (D-116)
+
+app.get("/rankings", async (c) => {
+  const entries = await latestSummaries(c.env.DB);
+  const meta = {
+    title: pageTitle("Teacher salary rankings by school district"),
+    description:
+      "School districts ranked by teacher starting pay, master’s step 10 and the top of the salary scale, nationally and by state.",
+    canonicalPath: "/rankings",
+  };
+  return page(c, meta, rankingsOverviewPage(entries), { control: PAGE_CACHE, tags: [TAG_HOME] });
+});
+
+app.get("/rankings/:milestone", async (c) => {
+  const milestone = milestoneBySlug(c.req.param("milestone"));
+  if (!milestone) {
+    return notFound(c);
+  }
+  const entries = await latestSummaries(c.env.DB);
+  const info = MILESTONE_INFO[milestone];
+  const meta = {
+    title: pageTitle(`Highest teacher ${info.label.toLowerCase()} by school district`),
+    description: `The top ${NATIONAL_LIMIT} school districts ranked by teacher ${info.label.toLowerCase()}: ${info.definition}. Rankings by state too.`,
+    canonicalPath: rankingPath(milestone),
+  };
+  const body = rankingPage(entries, milestone, null);
+  return page(c, meta, body, { control: PAGE_CACHE, tags: [TAG_HOME] });
+});
+
+app.get("/rankings/:milestone/:state", async (c) => {
+  const milestone = milestoneBySlug(c.req.param("milestone"));
+  if (!milestone) {
+    return notFound(c);
+  }
+  const entries = await latestSummaries(c.env.DB);
+  const stateSlug = c.req.param("state");
+  const inState = entries.filter((e) => e.stateSlug === stateSlug);
+  const first = inState[0];
+  if (!first) {
+    return notFound(c);
+  }
+  const state = { slug: stateSlug, name: first.stateName };
+  const info = MILESTONE_INFO[milestone];
+  const meta = {
+    title: pageTitle(`${state.name} teacher ${info.label.toLowerCase()} by district`),
+    description: `${state.name} school districts ranked by teacher ${info.label.toLowerCase()}: ${info.definition}.`,
+    canonicalPath: rankingPath(milestone, stateSlug),
+    noindex: inState.length < MIN_INDEXED_STATE,
+  };
+  const body = rankingPage(entries, milestone, state);
+  return page(c, meta, body, {
+    control: PAGE_CACHE,
+    tags: [TAG_HOME, stateTag(first.stateCode)],
+  });
 });
 
 app.get("/:state", async (c) => {

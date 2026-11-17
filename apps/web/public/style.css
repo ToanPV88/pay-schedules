@@ -1757,3 +1757,30 @@ summary:focus-visible,
   font-size: 0.875em;
   white-space: nowrap;
 }
+
+/* Trang xếp hạng (views/rankings.ts). */
+.rank-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rank-table td:first-child {
+  width: 3.5em;
+  font-variant-numeric: tabular-nums;
+}
+nav.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+nav.tabs a {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  text-decoration: none;
+}
+nav.tabs a[aria-current="page"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
