@@ -6,7 +6,7 @@
   "shards": 10,
   "deadline_minutes": 60,
   "seeded_only": false,
-  "ids_file": "pipeline/sources/ddg-big-seeds-20261117.csv",
+  "ids_file": "pipeline/sources/rerun-d073-20261117.csv",
   "manual_release": "",
   "reread_drafts": false
 }
