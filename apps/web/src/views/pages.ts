@@ -16,6 +16,7 @@ import { formatCents, plural, schoolYearLabel } from "../format";
 import { breadcrumbs, type Html } from "./layout";
 import { coverageLine, payOverview, recentList } from "./overview";
 import { benchmarkRow, districtPath, hitList, moneyCell, searchForm } from "./parts";
+import { stateMap } from "./statemap";
 
 // ---------------------------------------------------------------- trang chủ
 
@@ -118,6 +119,7 @@ ${largestTable(data.largest ?? [])}
 ${recent}
 <section aria-labelledby="states-heading">
 <h2 id="states-heading">Browse by state</h2>
+${stateMap(states)}
 ${stateList}
 </section>
 <section aria-labelledby="reading-heading">

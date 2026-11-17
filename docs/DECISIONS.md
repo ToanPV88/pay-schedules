@@ -1423,3 +1423,11 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Bổ sung D-114 (2026-11-17): luật WAF bỏ qua bot đã xác minh (`and not cf.client.bot`) để không
   chặn Googlebot, Bingbot khi crawl. `site-check.yml` cách mỗi request 0,25 giây, vì chạy liền mạch
   thì chính nó vượt 60 request/10 giây và nhận 429.
+
+## D-120: Bản đồ ô các bang trên trang chủ
+
+- Ngày: 2026-11-17. Tính năng rút ra từ phân tích đối thủ (GovPayScales có bản đồ bang).
+- Mục "Browse by state" có bản đồ ô 12 × 8 (50 bang và DC theo vị trí gần đúng), tô 5 mức theo
+  phần trăm học khu đã có bảng lương published: chưa có, dưới 10%, 10–24%, 25–49%, từ 50%. Mỗi ô là
+  liên kết tới trang bang, có nhãn đầy đủ cho trình đọc màn hình. Danh sách bang giữ nguyên bên dưới.
+- HTML và CSS thuần (vị trí ô bằng thuộc tính style, CSP cho phép `style-src-attr`), không JavaScript.
