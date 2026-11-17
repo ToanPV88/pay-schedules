@@ -44,11 +44,11 @@ from pay_pipeline.documents.classify import NEGATIVE_RE, TEACHER_RE, school_year
 from pay_pipeline.schedules.model import school_year_start
 from pay_pipeline.schedules.validate import current_school_year_start
 
-LAYOUT = "layout-text@16"
-WORDS = "pdfplumber-words@16"
-XLSX = "xlsx-cells@16"
-DOCX = "docx-cells@16"
-HTML = "html-cells@16"
+LAYOUT = "layout-text@17"
+WORDS = "pdfplumber-words@17"
+XLSX = "xlsx-cells@17"
+DOCX = "docx-cells@17"
+HTML = "html-cells@17"
 # Đổi cách đọc thì tăng số phiên bản: tài liệu chỉ được coi là "đã xử lý" (bỏ qua khi sha256 không
 # đổi) nếu đã có lần đọc bằng một bộ đọc trong danh sách này.
 READERS = frozenset({LAYOUT, WORDS, XLSX, DOCX})
@@ -831,11 +831,14 @@ def _score(t: Table) -> float:
 
 
 def year_in_force(years: set[str], today: dt.date | None = None) -> str:
-    """The latest school year no later than next school year; the latest if all are later."""
-    limit = current_school_year_start(today or dt.datetime.now(dt.UTC).date()) + 1
+    """The school year in force: the latest no later than the current one, or the nearest later one
+    when all are later (D-070, before: the latest no later than next school year, D-058)."""
+    current = current_school_year_start(today or dt.datetime.now(dt.UTC).date())
     dated = [y for y in years if y]
-    near = [y for y in dated if school_year_start(y) <= limit]
-    return max(near or dated, default="")
+    past = [y for y in dated if school_year_start(y) <= current]
+    if past:
+        return max(past)
+    return min(dated, default="")
 
 
 def pick_table(tables: list[Table]) -> Table | None:
