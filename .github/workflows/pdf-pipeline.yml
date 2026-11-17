@@ -181,7 +181,7 @@ jobs:
           uv run pay-pipeline pdf-shard --queue "$GITHUB_WORKSPACE/inputs/queue.json" \
             --shards "$SHARDS" --out-dir "$GITHUB_WORKSPACE/inputs" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "shards=$(python3 -c 'import json,sys; print(json.dumps([str(i) for i in range(int(sys.argv[1]))]))' "$SHARDS")" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: inputs
           path: inputs/
@@ -211,7 +211,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq poppler-utils tesseract-ocr
           (cd pipeline && uv sync --locked --no-dev)
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: inputs
           path: inputs
@@ -249,7 +249,7 @@ jobs:
           cat "$GITHUB_WORKSPACE/work/report.md" >> "$GITHUB_STEP_SUMMARY"
           cp "$GITHUB_WORKSPACE/work/report.md" "$GITHUB_WORKSPACE/work/work.json" "$GITHUB_WORKSPACE/work/docs/"
           if [ -f "$GITHUB_WORKSPACE/work/extractions.json" ]; then cp "$GITHUB_WORKSPACE/work/extractions.json" "$GITHUB_WORKSPACE/work/docs/"; fi
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: work-${{ matrix.shard }}
           path: |
@@ -267,7 +267,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: work-*
           path: work
@@ -293,7 +293,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: work-*
           path: work
