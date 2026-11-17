@@ -1295,3 +1295,18 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Lượt đọc lại đầu tiên: 179 bảng 2026-27 bị kiểm tra năm học giữ lại vì "cũ hơn bảng đang published
   (2027-28)". Kiểm tra này để chặn bảng lùi năm; khi bảng đang published là năm tương lai thì so với
   năm đang áp dụng. Bộ đọc @18 để đọc lại các bảng nháp đó, rồi chạy lại `retire-future`.
+
+## D-072: Tìm link bảng lương cho học khu lớn còn thiếu qua DuckDuckGo
+
+- Ngày: 2026-11-17. Chủ dự án đồng ý. 944 học khu ≥ 5.000 học sinh chưa có bảng (13,7 triệu học
+  sinh), phần lớn pipeline đã duyệt website mà không thấy bảng. Tìm bằng trình duyệt của chủ dự án
+  trên DuckDuckGo bản HTML, cách 1,8–2,5 giây một truy vấn: "<tên học khu> <bang> teacher salary
+  schedule" (bỏ CT, WV đã có ở D-071).
+- Chỉ giữ link nằm trên website của chính học khu (tên miền NCES), hoặc tệp trên host CMS
+  (Finalsite, Thrillshare, BoardDocs…) có tên site trùng tên miền học khu, hoặc tên miền mới của học
+  khu chứa tên riêng của học khu và mã bang. Bỏ trang tổng hợp, báo, trang công đoàn, trang .gov của
+  thành phố/quận (không phải học khu), và tệp của nhóm nhân viên khác (classified, hành chính, lịch
+  trả lương…). Bỏ tay vài link nhầm (Jackson County MS nhận tệp của Jackson Public Schools).
+- 426 học khu có link; 337 link mới đặt đầu danh sách của học khu trong `schedule-urls.csv` (tối đa
+  3 link mỗi học khu như D-064). Pipeline tự tải, theo robots.txt, tự đọc và kiểm tra như mọi tài
+  liệu. Danh sách chạy: `pipeline/sources/ddg-big-seeds-20261117.csv`.
