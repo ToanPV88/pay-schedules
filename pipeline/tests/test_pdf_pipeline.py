@@ -1466,15 +1466,15 @@ def test_multi_year_contract_takes_latest_year(tmp_path: Path) -> None:
     assert answers[0]["cells"][0][0] == 53500
 
 
-def test_year_in_force_stops_at_next_school_year() -> None:
-    # D-058: a Michigan contract through 2029-30 is read for next school year at the latest.
+def test_year_in_force_is_the_current_school_year() -> None:
+    # D-070: a Michigan contract through 2029-30 is read for the school year in force.
     import datetime as dt
 
     today = dt.date(2026, 11, 15)  # school year 2026-27
     years = {"2025-26", "2026-27", "2027-28", "2028-29", "2029-30", ""}
-    assert rd.year_in_force(years, today) == "2027-28"
+    assert rd.year_in_force(years, today) == "2026-27"
     assert rd.year_in_force({"2023-24", "2024-25"}, today) == "2024-25"
-    assert rd.year_in_force({"2030-31", "2031-32"}, today) == "2031-32"  # all later: the latest
+    assert rd.year_in_force({"2027-28", "2028-29"}, today) == "2027-28"  # all later: the nearest
 
 
 def test_side_figures_before_and_between_annual_amounts() -> None:
