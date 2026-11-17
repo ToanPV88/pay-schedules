@@ -20,7 +20,13 @@ from pay_pipeline.catalog.districts import build_catalog, render_report
 from pay_pipeline.federal import tables as federal
 from pay_pipeline.pdf_pipeline import gather as pdf_gather
 from pay_pipeline.pdf_pipeline import run as pdf_run
-from pay_pipeline.pdf_pipeline.unpublish import due_sql, reject_sql, requeue_sql, unpublish_sql
+from pay_pipeline.pdf_pipeline.unpublish import (
+    due_sql,
+    reject_sql,
+    requeue_sql,
+    retire_future_sql,
+    unpublish_sql,
+)
 from pay_pipeline.schedules import state_import
 from pay_pipeline.schedules.d1sql import schedules_sql
 from pay_pipeline.sources import fetch_sources, load_manifest, required_failures, verify_sources
@@ -142,6 +148,12 @@ def _cmd_due_districts(args: argparse.Namespace) -> int:
         return 1
     Path(args.sql).write_text(render_sql(due_sql(ids)), encoding="utf-8")
     print(f"SQL đặt {len(set(ids))} học khu đến hạn chạy lại")
+    return 0
+
+
+def _cmd_retire_future(args: argparse.Namespace) -> int:
+    Path(args.sql).write_text(render_sql(retire_future_sql(dt.datetime.now(dt.UTC).date())))
+    print("SQL thay bảng năm tương lai bằng bảng năm đang áp dụng cùng tài liệu (D-070)")
     return 0
 
 
@@ -311,6 +323,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ids-file", required=True, help="CSV có cột nces_id")
     p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
     p.set_defaults(func=_cmd_due_districts)
+    p = sub.add_parser("retire-future", help="Thay bảng năm tương lai đọc trước D-070")
+    p.add_argument("--sql", required=True, help="Tệp SQL đầu ra")
+    p.set_defaults(func=_cmd_retire_future)
 
     p = sub.add_parser("federal-build", help="Bảng lương liên bang: OPM GS, y tá VA (D-065)")
     p.add_argument("--sources", required=True, help="Thư mục tệp của Release src-federal-pay-*")

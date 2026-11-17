@@ -21,7 +21,10 @@ env:
   REJECT_IDS: ""
   REQUEUE_IDS: ""
   # Districts to read again with the current reader even if they have a published table (D-069).
-  DUE_IDS: pipeline/sources/rerun-columns-20261116.csv
+  DUE_IDS: pipeline/sources/rerun-future-20261117.csv
+  # "true": retire tables of a later year read before D-070 once the same document has a
+  # published table of the year in force.
+  RETIRE_FUTURE: ""
   REQUEUE_REASON: "[lane_label] Cột không có tên trong tài liệu (Column N): xem tài liệu gốc trước khi duyệt (D-067)"
   REJECT_REASON: "Loại khi rà hàng chờ 2026-11-16: bảng đọc sai hoặc không phải bảng hiện hành"
   REASON: "Gỡ: bảng đọc từ tài liệu tổng hợp nhiều học khu, không phải bảng của học khu (D-066)"
@@ -70,13 +73,17 @@ jobs:
         if: env.DUE_IDS != ''
         working-directory: pipeline
         run: uv run pay-pipeline due-districts --ids-file "../$DUE_IDS" --sql "$GITHUB_WORKSPACE/due.sql"
+      - name: Build retire SQL
+        if: env.RETIRE_FUTURE == 'true'
+        working-directory: pipeline
+        run: uv run pay-pipeline retire-future --sql "$GITHUB_WORKSPACE/retire.sql"
       - name: Apply to D1
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
-          for f in unpublish reject requeue due; do
+          for f in unpublish reject requeue due retire; do
             if [ -s "$GITHUB_WORKSPACE/$f.sql" ]; then
               echo "== $f.sql"
               npx wrangler d1 execute "$db" $flag --remote --file "$GITHUB_WORKSPACE/$f.sql"

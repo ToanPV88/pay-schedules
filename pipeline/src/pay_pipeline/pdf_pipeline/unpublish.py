@@ -64,8 +64,13 @@ def _take_back(picked: str, reason: str, *, requeue: bool, now: dt.datetime | No
         + " END,"
         f" detail = {quote(reason)}"
         " WHERE district_id IN (SELECT district_id FROM _unp)",
-        "DELETE FROM district_summary WHERE district_id IN (SELECT district_id FROM _unp)",
     ]
+    return sql + _refresh(stamp)
+
+
+def _refresh(stamp: str) -> list[str]:
+    """Recompute ``district_summary`` of the districts in ``_unp`` and queue their cache purge."""
+    sql = ["DELETE FROM district_summary WHERE district_id IN (SELECT district_id FROM _unp)"]
     cell_at = (
         "(SELECT c.amount_cents FROM cells c JOIN steps t ON t.id = c.step_id"
         " JOIN lanes l ON l.id = c.lane_id WHERE c.schedule_id = s.id"
@@ -97,6 +102,31 @@ def _take_back(picked: str, reason: str, *, requeue: bool, now: dt.datetime | No
     )
     sql.append("DROP TABLE _unp")
     return sql
+
+
+def retire_future_sql(today: dt.date, now: dt.datetime | None = None) -> list[str]:
+    """D-070: a document read again for the school year in force now has a published table for it;
+    the table of a later year read from the same document before is retired (superseded by it)."""
+    stamp = (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    start = today.year if today.month >= 7 else today.year - 1
+    current = f"{start}-{(start + 1) % 100:02d}"
+    newer = (
+        "SELECT max(t.id) FROM schedules t WHERE t.source_document_id = s.source_document_id"
+        " AND t.district_id = s.district_id"
+        " AND t.schedule_type = s.schedule_type AND t.title IS s.title AND t.status = 'published'"
+        f" AND t.school_year <= {quote(current)} AND t.id > s.id"
+    )
+    return [
+        "DROP TABLE IF EXISTS _unp",
+        "CREATE TABLE _unp (schedule_id INTEGER PRIMARY KEY, district_id INTEGER, by_id INTEGER)",
+        f"INSERT INTO _unp (schedule_id, district_id, by_id) SELECT s.id, s.district_id, ({newer})"
+        " FROM schedules s WHERE s.status = 'published' AND s.source_document_id IS NOT NULL"
+        f" AND s.school_year > {quote(current)} AND ({newer}) IS NOT NULL",
+        "UPDATE schedules SET status = 'superseded',"
+        " superseded_by = (SELECT by_id FROM _unp WHERE schedule_id = schedules.id)"
+        " WHERE id IN (SELECT schedule_id FROM _unp)",
+        *_refresh(stamp),
+    ]
 
 
 REJECTED_RETRY_DAYS = 90
