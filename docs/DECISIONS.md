@@ -1384,3 +1384,15 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   tính theo năm; bằng nhau cùng hạng.
 - Không đưa vào sitemap: sitemap chỉ gồm trang học khu có bảng published (nghiệm thu Công đoạn 7);
   trang xếp hạng được tìm thấy qua menu và liên kết.
+
+## D-117: Google Tag Manager và Google Analytics
+
+- Ngày: 2026-11-17. Chủ dự án yêu cầu gắn container `GTM-P9JG9HN2` bằng đoạn mã của chủ dự án
+  (`gtm.js?id=…` async và khởi tạo `dataLayer`/`gtag('js', …)`).
+- Chỉ production (`GTM_ID` trong `wrangler.jsonc`); bản xem trước và test không gắn.
+- CSP: thêm `https://www.googletagmanager.com`, `https://*.googletagmanager.com`,
+  `https://*.google-analytics.com`, `https://*.analytics.google.com` cho script, kết nối, ảnh; mã
+  khởi tạo nội tuyến cho phép theo hash (test giữ hash khớp). Thẻ "Custom HTML" trong GTM chạy mã
+  nội tuyến nên bị CSP chặn: dùng thẻ dựng sẵn (Google tag, GA4 Event).
+- Trang Privacy: thay câu "không đặt cookie" bằng mục Analytics (cookie `_ga`, dữ liệu Google nhận,
+  cách tắt). Chưa có banner đồng ý cookie (khán giả chính ở Mỹ); cần nếu nhắm EU hoặc gắn quảng cáo.
