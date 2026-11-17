@@ -71,6 +71,8 @@ const privacy: ContentPage = {
 <h2>Error reports</h2>
 <p>If you send an error report, we store the text you write and the page it refers to. We do not store your name, email address or IP address with the report. Please do not include personal information in the message. Reports are deleted ${REPORT_RETENTION_DAYS} days after they are sent.</p>
 <p>The report form uses Cloudflare Turnstile to block spam. Turnstile runs a check in your browser and is covered by <a href="https://www.cloudflare.com/turnstile-privacy-policy/" rel="noopener">Cloudflare’s Turnstile privacy addendum</a>.</p>
+<h2>District requests</h2>
+<p>If you select “Request this district” on a district without a schedule, we add one to that district’s request count for the day. Nothing about you is stored with it.</p>
 <h2>Server logs</h2>
 <p>The site runs on Cloudflare, which processes requests and keeps operational logs as described in <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare’s privacy policy</a>.</p>
 <p>To limit automated bulk downloading, the site counts requests from each IP address for one minute at a time. The count is kept in memory only and is not stored.</p>

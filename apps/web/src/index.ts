@@ -3,6 +3,7 @@
  * phía client chỉ dùng cho máy tính lương và sắp xếp bảng (`public/site.js`).
  */
 import {
+  countDistrictRequests,
   countDistrictsOfState,
   countSameNameInState,
   DISTRICT_SORTS,
@@ -38,6 +39,7 @@ import {
   REPORT_MAX_LENGTH,
   REPORT_MIN_LENGTH,
   REPORT_RETENTION_DAYS,
+  recordDistrictRequest,
   type Schedule,
   type SearchHit,
   type SortDirection,
@@ -103,6 +105,7 @@ import {
   districtPage,
   districtTitle,
   missingSchedulePage,
+  requestThanksPage,
   type Selection,
 } from "./views/district";
 import {
@@ -1069,7 +1072,8 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
       canonicalPath: base,
       noindex: true,
     };
-    return page(c, meta, missingSchedulePage(district), { control: PAGE_CACHE, tags });
+    const requests = await countDistrictRequests(c.env.DB, district.id);
+    return page(c, meta, missingSchedulePage(district, requests), { control: PAGE_CACHE, tags });
   }
   if (yearParam === latestYear) {
     c.header("Cache-Control", PAGE_CACHE);
@@ -1125,6 +1129,30 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
 }
 
 app.get("/:state/:district", (c) => districtRoute(c, null));
+
+/**
+ * "Request this district" (D-121): đếm một yêu cầu cho học khu chưa có bảng published. Không lưu gì
+ * về người gửi; giới hạn 5 lần/phút mỗi IP (guard.ts) và tối đa 20 lần/ngày mỗi học khu.
+ */
+app.post("/:state/:district/request", async (c) => {
+  const district = await getDistrictBySlug(
+    c.env.DB,
+    c.req.param("state") ?? "",
+    c.req.param("district") ?? "",
+  );
+  if (!district) {
+    return notFound(c);
+  }
+  const base = districtPath(district.state.slug, district.slug);
+  c.header("Cache-Control", NO_STORE);
+  const published = await listPublishedSchedules(c.env.DB, district.id);
+  if (published.length > 0) {
+    return c.redirect(base, 303);
+  }
+  await recordDistrictRequest(c.env.DB, district.id, new Date().toISOString().slice(0, 10));
+  const meta = { title: pageTitle(`Request recorded: ${district.name}`), noindex: true };
+  return page(c, meta, requestThanksPage(district), { control: NO_STORE });
+});
 
 app.get("/:state/:district/:year", (c) => {
   const year = c.req.param("year");

@@ -1884,3 +1884,15 @@ p.pairs span {
     display: none;
   }
 }
+
+/* "Request this district" trên trang học khu chưa có bảng (D-121). */
+.request-box {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.request-box h2 {
+  margin-top: 0;
+}
