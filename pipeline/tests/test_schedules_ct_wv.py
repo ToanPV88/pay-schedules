@@ -30,6 +30,7 @@ def test_ct_grids_and_blank_cells() -> None:
     assert bethel.school_year == "2025-26"
     assert [ln.label_raw for ln in bethel.lanes] == ["BA", "BA+15", "BA+30", "MA"]
     assert [bethel.amount(3, k) for k in range(4)] == [None, None, 8209400, 8441600]
+    assert bethel.cells[(3, 0)].note == ct_cea.BLANK
     # A heading over two lines: the second line names the last column.
     assert [ln.label_raw for ln in ridgefield.lanes] == ["BA", "BA 18", "BA 30/ MA", "YR 9"]
     assert ridgefield.amount(0, 3) == 6183400

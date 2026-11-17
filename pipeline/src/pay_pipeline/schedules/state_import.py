@@ -48,6 +48,11 @@ IMPORTERS = {
 # steps or lanes, a big change from last year) are published as reported, not held for a person
 # (D-028). Holds from a manual cross-check and structural problems still wait for review.
 AS_REPORTED = frozenset({"monotonic_step", "monotonic_lane", "start_change"})
+STATE_AS_REPORTED = {
+    # Connecticut contracts often start the grid above step 1 (frozen or retired lower steps,
+    # Bridgeport starts at 6): the book prints every row it has (D-071).
+    "CT": frozenset({"step_start"}),
+}
 
 STATE_KEY: dict[str, Callable[[str], str | None]] = {
     # 'CA-0161119' -> CDS '0161119'
@@ -411,7 +416,7 @@ def build_import(
                 source=doc,
                 importer=IMPORTERS[draft.state],
                 issues=issues,
-                as_reported=AS_REPORTED,
+                as_reported=AS_REPORTED | STATE_AS_REPORTED.get(draft.state, frozenset()),
             )
         )
     used = {p.source.asset_name for p in prepared}

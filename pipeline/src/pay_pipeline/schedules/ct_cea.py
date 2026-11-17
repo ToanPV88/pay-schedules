@@ -27,8 +27,10 @@ from pay_pipeline.schedules.model import (
 STATE = "CT"
 NOTES = (
     "Compiled by the Connecticut Education Association from the district's teacher contract."
-    " Blank cells: the lane has no pay at that step."
+    " A blank cell: the lane has no pay at that step."
 )
+
+BLANK = "No pay at this step in this lane"
 
 ALIASES = {"AMITY": "REGION 5"}
 """Book names of regional districts that the NCES directory lists by number."""
@@ -111,6 +113,15 @@ class _Grid:
                 if (i, k) in cells:
                     return None
                 cells[(i, k)] = Cell(a)
+        # A lane that starts higher or ends lower than the grid (BA ends at step 13, a doctorate
+        # lane starts at step 5) is blank there in the book. A blank between two amounts of a lane
+        # is left missing, so the check holds the grid for a person.
+        for k in range(len(columns)):
+            filled = [i for i in range(len(self.rows)) if (i, k) in cells]
+            if not filled:
+                return None
+            for i in [*range(filled[0]), *range(filled[-1] + 1, len(self.rows))]:
+                cells[(i, k)] = Cell(None, BLANK)
         return ScheduleDraft(
             state=STATE,
             state_district_id=district_key(self.name),

@@ -1283,3 +1283,8 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Hai sách không in mã học khu của bang, nên importer khớp theo tên trong NCES CCD (`NAME_KEY`);
   trùng tên thì học khu thường (LEA_TYPE 1) được ưu tiên.
 - MNEA Missouri không dùng được: chỉ có 3 mức lương mỗi lane, không phải bảng đầy đủ.
+- Sau lượt nạp thử (preview): 90/162 bảng CT bị giữ vì ô trống và bảng bắt đầu trên bậc 1. Ô trống ở
+  đầu hoặc cuối một lane (lane BA dừng ở bậc 13, lane tiến sĩ bắt đầu ở bậc 5) là cách hợp đồng in,
+  nên được ghi chú "No pay at this step in this lane"; ô trống nằm giữa hai số của cùng lane vẫn để
+  thiếu cho người xem. Với CT, `step_start` được publish như nguồn (D-028): sách in mọi hàng hợp đồng
+  có (Bridgeport bắt đầu ở bậc 6).
