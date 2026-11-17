@@ -1264,3 +1264,8 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Bổ sung (bộ đọc @16): lưới cột năm học chạy sang trang sau không lặp tiêu đề (Attica: bậc 1–4
   trang 25, 5–18 trang 26) được nối và lấy đúng cột đó (bậc chữ "I", "O" in thành "1", "0" vẫn nối
   được). Một cột lương duy nhất tên "Salary" không còn bị coi là nhãn lane thiếu tên.
+
+## D-070: Hợp đồng nhiều năm hiển thị năm học đang áp dụng
+
+- Ngày: 2026-11-17. Sửa D-058. Anh chọn hiển thị năm đang áp dụng thay vì năm sau: lấy năm mới
+  nhất không quá năm học hiện tại; nếu mọi năm đều ở tương lai thì lấy năm gần nhất. Bộ đọc @17.
