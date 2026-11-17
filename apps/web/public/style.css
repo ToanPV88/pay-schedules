@@ -1784,3 +1784,15 @@ nav.tabs a[aria-current="page"] {
   border-color: var(--accent);
   color: var(--accent-text);
 }
+
+/* Trang so sánh hai học khu (views/pair.ts). */
+.pair-table td {
+  font-variant-numeric: tabular-nums;
+}
+.pair-table thead th a {
+  font-weight: 700;
+}
+p.pairs span {
+  color: var(--muted);
+  margin-right: 0.25rem;
+}

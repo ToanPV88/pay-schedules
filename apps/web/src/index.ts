@@ -41,9 +41,11 @@ import {
   type Schedule,
   type SearchHit,
   type SortDirection,
+  type SummaryEntry,
   searchDistricts,
 } from "@pay-schedules/db";
 import { type Context, Hono } from "hono";
+import { html } from "hono/html";
 import {
   cachePurger,
   cacheTags,
@@ -81,6 +83,14 @@ import {
   locationFromParam,
   nearbyHits,
 } from "./nearby";
+import {
+  featuredPairs,
+  findEntry,
+  isCanonicalOrder,
+  isFeatured,
+  pairPath,
+  parsePair,
+} from "./pairs";
 import { latestSummaries, rankOf } from "./ranks";
 import { SECURITY_HEADERS } from "./security";
 import { verifyTurnstile } from "./turnstile";
@@ -120,6 +130,7 @@ import {
   statePage,
   TOP_LIMIT,
 } from "./views/pages";
+import { headToHead, pairSummary } from "./views/pair";
 import { districtPath, placeLine } from "./views/parts";
 import {
   MILESTONE_INFO,
@@ -527,7 +538,11 @@ app.get("/compare", async (c) => {
   };
   const tags = [TAG_COMPARE, ...entries.map((e) => districtTag(e.district.id))];
   const popular = entries.length === 0 ? await listLargestDistricts(c.env.DB, POPULAR_LIMIT) : [];
-  const body = comparePage({ entries, lanes, lane, steps, step, query, hits, popular });
+  const featured =
+    entries.length === 0
+      ? pairLinks(featuredPairs(await latestSummaries(c.env.DB)).slice(0, FEATURED_ON_COMPARE))
+      : [];
+  const body = comparePage({ entries, lanes, lane, steps, step, query, hits, popular, featured });
   return page(c, meta, body, { control: PAGE_CACHE, tags });
 });
 
@@ -799,6 +814,76 @@ app.get(`${VA_NURSE_PATH}/:station`, async (c) => {
   return page(c, meta, vaStationPage(name, tables), { control: PAGE_CACHE, tags: [TAG_FEDERAL] });
 });
 
+// ---------------------------------------------------------------- so sánh hai học khu (D-118)
+
+/** Số cặp nổi bật gợi ý trên /compare khi chưa chọn học khu. */
+const FEATURED_ON_COMPARE = 12;
+
+function pairLinks(pairs: [SummaryEntry, SummaryEntry][]): { href: string; label: string }[] {
+  return pairs.map(([a, b]) => ({ href: pairPath(a, b), label: `${a.name} vs ${b.name}` }));
+}
+
+app.get("/compare/:pair", async (c) => {
+  const parsed = parsePair(c.req.param("pair"));
+  if (!parsed) {
+    return notFound(c);
+  }
+  const all = await latestSummaries(c.env.DB);
+  const a = findEntry(all, parsed[0]);
+  const b = findEntry(all, parsed[1]);
+  if (!a || !b) {
+    return notFound(c);
+  }
+  if (!isCanonicalOrder(a, b)) {
+    c.header("Cache-Control", PAGE_CACHE);
+    return c.redirect(`${pairPath(b, a)}${new URL(c.req.url).search}`, 301);
+  }
+  const entries: CompareEntry[] = [];
+  for (const e of [a, b]) {
+    const district = await getDistrictBySlug(c.env.DB, e.stateSlug, e.slug);
+    if (!district) {
+      return notFound(c);
+    }
+    const [schedules, summary] = await Promise.all([
+      latestSchedules(c.env.DB, district),
+      getLatestSummary(c.env.DB, district.id),
+    ]);
+    entries.push({ district, schedule: schedules[0] ?? null, summary });
+  }
+  const lanes = laneOptions(entries);
+  const wanted = c.req.query("lane") ?? "";
+  const lane = lanes.includes(wanted) ? wanted : (lanes[0] ?? null);
+  const steps = Math.max(1, maxSteps(entries));
+  const step = positionToIndex(c.req.query("step"), steps) + 1;
+  const featured = isFeatured(featuredPairs(all), a, b);
+  const heading = `${a.name} vs ${b.name} teacher salary`;
+  const summaryText = pairSummary(a, b);
+  const path = pairPath(a, b);
+  const meta = {
+    title: pageTitle(`${a.name} vs ${b.name}: teacher salary schedules compared`),
+    description:
+      summaryText ||
+      `Teacher salary schedules of ${a.name} and ${b.name} side by side: starting pay, master’s step 10 and the top of the scale.`,
+    canonicalPath: path,
+    noindex: !featured || hasQuery(c),
+    script: true,
+  };
+  const body = comparePage({
+    entries,
+    lanes,
+    lane,
+    steps,
+    step,
+    query: "",
+    hits: [],
+    heading,
+    lede: html`${summaryText} <a href="${districtPath(a.stateSlug, a.slug)}">${a.name}</a> (${a.stateName}) and <a href="${districtPath(b.stateSlug, b.slug)}">${b.name}</a> (${b.stateName}), from each district’s latest published schedule.`,
+    before: headToHead(a, b, all),
+  });
+  const tags = [TAG_COMPARE, districtTag(a.id), districtTag(b.id)];
+  return page(c, meta, body, { control: PAGE_CACHE, tags });
+});
+
 // ---------------------------------------------------------------- xếp hạng (D-116)
 
 app.get("/rankings", async (c) => {
@@ -946,6 +1031,22 @@ async function districtRanks(
   };
 }
 
+/** Số cặp so sánh nổi bật liệt kê trên trang học khu. */
+const PAIRS_ON_DISTRICT = 5;
+
+/** Cặp so sánh nổi bật có học khu này (D-118). */
+async function districtPairs(
+  db: D1Database,
+  districtId: number,
+): Promise<{ href: string; label: string }[]> {
+  const all = await latestSummaries(db);
+  const own = featuredPairs(all).filter(([a, b]) => a.id === districtId || b.id === districtId);
+  return own.slice(0, PAIRS_ON_DISTRICT).map(([a, b]) => {
+    const other = a.id === districtId ? b : a;
+    return { href: pairPath(a, b), label: `vs ${other.name}` };
+  });
+}
+
 async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
   const district = await getDistrictBySlug(
     c.env.DB,
@@ -1009,6 +1110,7 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     demo: false,
     statePay,
     ranks,
+    pairs: await districtPairs(c.env.DB, district.id),
     sameNameInState: sameName > 1,
   };
   const meta = {

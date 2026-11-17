@@ -27,6 +27,12 @@ export interface ComparePageData {
   hits: SearchHit[];
   /** Học khu lớn có số liệu, gợi ý sẵn khi chưa chọn học khu nào. */
   popular?: LargeDistrict[];
+  /** Cặp so sánh nổi bật (trang /compare/<a>-vs-<b>), gợi ý khi chưa chọn học khu. */
+  featured?: { href: string; label: string }[];
+  /** Trang so sánh hai học khu: tiêu đề và phần đối đầu thay cho tiêu đề chung (D-118). */
+  heading?: string;
+  lede?: Html;
+  before?: Html;
 }
 
 /** Danh sách học khu gợi ý sẵn (thẻ bấm được), mỗi thẻ dẫn tới `hrefOf(key)`. */
@@ -207,10 +213,19 @@ ${quick}
 ${popularList(popular, (key) => comparePath([key], null, 1))}
 </section>`;
     }
+    const featured = data.featured ?? [];
+    const pairs =
+      featured.length > 0
+        ? html`<section aria-labelledby="pairs-heading">
+<h2 id="pairs-heading">Popular comparisons</h2>
+<ul class="chip-list">${featured.map((p) => html`<li><a href="${p.href}">${p.label}</a></li>`)}</ul>
+</section>`
+        : html``;
     return html`<h1>Compare salary schedules</h1>
 <p class="lede">Put up to ${MAX_COMPARE} districts side by side at the same step and education lane. Each row reads one cell from that district’s latest published schedule.</p>
 ${adder}
-${start}`;
+${start}
+${pairs}`;
   }
   const benchmarks: Html[] = [];
   for (const entry of data.entries) {
@@ -233,8 +248,13 @@ ${benchmarks}</tbody>
 </div>
 </section>`;
   }
-  return html`<h1>Compare salary schedules</h1>
-<p class="lede">Each row reads one cell from that district’s latest published schedule. Lanes are matched by education level; steps are matched by row position, so check each district’s own step label.</p>
+  const lede =
+    data.lede ??
+    html`Each row reads one cell from that district’s latest published schedule. Lanes are matched by education level; steps are matched by row position, so check each district’s own step label.`;
+  return html`<h1>${data.heading ?? "Compare salary schedules"}</h1>
+<p class="lede">${lede}</p>
+${data.before ?? html``}
+${data.heading ? html`<h2 id="same-cell-heading">Same step and lane</h2>` : html``}
 ${compareControls(data, keys)}
 <div class="table-scroll" role="region" aria-label="Comparison" tabindex="0">
 <table class="compare">

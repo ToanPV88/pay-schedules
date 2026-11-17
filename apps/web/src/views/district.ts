@@ -63,6 +63,8 @@ export interface DistrictPageData {
   statePay?: PayOverview | null;
   /** Hạng ở mốc khởi điểm và tối đa, trong bang và toàn quốc; chỉ có khi đang xem năm mới nhất. */
   ranks?: DistrictRanks | null;
+  /** Cặp so sánh nổi bật có học khu này (trang /compare/<a>-vs-<b>, D-118). */
+  pairs?: { href: string; label: string }[];
   /** Có học khu khác cùng tên trong bang: tiêu đề thêm thành phố. */
   sameNameInState?: boolean;
 }
@@ -437,7 +439,16 @@ ${rows}</tbody>
 </table>
 </div>
 ${compare}
+${pairList(data)}
 </section>`;
+}
+
+function pairList(data: DistrictPageData): Html {
+  const pairs = data.pairs ?? [];
+  if (pairs.length === 0) {
+    return html``;
+  }
+  return html`<p class="pairs"><span>Head-to-head:</span> ${pairs.map((p, i) => html`${i > 0 ? ", " : ""}<a href="${p.href}">${data.district.name} ${p.label}</a>`)}</p>`;
 }
 
 function detailSections(data: DistrictPageData): Html {
