@@ -120,6 +120,7 @@ export async function resetData(db: D1Database): Promise<void> {
       "extraction_runs",
       "source_documents",
       "district_neighbors",
+      "district_requests",
       "districts",
       "states",
     ].map((t) => db.prepare(`DELETE FROM ${t}`)),

@@ -1431,3 +1431,14 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   phần trăm học khu đã có bảng lương published: chưa có, dưới 10%, 10–24%, 25–49%, từ 50%. Mỗi ô là
   liên kết tới trang bang, có nhãn đầy đủ cho trình đọc màn hình. Danh sách bang giữ nguyên bên dưới.
 - HTML và CSS thuần (vị trí ô bằng thuộc tính style, CSP cho phép `style-src-attr`), không JavaScript.
+
+## D-121: "Request this district" cho học khu chưa có bảng lương
+
+- Ngày: 2026-11-17. Tính năng rút ra từ phân tích đối thủ (Public Paycheck có form "Request a job").
+- Trang học khu chưa có bảng published có nút "Request this district" (form POST, không cần
+  JavaScript) và số lần đã yêu cầu. Gửi xong hiện trang cảm ơn (noindex, no-store); học khu đã có
+  bảng thì chuyển 303 về trang học khu.
+- Bảng `district_requests` (migration 0012): chỉ (học khu, ngày, số lần). Không lưu IP, tên, email.
+  Tối đa 20 lần mỗi học khu mỗi ngày; giới hạn 5 lần gửi/phút mỗi IP như form báo lỗi (D-109).
+- Dùng để ưu tiên lấy dữ liệu: `listTopRequested(db, n)` (packages/db) trả học khu chưa có bảng được
+  yêu cầu nhiều nhất. Trang Privacy ghi thêm mục "District requests".

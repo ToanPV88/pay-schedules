@@ -668,7 +668,16 @@ ${adSlot(site, "page-end")}`;
 }
 
 /** Học khu có trong danh mục nhưng chưa có bảng published: trang này luôn noindex. */
-export function missingSchedulePage(district: District): Html {
+/** Trang cảm ơn sau khi gửi "Request this district" (D-121). */
+export function requestThanksPage(district: District): Html {
+  const base = districtPath(district.state.slug, district.slug);
+  return html`<h1>Thanks, your request is recorded</h1>
+<p class="lede">We count requests to decide which districts to add next. ${district.name} will be listed once we find and check its salary schedule.</p>
+<p>We did not store anything about you, only that the district was requested today.</p>
+<p><a href="${base}">Back to ${district.name}</a> · <a href="/${district.state.slug}">Other districts in ${district.state.name}</a></p>`;
+}
+
+export function missingSchedulePage(district: District, requests = 0): Html {
   const crumbs = breadcrumbs([
     { label: "Home", href: "/" },
     { label: district.state.name, href: `/${district.state.slug}` },
@@ -684,5 +693,12 @@ export function missingSchedulePage(district: District): Html {
 <p class="lede">${place}</p>
 <p class="notice"><strong>Schedule not found.</strong> We have not published a salary schedule for this district yet.</p>
 ${link}
+<section aria-labelledby="request-heading" class="request-box">
+<h2 id="request-heading">Want this district added?</h2>
+<p>Let us know you need it. Districts with more requests are added first.${requests > 0 ? ` Requested ${requests.toLocaleString("en-US")} ${requests === 1 ? "time" : "times"} so far.` : ""}</p>
+<form method="post" action="${districtPath(district.state.slug, district.slug)}/request">
+<button type="submit">Request this district</button>
+</form>
+</section>
 <p><a href="/${district.state.slug}">Other districts in ${district.state.name}</a></p>`;
 }

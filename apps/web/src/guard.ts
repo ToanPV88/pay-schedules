@@ -70,7 +70,7 @@ export function limitKind(method: string, pathname: string): LimitKind {
   if (pathname.startsWith("/schedules/")) {
     return "download";
   }
-  if (method === "POST" && pathname === "/report") {
+  if (method === "POST" && (pathname === "/report" || pathname.endsWith("/request"))) {
     return "form";
   }
   if (pathname.startsWith("/api/") || method === "POST") {
