@@ -75,10 +75,11 @@ export function featuredPairs(entries: SummaryEntry[]): [SummaryEntry, SummaryEn
   const list = eligible(entries);
   const pairs: [SummaryEntry, SummaryEntry][] = [];
   const top = list.slice(0, TOP_ALL_PAIRS);
-  for (let i = 0; i < top.length; i++) {
-    for (let j = i + 1; j < top.length; j++) {
+  // Theo khoảng cách hạng: (1,2), (2,3)… rồi (1,3), (2,4)…, để vài cặp đầu không cùng một học khu.
+  for (let gap = 1; gap < top.length; gap++) {
+    for (let i = 0; i + gap < top.length; i++) {
       const a = top[i];
-      const b = top[j];
+      const b = top[i + gap];
       if (a && b) {
         pairs.push([a, b]);
       }
