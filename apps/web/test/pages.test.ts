@@ -433,6 +433,7 @@ describe("tải CSV và câu hỏi thường gặp", () => {
     expect(data["@graph"].map((g) => g["@type"])).toEqual(["FAQPage", "BreadcrumbList", "Dataset"]);
     const dataset = data["@graph"][2] as unknown as Record<string, unknown>;
     expect(dataset.temporalCoverage).toBe("2025-07-01/2026-06-30");
+    expect(dataset.license).toBe("https://example.invalid/terms");
     expect(JSON.stringify(dataset.distribution)).toMatch(/\/schedules\/\d+\.csv/);
   });
 });

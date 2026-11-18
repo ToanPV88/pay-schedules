@@ -576,6 +576,8 @@ export function datasetNode(origin: string, data: DistrictPageData): object {
       `${district.name} salary`,
     ],
     isAccessibleForFree: true,
+    // Điều khoản dùng lại (D-112, D-122): Google khuyên Dataset có `license`.
+    license: `${origin}/terms`,
     distribution: data.schedules.flatMap((s) => [
       {
         "@type": "DataDownload",
