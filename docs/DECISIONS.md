@@ -1442,3 +1442,10 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   Tối đa 20 lần mỗi học khu mỗi ngày; giới hạn 5 lần gửi/phút mỗi IP như form báo lỗi (D-109).
 - Dùng để ưu tiên lấy dữ liệu: `listTopRequested(db, n)` (packages/db) trả học khu chưa có bảng được
   yêu cầu nhiều nhất. Trang Privacy ghi thêm mục "District requests".
+
+## D-122: Trường `license` trong JSON-LD Dataset
+
+- Ngày: 2026-11-18. Google Search Console báo vấn đề không nghiêm trọng "Trường license bị thiếu" ở
+  dữ liệu có cấu trúc Tập dữ liệu (Dataset) của trang học khu.
+- Thêm `license: <origin>/terms`: trang Điều khoản (D-112) ghi cách được dùng lại số liệu (trích dẫn
+  kèm nguồn, giữ dòng nguồn trong tệp tải, không đăng lại phần lớn các bảng khi chưa được phép).
