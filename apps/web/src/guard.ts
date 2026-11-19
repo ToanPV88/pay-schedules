@@ -175,7 +175,8 @@ export async function guard(c: Context<AppEnv>, next: Next): Promise<Response | 
   if (c.req.method === "GET" || c.req.method === "HEAD") {
     const target = canonicalSearch(url);
     if (target !== null) {
-      c.header("Cache-Control", "public, max-age=3600, s-maxage=86400");
+      // Chỉ trình duyệt lưu; không để bộ nhớ đệm dùng chung giữ phản hồi chuyển hướng (D-124).
+      c.header("Cache-Control", "private, max-age=3600");
       return c.redirect(target, 301);
     }
   }
