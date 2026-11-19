@@ -1449,3 +1449,13 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
   dữ liệu có cấu trúc Tập dữ liệu (Dataset) của trang học khu.
 - Thêm `license: <origin>/terms`: trang Điều khoản (D-112) ghi cách được dùng lại số liệu (trích dẫn
   kèm nguồn, giữ dòng nguồn trong tệp tải, không đăng lại phần lớn các bảng khi chưa được phép).
+
+## D-124: Phản hồi chuyển hướng không vào bộ nhớ đệm dùng chung
+
+- Ngày: 2026-11-19. Sự cố: trang chủ `https://payschedules.org/` lặp chuyển hướng, các trang khác
+  vẫn chạy. Nguyên nhân: bản 301 từ `workers.dev`/`www` về tên miền chính (D-113) có
+  `Cache-Control: public, max-age=86400`; bộ nhớ đệm của Worker (D-102) giữ nó dưới khóa không
+  phân biệt tên miền, rồi trả cho chính `payschedules.org/`.
+- Sửa: chuyển về tên miền chính dùng `private, max-age=86400`; chuyển hướng bỏ tham số lạ (D-108)
+  dùng `private, max-age=3600`. Bộ nhớ đệm dùng chung không lưu `private`; trình duyệt vẫn lưu.
+- Deploy phiên bản mới làm sạch bộ nhớ đệm cũ (mỗi phiên bản Worker có bộ nhớ đệm riêng).

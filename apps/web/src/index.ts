@@ -168,7 +168,9 @@ app.use("*", async (c, next) => {
   // Một tên miền chính (canonical.ts, D-113); chạy trước mọi việc khác.
   const target = canonicalRedirect(c.req.url, c.req.method, c.env.CANONICAL_ORIGIN);
   if (target !== null) {
-    c.header("Cache-Control", "public, max-age=86400");
+    // `private`: bộ nhớ đệm của Worker không phân biệt tên miền, nên bản 301 của workers.dev hay www
+    // mà được lưu sẽ bị trả cho cả payschedules.org thành vòng lặp (sự cố 2026-11-19, D-124).
+    c.header("Cache-Control", "private, max-age=86400");
     return c.redirect(target, 301);
   }
   await next();

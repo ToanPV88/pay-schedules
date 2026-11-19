@@ -26,6 +26,8 @@ describe("tên miền chính (D-113)", () => {
     const res = await request("/about?x=1", {}, { CANONICAL_ORIGIN: ORIGIN });
     expect(res.status).toBe(301);
     expect(res.headers.get("Location")).toBe("https://payschedules.org/about?x=1");
+    // Không để bộ nhớ đệm dùng chung giữ bản chuyển hướng (D-124).
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=86400");
     const same = await request("/about", {}, { CANONICAL_ORIGIN: "https://example.invalid" });
     expect(same.status).toBe(200);
   });

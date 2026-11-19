@@ -40,7 +40,7 @@ describe("chuẩn hoá tham số URL", () => {
     const res = await request("/about?x=123", { redirect: "manual" });
     expect(res.status).toBe(301);
     expect(res.headers.get("Location")).toBe("/about");
-    expect(res.headers.get("Cache-Control")).toContain("s-maxage");
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=3600");
     expect(res.headers.get("Content-Security-Policy")).not.toBeNull();
   });
 });
