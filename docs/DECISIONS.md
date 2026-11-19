@@ -1459,3 +1459,11 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Sửa: chuyển về tên miền chính dùng `private, max-age=86400`; chuyển hướng bỏ tham số lạ (D-108)
   dùng `private, max-age=3600`. Bộ nhớ đệm dùng chung không lưu `private`; trình duyệt vẫn lưu.
 - Deploy phiên bản mới làm sạch bộ nhớ đệm cũ (mỗi phiên bản Worker có bộ nhớ đệm riêng).
+
+## D-123: Ảnh pin Pinterest
+
+- Ngày: 2026-11-19. Chủ dự án yêu cầu đăng Pinterest để quảng bá site.
+- 5 ảnh dọc 1000 × 1500 (`apps/web/public/pins/*.jpg`) dựng bằng HTML/CSS rồi chụp bằng Chrome
+  headless, số liệu lấy từ site ngày 2026-11-19: giới thiệu (3.891 học khu, 50 bang và D.C., 24 triệu
+  học sinh), top 10 lương khởi điểm, top 10 MA bậc 10, máy tính lương, so sánh hai học khu. Mỗi pin
+  dẫn tới trang tương ứng. Ảnh nằm trên site để Pinterest lấy qua URL; số liệu không tự cập nhật.
