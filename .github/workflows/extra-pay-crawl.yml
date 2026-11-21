@@ -37,7 +37,7 @@ env:
 jobs:
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,7 +54,24 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - run: |
+          npm ci --no-audit --no-fund
+          (cd pipeline && uv sync --locked --no-dev)
+      - name: Known salary pages (work.json of the docs Releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/work" "$GITHUB_WORKSPACE/inputs"
+          gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/docs-production-" --paginate --jq '.[].ref' \
+            | sed 's#refs/tags/##' | while read -r tag; do
+              gh release download "$tag" -R "$GITHUB_REPOSITORY" -p work.json -O "$RUNNER_TEMP/work/$tag.json" 2>/dev/null || true
+            done
+          (cd pipeline && uv run --no-dev pay-pipeline extra-pay-seeds --work-dir "$RUNNER_TEMP/work" \
+            --out "$GITHUB_WORKSPACE/inputs/seeds.json") | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Read queue from D1
         working-directory: apps/web
         env:
@@ -105,7 +122,8 @@ jobs:
         working-directory: pipeline
         run: |
           uv run --no-dev pay-pipeline extra-pay-crawl --queue "$GITHUB_WORKSPACE/inputs/queue.json" \
-            --known "$GITHUB_WORKSPACE/inputs/known.json" --shard "$SHARD" --shards "$SHARDS" \
+            --known "$GITHUB_WORKSPACE/inputs/known.json" --seeds "$GITHUB_WORKSPACE/inputs/seeds.json" \
+            --shard "$SHARD" --shards "$SHARDS" \
             --out "$RUNNER_TEMP/out" --deadline-minutes 290 | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Read
         working-directory: pipeline
