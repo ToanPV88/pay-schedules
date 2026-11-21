@@ -66,3 +66,34 @@ def test_crawl_keeps_stipend_pdfs_and_respects_robots(tmp_path: Path) -> None:
     assert sorted(p.name for p in (tmp_path / "docs").iterdir()) == sorted(
         [*names, "manifest.json"]
     )
+
+
+def test_seed_page_is_crawled_and_seeds_from_work(tmp_path: Path) -> None:
+    from pay_pipeline.extra_pay.crawl import seeds_from_work
+
+    work = tmp_path / "work.json"
+    work.write_text(json.dumps([{"nces_id": "9900001", "candidates": [
+        {"found_on": f"{SITE}/deep/salaries", "score": 5},
+        {"found_on": f"{SITE}/sitemap.xml", "score": 5},
+        {"found_on": f"{SITE}/x", "score": 1}]}]))  # fmt: skip
+    seeds = seeds_from_work([work])
+    assert seeds == {"9900001": [f"{SITE}/deep/salaries"]}
+    seen: list[str] = []
+    base = _transport(seen)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == f"{SITE}/":
+            seen.append(str(request.url))
+            return httpx.Response(200, headers=HTML, html="<p>Welcome</p>")
+        if str(request.url) == f"{SITE}/deep/salaries":
+            seen.append(str(request.url))
+            link = f'<a href="{SITE}/files/stipends.pdf">Stipends</a>'
+            return httpx.Response(200, headers=HTML, html=link)
+        return base.handle_request(request)
+
+    out = tmp_path / "out"
+    queue = [{"nces_id": "9900001", "website": f"{SITE}/"}]
+    results = crawl(queue, out, set(), "ua", workers=1, seeds=seeds,
+                    transport=httpx.MockTransport(handler), sleep=lambda _: None)  # fmt: skip
+    assert results[0].status == "ok"
+    assert results[0].outcomes == [f"kept: {SITE}/files/stipends.pdf"]

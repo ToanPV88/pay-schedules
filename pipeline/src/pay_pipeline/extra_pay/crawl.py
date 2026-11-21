@@ -49,8 +49,8 @@ PAGE_WORDS = ("athletic", "activities", "coach", "stipend", "supplement", "extra
               "salary", "compensation", "negotiated", "bargaining", "board policy",
               "policies")  # fmt: skip
 
-MAX_PAGES = 20
-MAX_DOCS = 4
+MAX_PAGES = 30
+MAX_DOCS = 6
 MIN_SCORE = 2.0
 
 
@@ -86,19 +86,29 @@ class CrawlResult:
     tried: int = 0
     files: list[dict[str, Any]] = field(default_factory=list)
     detail: str = ""
+    candidates: list[str] = field(default_factory=list)
+    """Best candidates, "score url", to see why a district gave nothing."""
+    outcomes: list[str] = field(default_factory=list)
+    """What each tried candidate turned out to be: "kept", "not pdf", "no stipend page"..."""
 
 
 def crawl_one(
-    nces_id: str, website: str | None, fetcher: PoliteFetcher, docs: Path, known: set[str]
+    nces_id: str,
+    website: str | None,
+    fetcher: PoliteFetcher,
+    docs: Path,
+    known: set[str],
+    seeds: list[str] | None = None,
 ) -> CrawlResult:
     site = reachable_website(fetcher, website)
-    if not site:
+    if not site and not seeds:
         return CrawlResult(nces_id, website, "no_website" if not website else "unreachable")
     found = discover(
-        fetcher, nces_id, site, max_pages=MAX_PAGES,
-        doc_score=score_doc, page_score=score_page, table_pages=False,
+        fetcher, nces_id, site or (seeds or [""])[0], max_pages=MAX_PAGES,
+        doc_score=score_doc, page_score=score_page, table_pages=False, seeds=seeds or (),
     )  # fmt: skip
     result = CrawlResult(nces_id, site, found.status, pages=found.pages_fetched)
+    result.candidates = [f"{c.score:g} {c.url}"[:200] for c in found.candidates[:10]]
     if found.status != "ok":
         result.detail = "; ".join(found.errors[:2])[:300]
         return result
@@ -116,13 +126,16 @@ def crawl_one(
             if detect_kind(data) != "pdf":
                 inner = landing_target(data, response.final_url, cand.anchor_text)
                 if inner is None or inner in known:
+                    result.outcomes.append(f"{detect_kind(data)}: {cand.url}"[:200])
                     continue
                 response = fetcher.get(export_url(inner), headers=fetch_headers(inner))
                 data = response.content
             if detect_kind(data) != "pdf":
+                result.outcomes.append(f"{detect_kind(data)}: {cand.url}"[:200])
                 continue
         except FetchError as exc:
             errors.append(f"{cand.url}: {exc}"[:200])
+            result.outcomes.append(f"error: {cand.url}"[:200])
             continue
         sha = hashlib.sha256(data).hexdigest()
         name = f"{nces_id}-{sha[:12]}.pdf"
@@ -132,8 +145,11 @@ def crawl_one(
         path.write_bytes(data)
         s = survey_file(path)
         if s is None or s.scanned or not s.stipend_pages:
+            why = "scanned" if s is not None and s.scanned else "no stipend page"
+            result.outcomes.append(f"{why}: {cand.url}"[:200])
             path.unlink()
             continue
+        result.outcomes.append(f"kept: {cand.url}"[:200])
         result.files.append({
             "name": name, "url": cand.url, "final_url": response.final_url, "sha256": sha,
             "bytes": len(data),
@@ -151,6 +167,7 @@ def crawl(
     known: set[str],
     user_agent: str,
     *,
+    seeds: dict[str, list[str]] | None = None,
     workers: int = 16,
     deadline_seconds: float = 300 * 60,
     transport: httpx.BaseTransport | None = None,
@@ -173,7 +190,10 @@ def crawl(
             throttle, transport=transport, sleep=sleep, max_bytes=MAX_DOC_BYTES, max_retries=1
         ) as fetcher:
             try:
-                r = crawl_one(nces, row.get("website") or None, fetcher, docs, known)
+                r = crawl_one(
+                    nces, row.get("website") or None, fetcher, docs, known,
+                    (seeds or {}).get(nces),
+                )  # fmt: skip
             except Exception as exc:  # one district must not stop the batch
                 r = CrawlResult(nces, row.get("website"), "error", detail=f"{exc}"[:300])
         with lock:
@@ -190,3 +210,22 @@ def crawl(
         json.dumps([asdict(r) for r in ordered], indent=1) + "\n", encoding="utf-8"
     )
     return ordered
+
+
+def seeds_from_work(paths: list[Path], per_district: int = 3) -> dict[str, list[str]]:
+    """Pages where the teacher crawl found salary documents (``work.json`` in the docs Releases):
+    a district's stipend schedule is often listed on the same HR page."""
+    out: dict[str, list[str]] = {}
+    for path in paths:
+        try:
+            works = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for w in works:
+            pages = out.setdefault(str(w["nces_id"]), [])
+            for c in w.get("candidates", []):
+                page = str(c.get("found_on", ""))
+                good = c.get("score", 0) >= 2 and page.startswith("http")
+                if good and not page.endswith("sitemap.xml") and page not in pages:
+                    pages.append(page)
+    return {k: v[:per_district] for k, v in out.items() if v}

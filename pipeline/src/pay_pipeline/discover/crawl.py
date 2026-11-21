@@ -282,6 +282,7 @@ def discover(
     doc_score: Callable[[Link], float] = score_document,
     page_score: Callable[[Link], float] = score_page,
     table_pages: bool = True,
+    seeds: Iterable[str] = (),
 ) -> Discovery:
     """Best-first crawl of the district site for salary-schedule documents (D-027).
 
@@ -305,6 +306,10 @@ def discover(
     # Frontier of (priority, depth, url); best-first so salary pages are fetched early.
     frontier: list[tuple[float, int, str]] = [(10.0, 0, website)]
     seen: set[str] = {website}
+    for u in seeds:  # pages known to list pay documents (the teacher crawl's finds), after home
+        if u not in seen:
+            seen.add(u)
+            frontier.append((9.0, 1, u))
     home = website
     while frontier and result.pages_fetched < max_pages:
         frontier.sort(key=lambda x: (-x[0], x[1]))
@@ -315,8 +320,8 @@ def discover(
             result.errors.append(f"{url}: {exc}"[:300])
             continue
         result.pages_fetched += 1
+        result.status = "ok"
         if depth == 0:
-            result.status = "ok"
             home = response.final_url  # the site may redirect to another host
             sitemap = urljoin(home, "/sitemap.xml")
             pages: list[tuple[float, str]] = []

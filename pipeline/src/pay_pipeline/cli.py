@@ -301,9 +301,11 @@ def _cmd_extra_pay_crawl(args: argparse.Namespace) -> int:
     rows = _wrangler_rows(Path(args.queue))
     shard = [r for i, r in enumerate(rows) if i % args.shards == args.shard]
     known = {str(r["url"]) for r in _wrangler_rows(Path(args.known))} if args.known else set()
+    seeds = json.loads(Path(args.seeds).read_text()) if args.seeds else {}
     results = crawl.crawl(
-        shard, Path(args.out), known, user_agent(), deadline_seconds=args.deadline_minutes * 60
-    )
+        shard, Path(args.out), known, user_agent(), seeds=seeds,
+        deadline_seconds=args.deadline_minutes * 60,
+    )  # fmt: skip
     counts: dict[str, int] = {}
     for r in results:
         counts[r.status] = counts.get(r.status, 0) + 1
@@ -311,6 +313,15 @@ def _cmd_extra_pay_crawl(args: argparse.Namespace) -> int:
     print(
         f"lô {args.shard}: {len(results)}/{len(shard)} học khu, {files} tài liệu phụ cấp, {counts}"
     )
+    return 0
+
+
+def _cmd_extra_pay_seeds(args: argparse.Namespace) -> int:
+    from pay_pipeline.extra_pay import crawl
+
+    seeds = crawl.seeds_from_work(sorted(Path(args.work_dir).glob("*.json")))
+    Path(args.out).write_text(json.dumps(seeds, indent=0) + "\n", encoding="utf-8")
+    print(f"Trang lương đã biết: {len(seeds)} học khu")
     return 0
 
 
@@ -484,7 +495,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--shards", type=int, default=1)
     p.add_argument("--out", required=True)
     p.add_argument("--deadline-minutes", type=float, default=300)
+    p.add_argument("--seeds", help="JSON {nces_id: [trang]} từ extra-pay-seeds")
     p.set_defaults(func=_cmd_extra_pay_crawl)
+
+    p = sub.add_parser("extra-pay-seeds", help="Trang lương đã biết từ work.json (PLAN 11)")
+    p.add_argument("--work-dir", required=True, help="Thư mục chứa các tệp *.json (work.json)")
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=_cmd_extra_pay_seeds)
 
     p = sub.add_parser("extra-pay-build", help="Chọn bảng phụ cấp, SQL cho D1 (PLAN 11)")
     p.add_argument("--readings", required=True, help="Thư mục các tệp JSONL của extra-pay-read")
