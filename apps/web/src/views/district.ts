@@ -18,6 +18,7 @@ import { XLSX_TYPE, xlsxPath } from "../xlsx";
 import { payChart } from "./chart";
 import { faqSection } from "./faq";
 import { adSlot, breadcrumbs, type Html, type Site } from "./layout";
+import { morePayBlock } from "./extra";
 import { benchmarkRow, districtPath, placeLine } from "./parts";
 import {
   calculator,
@@ -67,6 +68,8 @@ export interface DistrictPageData {
   pairs?: { href: string; label: string }[];
   /** Có học khu khác cùng tên trong bang: tiêu đề thêm thành phố. */
   sameNameInState?: boolean;
+  /** Trang lương khác của học khu (phụ cấp HLV...), PLAN Công đoạn 11. */
+  morePay?: { href: string; label: string }[];
 }
 
 /** Số học khu tối thiểu để trung vị của bang đủ nghĩa khi so sánh. */
@@ -665,6 +668,7 @@ ${adSlot(site, "before-comparison")}
 ${neighborSection(data)}
 ${detailSections(data)}
 ${historySection(data)}
+${morePayBlock(data.morePay ?? [])}
 ${faqSection(site.origin, { ...yearFacts(data.schedules), district, year: data.year, schedules: data.schedules, summary: data.summary }, data.demo ? [] : [datasetNode(site.origin, data)])}
 ${adSlot(site, "page-end")}`;
 }

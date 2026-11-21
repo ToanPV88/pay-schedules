@@ -1459,3 +1459,17 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Sửa: chuyển về tên miền chính dùng `private, max-age=86400`; chuyển hướng bỏ tham số lạ (D-108)
   dùng `private, max-age=3600`. Bộ nhớ đệm dùng chung không lưu `private`; trình duyệt vẫn lưu.
 - Deploy phiên bản mới làm sạch bộ nhớ đệm cũ (mỗi phiên bản Worker có bộ nhớ đệm riêng).
+
+## D-125: Bảng phụ cấp HLV nạp thẳng published khi hai bộ đọc khớp và qua kiểm tra
+
+- Ngày: 2026-11-21. PLAN Công đoạn 11, đợt 1. Loại bảng mới `extra_duty` (migration 0013): hàng
+  là vị trí (Head Football Coach…), cột là mức kinh nghiệm hoặc một cột "Amount" (bảng không lane).
+- Nguồn: chỉ tài liệu đã có trong Release docs-* (quét 15.219 tài liệu, 1.249 học khu có trang phụ
+  cấp). Không crawl thêm ở bước này.
+- Một bảng được nạp khi: hai bộ đọc (`stipend-layout@1`, `stipend-plumber@1`) cho cùng hàng và số
+  tiền; ≥5 hàng, ≥2 tên hoạt động; mọi số tiền trong $50–$40.000; có năm học. Mỗi học khu lấy năm
+  học đang hiệu lực, rồi tài liệu nhiều hàng nhất. Bảng không qua thì chỉ ghi vào báo cáo, không vào
+  hàng chờ duyệt (chủ dự án không duyệt tay, D-034).
+- Mọi truy vấn trang giáo viên, tóm tắt, sitemap cũ, yêu cầu học khu chỉ đếm `schedule_type =
+  'teacher'`. Trang mới `/{state}/{district}/coaching-stipends` có canonical riêng, 404 khi không có
+  bảng, nằm trong `/sitemap-extra-pay.xml` (robots.txt liệt kê thêm); `/sitemap.xml` giữ nguyên.

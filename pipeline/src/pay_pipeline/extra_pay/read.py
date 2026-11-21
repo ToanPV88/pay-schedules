@@ -1,0 +1,243 @@
+"""Read coaching / extra-duty stipend tables from a district document (PLAN 11, đợt 1).
+
+A stipend table is a list of positions ("Football – Head Varsity") with one amount, or one amount
+per experience column ("Year 1" … "Year 6"). Rows are found line by line: a label of words, then
+amounts. A small integer before the first amount is a count of positions ("HS FOOTBALL ASST 7
+3,250") and is dropped; words after the amounts ("+13 days") are notes and are dropped. When a
+row prints any amount with "$", only "$" amounts count, so position codes ("1302") are not read
+as money. "N/A" or a dash in an amount column is an empty cell.
+
+Two readers see the same page (``pdftotext -layout`` and pdfplumber words, the readers of the
+teacher pipeline); a table is trusted only when both give the same rows and amounts (D-036).
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from pay_pipeline.documents.classify import school_years
+from pay_pipeline.extra_pay.survey import _ACTIVITY_RE, STIPEND_RANGE
+from pay_pipeline.pdf_pipeline.read import Line, Word, _cluster, layout_lines, plumber_lines
+
+READERS = ("stipend-layout@1", "stipend-plumber@1")
+
+_NUM = re.compile(r"^\(?(\$)?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?\)?\**$")
+_EMPTY = {"n/a", "na", "-", "–", "—", "--"}
+_LETTER = re.compile(r"[A-Za-z]")
+_NOT_A_ROW = re.compile(r"^(total|subtotal|page \d|step|years?|column|level)\b", re.I)
+MIN_ROWS = 5
+HEADER_REACH = 4  # lines above the first row searched for column headers
+COLUMN_GAP = {"stipend-layout@1": 3.0, "stipend-plumber@1": 9.0}
+
+
+@dataclass
+class Amount:
+    x0: float
+    x1: float
+    value: float | None  # None: printed empty ("N/A", "-")
+
+
+@dataclass
+class StipendRow:
+    label: str
+    amounts: list[Amount]
+    line_index: int
+
+
+@dataclass
+class StipendTable:
+    page: int
+    rows: list[StipendRow]
+    columns: list[str] = field(default_factory=list)
+    grid: list[list[float | None]] = field(default_factory=list)
+    context: str = ""
+
+
+def _number(word: str) -> tuple[bool, float] | None:
+    m = _NUM.match(word)
+    if not m:
+        return None
+    value = float(m.group(2).replace(",", "") + ("." + m.group(3) if m.group(3) else ""))
+    return (m.group(1) == "$", value)
+
+
+def parse_row(line: Line, index: int) -> StipendRow | None:
+    words = line.words
+    label: list[Word] = []
+    nums: list[tuple[Word, bool, float | None]] = []
+    for w in words:
+        if nums:
+            n = _number(w.text)
+            if n is not None:
+                nums.append((w, n[0], n[1]))
+            elif w.text.lower() in _EMPTY:
+                nums.append((w, False, None))
+            else:
+                break  # notes after the amounts
+            continue
+        n = _number(w.text)
+        if n is not None and label and (n[0] or "," in w.text or n[1] >= STIPEND_RANGE[0]):
+            nums.append((w, n[0], n[1]))
+        elif n is not None and label and n[1] < STIPEND_RANGE[0] and not n[0]:
+            continue  # a count of positions before the first amount
+        elif w.text.lower() in _EMPTY and label:
+            nums.append((w, False, None))
+        else:
+            label.append(w)
+    text = " ".join(w.text for w in label).strip(" :.-–")
+    if len(_LETTER.findall(text)) < 3 or _NOT_A_ROW.match(text):
+        return None
+    if any(dollar for _, dollar, _ in nums):
+        nums = [(w, d, v) for w, d, v in nums if d or v is None]
+    amounts = [Amount(w.x0, w.x1, v) for w, _, v in nums]
+    if not any(a.value is not None for a in amounts):
+        return None
+    return StipendRow(text, amounts, index)
+
+
+def find_tables(lines: list[Line], page: int) -> list[StipendTable]:
+    """Runs of stipend rows on a page; a run may skip up to two non-row lines (section titles)."""
+    tables: list[StipendTable] = []
+    run: list[StipendRow] = []
+    gap = 0
+    for i, line in enumerate(lines):
+        row = parse_row(line, i) if line.words else None
+        if row is not None:
+            run.append(row)
+            gap = 0
+            continue
+        if line.words:
+            gap += 1
+        if run and gap > 2:
+            tables.append(StipendTable(page, run))
+            run, gap = [], 0
+    if run:
+        tables.append(StipendTable(page, run))
+    return [t for t in tables if len(t.rows) >= MIN_ROWS]
+
+
+def build(table: StipendTable, lines: list[Line], reader: str) -> StipendTable | None:
+    """Columns from the amounts' right edges; headers from the lines just above the first row."""
+    edges = [a.x1 for r in table.rows for a in r.amounts]
+    columns = _cluster(edges, COLUMN_GAP[reader])
+    if len(columns) > 8:
+        return None
+    grid: list[list[float | None]] = []
+    for r in table.rows:
+        cells: list[float | None] = [None] * len(columns)
+        for a in r.amounts:
+            k = min(range(len(columns)), key=lambda j: abs(columns[j] - a.x1))
+            if cells[k] is not None:
+                return None  # two amounts in one column: the columns are not clear
+            cells[k] = a.value
+        grid.append(cells)
+    first = table.rows[0].line_index
+    header = lines[max(0, first - HEADER_REACH) : first]
+    spans = []
+    for k, edge in enumerate(columns):
+        xs = [a.x0 for r in table.rows for a in r.amounts if abs(a.x1 - edge) <= COLUMN_GAP[reader]]
+        spans.append((min(xs) - COLUMN_GAP[reader], edge + COLUMN_GAP[reader]))
+        del k
+    labels = []
+    for lo, hi in spans:
+        words = [w.text for ln in header for w in ln.words if w.x1 > lo and w.x0 < hi]
+        labels.append(" ".join(words).strip())
+    if len(columns) == 1:
+        labels = [labels[0] or "Amount"]
+    elif not all(labels) or len(set(labels)) < len(labels):
+        labels = [f"Column {k + 1}" for k in range(len(columns))]
+    table.columns = labels
+    table.grid = grid
+    table.context = "\n".join(ln.text for ln in lines[max(0, first - 8) : first])
+    return table
+
+
+_RUNNING_HEADER = re.compile(
+    r"school district|\bISD\b|\bCISD\b|public schools|unified|compensation (plan|manual)|"
+    r"salary (schedule|handbook)|^page \d+",
+    re.IGNORECASE,
+)
+
+
+def title_of(context: str) -> str:
+    """Lines printed above the table, without its column header line: "Campus Stipends — Dawson
+    High School". At most three lines, each squeezed to single spaces."""
+    lines = [re.sub(r"\s+", " ", ln).strip() for ln in context.split("\n")]
+    lines = [ln for ln in lines if _LETTER.search(ln)]
+    lines = lines[-4:-1] if len(lines) > 1 else lines
+    # The running header of the document (district name, plan name) says nothing about the table.
+    lines = [ln for ln in lines if not _RUNNING_HEADER.search(ln)]
+    return " — ".join(lines)[:200]
+
+
+def to_answer(table: StipendTable | None, page_text: str, reader: str) -> dict[str, Any]:
+    if table is None:
+        return {"reader": reader, "rows": []}
+    years = school_years(table.context) or school_years(page_text)
+    return {
+        "title": title_of(table.context),
+        "reader": reader,
+        "page": table.page,
+        "school_year": years[0] if years else None,
+        "columns": table.columns,
+        "rows": [
+            {"label": r.label, "amounts": g} for r, g in zip(table.rows, table.grid, strict=True)
+        ],
+    }
+
+
+def read_pages(pages: list[list[Line]], wanted: list[int], reader: str) -> list[dict[str, Any]]:
+    out = []
+    for p in wanted:
+        if not 1 <= p <= len(pages):
+            continue
+        lines = pages[p - 1]
+        text = "\n".join(ln.text for ln in lines)
+        for t in find_tables(lines, p):
+            built = build(t, lines, reader)
+            if built is not None:
+                out.append(to_answer(built, text, reader))
+    return out
+
+
+def read_document(
+    path: Path, pages: list[int]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Both readers' tables on the given pages of a text PDF."""
+    return (
+        read_pages(layout_lines(path), pages, READERS[0]),
+        read_pages(plumber_lines(path), pages, READERS[1]),
+    )
+
+
+def _key(answer: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(
+        (re.sub(r"\s+", " ", r["label"]).lower(), tuple(r["amounts"])) for r in answer["rows"]
+    )
+
+
+def agreed(a: list[dict[str, Any]], b: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Tables both readers read the same, rows and amounts (column labels may differ)."""
+    keys = {(x["page"], _key(x)) for x in b}
+    return [x for x in a if (x["page"], _key(x)) in keys]
+
+
+def check(answer: dict[str, Any]) -> list[str]:
+    """Reasons a stipend table is not published; empty when it passes."""
+    problems = []
+    rows = answer["rows"]
+    if len(rows) < MIN_ROWS:
+        problems.append(f"chỉ có {len(rows)} hàng")
+    acts = {m.group(1).lower() for r in rows for m in _ACTIVITY_RE.finditer(r["label"])}
+    if len(acts) < 2:
+        problems.append("ít hơn 2 môn hoặc hoạt động")
+    lo, hi = STIPEND_RANGE
+    bad = [v for r in rows for v in r["amounts"] if v is not None and not lo <= v <= hi]
+    if bad:
+        problems.append(f"số tiền ngoài khoảng ${lo:,}–${hi:,}: {bad[:3]}")
+    if not answer.get("school_year"):
+        problems.append("không thấy năm học")
+    return problems
