@@ -191,8 +191,11 @@ def prepare(
         titles: set[str] = set()
         for t in tables:
             draft = to_draft(t, cat.state, nces, cat.name)
-            if draft.title in titles:  # two tables, one title: tell them apart by page
-                draft.title = f"{draft.title} (page {t['page']})"
+            base, n = draft.title, 1
+            while draft.title in titles:  # two tables, one title: tell them apart by page
+                n += 1
+                part = f", part {n}" if n > 2 else ""
+                draft.title = f"{base} (page {t['page']}{part})"
             titles.add(draft.title)
             prepared.append(
                 Prepared(
