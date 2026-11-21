@@ -16,9 +16,9 @@ import { formatCents, payBasisNoun, safeHttpUrl, schoolYearLabel, sourceLanding 
 import { ordinal, type Rank, topPercent } from "../ranks";
 import { XLSX_TYPE, xlsxPath } from "../xlsx";
 import { payChart } from "./chart";
+import { morePayBlock } from "./extra";
 import { faqSection } from "./faq";
 import { adSlot, breadcrumbs, type Html, type Site } from "./layout";
-import { morePayBlock } from "./extra";
 import { benchmarkRow, districtPath, placeLine } from "./parts";
 import {
   calculator,
