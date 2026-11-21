@@ -31,7 +31,7 @@ Giao từng công đoạn một; mỗi công đoạn kết thúc bằng tiêu ch
 
 - Xuất tài liệu này ra Markdown và lưu vào repo mới dưới tên `docs/PLAN.md`, để Claude đọc lại ở mỗi phiên.
 - Công đoạn 0 chạy trong repo travienphi ở chế độ chỉ đọc. Từ Công đoạn 1 trở đi chạy trong repo mới.
-- Thứ tự phụ thuộc: 0 → 1 → 2 → 3 → 4 → 6 → 5 → 7 → 8 → 9 → 10. Website (6) làm trước pipeline PDF (5) để site ra mắt được với dữ liệu California và Kentucky.
+- Thứ tự phụ thuộc: 0 → 1 → 2 → 3 → 4 → 6 → 5 → 7 → 8 → 9 → 10 → 11 (Công đoạn 11 thêm ngày 2026-11-21, làm trước các nhóm nghề còn lại của 10). Website (6) làm trước pipeline PDF (5) để site ra mắt được với dữ liệu California và Kentucky.
 - Mọi quyết định kỹ thuật Claude tự đưa ra phải ghi vào `docs/DECISIONS.md` kèm lý do.
 - Chỗ nào tài liệu này ghi "Claude kiểm tra" là thông tin tôi chưa xác minh; Claude phải tra tài liệu chính thức trước khi code.
 
@@ -379,6 +379,91 @@ Nghiệm thu:
 - Sau migration, mọi trang giáo viên giữ nguyên URL và dữ liệu.
 - Chạy thử cảnh sát ở 50 thành phố đông dân nhất: có báo cáo tỉ lệ tìm thấy tài liệu, tỉ lệ qua Validate và chi phí.
 - Mỗi nhóm nghề có bộ chuẩn 20 bảng nhập tay; với các bảng được publish, từ 99% số ô khớp bộ chuẩn.
+
+## Công đoạn 11: phụ cấp huấn luyện viên, lương dạy thay và lương y tá bệnh viện
+
+Bổ sung ngày 2026-11-21 theo yêu cầu của chủ dự án. Công đoạn này mở rộng site theo hướng của
+Công đoạn 10, nhưng làm trước các nhóm cảnh sát, cứu hỏa và nhân viên thành phố. Lý do: mảng lịch
+năm học và tiền nước đã nhiều đối thủ, còn mảng bảng lương thì ít.
+
+- **Phụ cấp HLV và việc ngoài giờ:** chưa thấy site nào tổng hợp theo học khu. Hiện chỉ có báo
+  chí làm cơ sở dữ liệu lương HLV, mà những cơ sở đó kèm tên người.
+- **Lương dạy thay:** đối thủ salaryschedule.org đã có.
+- **Lương y tá theo bệnh viện:** chưa ai gom; y tá phải tự tìm hợp đồng công đoàn.
+
+### Nguyên tắc không ảnh hưởng các trang đã được Google index
+
+1. Chỉ thêm, không sửa. URL, title, H1 và vị trí bảng lương giáo viên trên trang học khu giữ
+   nguyên. Trang học khu chỉ thêm khối liên kết nhỏ tới trang con mới.
+2. Trang mới là trang con riêng, có canonical của chính nó. Route mới khai báo trước `/:state` và
+   `/:state/:district/:year`.
+3. Test bắt buộc trước khi merge: mọi URL trong `sitemap.xml` cũ vẫn trả về 200 và giữ canonical
+   cũ.
+4. `/sitemap.xml` giữ nguyên. Trang mới vào sitemap riêng (ví dụ `sitemap-pay-extra.xml`), khai
+   trong `robots.txt` và gửi trong Search Console.
+5. Trang chưa có dữ liệu đã kiểm tra thì đặt `noindex` và không vào sitemap, cùng quy tắc với
+   trang bang hiện nay. Không mở hàng loạt trang rỗng.
+6. Mở theo đợt. Theo dõi Search Console 2–4 tuần: lượt click của trang giáo viên không được giảm
+   vì đợt mới.
+
+### Đợt 1: phụ cấp HLV, việc ngoài giờ và lương dạy thay ở học khu đã có dữ liệu
+
+Nguồn:
+
+- Trước tiên quét lại tài liệu đã tải, lưu trong các Release `docs-*`. Nhiều file "salary
+  schedules" có sẵn trang phụ cấp hoặc dạy thay, nên không cần tải thêm từ website học khu.
+- Sau đó mới thêm một lượt tìm có chủ đích, với các từ "coaching stipend", "extra duty",
+  "substitute pay". Lượt này tách khỏi lượt tìm bảng lương giáo viên. `discover/crawl.py` đang coi
+  các từ đó là tiêu cực, và lượt giáo viên phải giữ nguyên như vậy.
+
+Dữ liệu:
+
+- Dùng chung `schedules`, `lanes`, `steps`, `cells`. `schedule_type` thêm `extra_duty`; giá trị
+  `substitute` đã có sẵn.
+- Phụ cấp: hàng là vị trí (ví dụ "Football – Head Varsity"), cột là mức kinh nghiệm. Bảng không
+  có mức thì chỉ có một cột "Amount". Số tiền là phụ cấp cho cả mùa hoặc cả năm, đúng như tài
+  liệu ghi.
+- Dạy thay: hàng là loại người dạy thay (có chứng chỉ, dài hạn…), cột là đơn vị (theo ngày, nửa
+  ngày, theo giờ). `pay_basis` ghi `daily` hoặc `hourly`.
+- Validate có khoảng hợp lý riêng cho mỗi loại: phụ cấp từ $50 đến $40.000; dạy thay từ $40 đến
+  $800 một ngày. Phụ cấp không bắt buộc tăng dần theo hàng. Không thu tên người.
+
+Website:
+
+- `/{state}/{district}/coaching-stipends` và `/{state}/{district}/substitute-teacher-pay`, theo
+  quy ước `/{state}/{employer}/{occupation}` của Công đoạn 10.
+- Trang học khu có khối "More pay at this district" liệt kê các trang con có dữ liệu.
+- Sau khi có đủ dữ liệu mới làm trang xếp hạng theo bang và theo môn, ví dụ "football coach
+  stipends in Texas" (đợt 3).
+
+Nghiệm thu đợt 1:
+
+- Test URL sitemap cũ qua. Không trang noindex nào nằm trong sitemap mới.
+- Có bộ chuẩn 20 bảng nhập tay cho mỗi loại. Với các bảng được publish, từ 99% số ô khớp bộ
+  chuẩn.
+- Có báo cáo: số học khu có phụ cấp và có lương dạy thay, tỉ lệ qua Validate, số phút Actions đã
+  dùng.
+
+### Đợt 2: lương y tá theo bệnh viện
+
+- Danh mục bệnh viện lấy từ dữ liệu bệnh viện của CMS, mỗi bệnh viện có mã CCN. Claude kiểm tra
+  đúng file và ghi URL vào `DECISIONS.md`.
+- Nguồn bảng lương:
+  - trang hợp đồng của công đoàn y tá;
+  - bảng lương công khai của bệnh viện công;
+  - kho hợp đồng của bang (ví dụ NJ PERC) và kho của Bộ Lao động (OLMS).
+
+  Không vượt mật khẩu hay tường đăng nhập của công đoàn.
+- Dữ liệu và trang dựng tiếp trên phần y tá VA đã có (`pay_tables`, D-065). URL là
+  `/nurses/{state}/{hospital}`.
+- Trang hiện lương theo giờ đúng như tài liệu; số quy đổi ra lương năm phải ghi rõ là quy đổi.
+- Mở đầu bằng vài trăm bệnh viện có bảng lương đầy đủ, không tạo trang cho bệnh viện chưa có dữ
+  liệu.
+
+### Đợt 3: trang xếp hạng
+
+- Phụ cấp HLV theo bang và theo môn, lương dạy thay theo bang, lương y tá theo bang.
+- Chỉ làm khi mỗi bang có đủ đơn vị để so sánh.
 
 ## Rủi ro và quyết định còn mở
 
