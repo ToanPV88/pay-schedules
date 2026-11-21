@@ -249,7 +249,7 @@ def test_wrapped_label_joins_its_amounts() -> None:
              _line("Head Golf", "$4,000"), _line("Head Tennis", "$4,000")]  # fmt: skip
     rows = find_tables(lines, 1)[0].rows  # type: ignore[arg-type]
     assert [(r.label, r.amounts[0].value) for r in rows][1] == (
-        "Head Baseball / Softball (1",
+        "Head Baseball / Softball",
         6500.0,
     )
 
