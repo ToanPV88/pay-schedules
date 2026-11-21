@@ -21,13 +21,14 @@ def _table(year: str, page: int, title: str = "", columns: list[str] | None = No
         {"label": "Band Director", "amounts": [None] * len(cols)},
         {"label": "Head Track Coach", "amounts": [3000.0] * len(cols)},
     ]
-    return {"reader": "stipend-layout@1", "page": page, "school_year": year, "title": title,
+    return {"reader": "stipend-layout@2", "page": page, "school_year": year, "title": title,
             "columns": cols, "rows": rows, "problems": []}  # fmt: skip
 
 
 def _doc(name: str, tables: list[dict], fetched: str = "2026-11-01T00:00:00Z") -> DocReading:
     return DocReading(
-        nces_id="9900001", asset_name=name, url=f"https://x.invalid/{name}", sha256=name * 8,
+        nces_id="9900001", asset_name=name, url=f"https://x.invalid/{name}",
+        sha256=(name.encode().hex() * 64)[:64],
         fetched_at=fetched, content_type="application/pdf", release_tag="docs-t",
         stipend_pages=[t["page"] for t in tables], tables=tables,
     )  # fmt: skip
@@ -133,3 +134,84 @@ def test_check_rejects_repeated_labels() -> None:
 
     t = _raw(["Amount"], [("HEAD COACH", [7500.0])] * 4 + [("Band Director", [2000.0])] * 2)
     assert any("trùng tên" in p for p in check(t))
+
+
+def _line(label: str, amount: str | None = None) -> object:
+    from pay_pipeline.pdf_pipeline.read import Line, Word
+
+    words = [Word(t, 10.0 + 40 * i, 40.0 + 40 * i) for i, t in enumerate(label.split())]
+    if amount:
+        words.append(Word(amount, 400.0, 440.0))
+    return Line(words)
+
+
+def test_heading_names_role_only_rows() -> None:
+    from pay_pipeline.extra_pay.read import find_tables
+
+    lines = [_line("Football"), _line("Head", "$5,000"), _line("Asst.", "$3,000"),
+             _line("Basketball"), _line("Head", "$4,500"), _line("Asst.", "$2,800"),
+             _line("Head Golf Coach", "$2,000")]  # fmt: skip
+    labels = [r.label for r in find_tables(lines, 1)[0].rows]  # type: ignore[arg-type]
+    assert labels == ["Football Head", "Football Asst", "Basketball Head", "Basketball Asst",
+                      "Head Golf Coach"]  # fmt: skip
+
+
+def test_document_year_from_cover() -> None:
+    from pay_pipeline.extra_pay.read import document_year
+
+    pages = [[_line("Negotiated Agreement 2025-2026")], [_line("Stipends")]]
+    assert document_year(pages) == "2025-26"  # type: ignore[arg-type]
+
+
+def test_clean_drops_sentences_but_flags_many() -> None:
+    from pay_pipeline.extra_pay.read import check, clean
+
+    good = [(f"Head {s} Coach", [1000.0]) for s in ["Football", "Track", "Golf", "Tennis", "Swim"]]
+    t = clean(_raw(["Amount"], [*good, ("Teachers are compensated", [187.0])]))
+    assert len(t["rows"]) == 5 and check(t) == []
+    t = clean(_raw(["Amount"], [*good, *[("monetary supplements", [500.0])] * 3]))
+    assert any("câu văn" in p for p in check(t))
+
+
+def test_future_year_is_not_published() -> None:
+    result, _ = prepare([_doc("d", [_table("2027-28", 3)])], CATALOG, TODAY)
+    assert result.prepared == []
+
+
+def _db() -> object:
+    import sqlite3
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    db = sqlite3.connect(":memory:")
+    db.execute("PRAGMA foreign_keys = ON")
+    for path in sorted((repo / "packages" / "db" / "migrations").glob("*.sql")):
+        db.executescript(path.read_text(encoding="utf-8"))
+    db.execute("INSERT INTO states (code, name, slug) VALUES ('ZZ', 'Zed', 'zed')")
+    db.execute(
+        "INSERT INTO districts (nces_id, name, slug, state)"
+        " VALUES ('9900001', 'Test ISD', 'test-isd', 'ZZ')"
+    )
+    return db
+
+
+def _load(db: object, docs: list[DocReading]) -> None:
+    from pay_pipeline.extra_pay.build import with_retire
+
+    result, _ = prepare(docs, CATALOG, TODAY)
+    sql = with_retire(schedules_sql(result, now=dt.datetime(2026, 11, 21, tzinfo=dt.UTC)))
+    db.executescript(";\n".join(sql) + ";")  # type: ignore[attr-defined]
+
+
+def test_reimport_retires_tables_no_longer_read() -> None:
+    db = _db()
+    _load(db, [_doc("d", [_table("2026-27", 3, "Athletics"), _table("2026-27", 4, "Clubs")])])
+    q = "SELECT title, status FROM schedules WHERE schedule_type = 'extra_duty' ORDER BY id"
+    assert db.execute(q).fetchall() == [("Athletics", "published"), ("Clubs", "published")]  # type: ignore[attr-defined]
+    _load(db, [_doc("d", [_table("2026-27", 3, "Athletics")])])
+    assert db.execute(q).fetchall() == [("Athletics", "published"), ("Clubs", "superseded")]  # type: ignore[attr-defined]
+    cells = db.execute(  # type: ignore[attr-defined]
+        "SELECT count(*) FROM cells c JOIN schedules s ON s.id = c.schedule_id"
+        " WHERE s.status = 'published'"
+    ).fetchone()[0]
+    assert cells == 5

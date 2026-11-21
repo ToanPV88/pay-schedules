@@ -22,7 +22,7 @@ from pay_pipeline.documents.classify import school_years
 from pay_pipeline.extra_pay.survey import _ACTIVITY_RE, STIPEND_RANGE
 from pay_pipeline.pdf_pipeline.read import Line, Word, _cluster, layout_lines, plumber_lines
 
-READERS = ("stipend-layout@1", "stipend-plumber@1")
+READERS = ("stipend-layout@2", "stipend-plumber@2")
 
 _NUM = re.compile(r"^\(?(\$)?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?\)?\**$")
 _EMPTY = {"n/a", "na", "-", "–", "—", "--"}
@@ -30,7 +30,7 @@ _LETTER = re.compile(r"[A-Za-z]")
 _NOT_A_ROW = re.compile(r"^(total|subtotal|page \d|step|years?|column|level)\b", re.I)
 MIN_ROWS = 5
 HEADER_REACH = 4  # lines above the first row searched for column headers
-COLUMN_GAP = {"stipend-layout@1": 3.0, "stipend-plumber@1": 9.0}
+COLUMN_GAP = {"stipend-layout@2": 3.0, "stipend-plumber@2": 9.0}
 
 
 @dataclass
@@ -98,17 +98,34 @@ def parse_row(line: Line, index: int) -> StipendRow | None:
     return StipendRow(text, amounts, index)
 
 
+_ROLE_ONLY = re.compile(
+    r"^(head|asst\.?|assistant|varsity|jv|junior varsity|freshman|9th grade|middle school|"
+    r"ms|hs|high school|coach|sponsor|advisor|director|co-?head)"
+    r"(\s+(head|asst\.?|assistant|varsity|jv|coach|sponsor|advisor|director|\d+(\.\d+)?))*$",
+    re.I,
+)
+_HEADING = re.compile(r"^[A-Za-z][A-Za-z/&'.\- ]{2,40}$")
+
+
 def find_tables(lines: list[Line], page: int) -> list[StipendTable]:
-    """Runs of stipend rows on a page; a run may skip up to two non-row lines (section titles)."""
+    """Runs of stipend rows on a page; a run may skip up to two non-row lines (section titles).
+    A short heading line ("Football") names the rows under it that only give a role ("Head",
+    "Asst."): those become "Football Head", "Football Asst."."""
     tables: list[StipendTable] = []
     run: list[StipendRow] = []
     gap = 0
+    heading = ""
     for i, line in enumerate(lines):
         row = parse_row(line, i) if line.words else None
         if row is not None:
+            if heading and _ROLE_ONLY.match(row.label):
+                row.label = f"{heading} {row.label}"
             run.append(row)
             gap = 0
             continue
+        text = line.text.strip() if line.words else ""
+        if text and _HEADING.match(text) and len(text.split()) <= 4:
+            heading = re.sub(r"\s+", " ", text)
         if line.words:
             gap += 1
         if run and gap > 2:
@@ -173,10 +190,14 @@ def title_of(context: str) -> str:
     return " — ".join(lines)[:200]
 
 
-def to_answer(table: StipendTable | None, page_text: str, reader: str) -> dict[str, Any]:
+def to_answer(
+    table: StipendTable | None, page_text: str, reader: str, doc_year: str | None = None
+) -> dict[str, Any]:
     if table is None:
         return {"reader": reader, "rows": []}
-    years = school_years(table.context) or school_years(page_text)
+    years = (
+        school_years(table.context) or school_years(page_text) or ([doc_year] if doc_year else [])
+    )
     return {
         "title": title_of(table.context),
         "reader": reader,
@@ -191,6 +212,7 @@ def to_answer(table: StipendTable | None, page_text: str, reader: str) -> dict[s
 
 def read_pages(pages: list[list[Line]], wanted: list[int], reader: str) -> list[dict[str, Any]]:
     out = []
+    doc_year = document_year(pages)
     for p in wanted:
         if not 1 <= p <= len(pages):
             continue
@@ -199,8 +221,23 @@ def read_pages(pages: list[list[Line]], wanted: list[int], reader: str) -> list[
         for t in find_tables(lines, p):
             built = build(t, lines, reader)
             if built is not None:
-                out.append(to_answer(built, text, reader))
+                out.append(to_answer(built, text, reader, doc_year))
     return out
+
+
+def document_year(pages: list[list[Line]]) -> str | None:
+    """The school year the document is for, when a table's page does not print one: the first
+    year on the first three pages (the cover), else the year printed on the most pages."""
+    texts = ["\n".join(ln.text for ln in lines) for lines in pages]
+    for text in texts[:3]:
+        years = school_years(text)
+        if years:
+            return years[0]
+    counts: dict[str, int] = {}
+    for text in texts:
+        for y in set(school_years(text)):
+            counts[y] = counts.get(y, 0) + 1
+    return max(counts, key=lambda y: (counts[y], y)) if counts else None
 
 
 def read_document(
@@ -235,6 +272,7 @@ _FOOTER = re.compile(
     r"december)\s+\d{1,2},?$",
     re.I,
 )
+_FRAGMENT = re.compile(r"\b(are|is|will|shall|must|may be|be paid|per the)\b", re.I)
 _HEADER_WORDS = re.compile(
     r"\b(amount|position|assignment|stipend type|number|rate|activity|description)\b", re.I
 )
@@ -263,6 +301,15 @@ def clean(answer: dict[str, Any]) -> dict[str, Any]:
         for r in answer["rows"]
         if not _FOOTER.search(r["label"])
     ]
+    # Sentences and the wrapped tail of a label read as rows: "Teachers are compensated 187".
+    fragments = [r for r in rows if _FRAGMENT.search(r["label"]) or not r["label"][:1].isalnum()
+                 or r["label"][:1].islower()]  # fmt: skip
+    rows = [r for r in rows if r not in fragments]
+    lo = STIPEND_RANGE[0]
+    small = [r for r in rows if any(v is not None and v < lo for v in r["amounts"])]
+    if small and len(small) <= 0.25 * len(rows):
+        # Per-game or hourly rates printed among season stipends: left out, the rest kept.
+        rows = [r for r in rows if r not in small]
     cols = list(answer["columns"])
     keep = [j for j in range(len(cols)) if any(r["amounts"][j] is not None for r in rows)]
     cols = [cols[j] for j in keep]
@@ -280,16 +327,28 @@ def clean(answer: dict[str, Any]) -> dict[str, Any]:
         cols = ["Amount"]
     parts = [p for p in answer.get("title", "").split(" — ") if _title_part(p)]
     title = " — ".join(parts)
-    return {**answer, "columns": cols, "rows": rows, "title": title}
+    return {**answer, "columns": cols, "rows": rows, "title": title, "dropped": len(fragments)}
+
+
+_DUTY_RE = re.compile(
+    r"\b(sponsor|advisor|adviser|club|coordinator|department chair|grade level chair|"
+    r"student council|national honor society|mentor|newspaper|academic decathlon|"
+    r"science fair|spelling bee|math|chess|esports|orchestra|theat(?:er|re)|speech|"
+    r"forensics|scholastic|quiz bowl|destination imagination|ffa|fbla|deca|hosa|skills ?usa)",
+    re.I,
+)
 
 
 def check(answer: dict[str, Any]) -> list[str]:
     """Reasons a stipend table is not published; empty when it passes."""
     problems = []
     rows = answer["rows"]
+    if answer.get("dropped", 0) > 0.2 * (len(rows) + answer.get("dropped", 0)):
+        problems.append("nhiều dòng là câu văn hoặc nhãn bị ngắt dòng")
     if len(rows) < MIN_ROWS:
         problems.append(f"chỉ có {len(rows)} hàng")
     acts = {m.group(1).lower() for r in rows for m in _ACTIVITY_RE.finditer(r["label"])}
+    acts |= {m.group(1).lower() for r in rows for m in _DUTY_RE.finditer(r["label"])}
     if len(acts) < 2:
         problems.append("ít hơn 2 môn hoặc hoạt động")
     lo, hi = STIPEND_RANGE
