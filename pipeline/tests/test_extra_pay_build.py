@@ -126,3 +126,10 @@ def test_check_rejects_unnamed_columns_and_percent_rows() -> None:
 def test_old_school_year_is_not_published() -> None:
     result, outcomes = prepare([_doc("d", [_table("2023-24", 3)])], CATALOG, TODAY)
     assert result.prepared == [] and outcomes[0].status == "no_table"
+
+
+def test_check_rejects_repeated_labels() -> None:
+    from pay_pipeline.extra_pay.read import check
+
+    t = _raw(["Amount"], [("HEAD COACH", [7500.0])] * 4 + [("Band Director", [2000.0])] * 2)
+    assert any("trùng tên" in p for p in check(t))
