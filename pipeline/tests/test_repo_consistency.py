@@ -24,7 +24,10 @@ SECRET_STEP_COMMAND = {
     "CLOUDFLARE_API_TOKEN": ("wrangler",),
     "REVIEW_PASSWORD": ("wrangler secret put REVIEW_PASSWORD",),
     "PURGE_TOKEN": ("wrangler secret put PURGE_TOKEN",),
-    "GOOGLE_API_KEY": ("pay-pipeline pdf-gather",),  # Drive API, chỉ đọc file công khai (D-059)
+    "GOOGLE_API_KEY": (
+        "pay-pipeline pdf-gather",
+        "pay-pipeline extra-pay-crawl",
+    ),  # Drive API, chỉ đọc file công khai (D-059)
 }
 # Job duy nhất được ghi repo: tạo Release chứa tệp nguồn (D-014). Không ra Internet, không secret.
 WRITE_JOBS = {
