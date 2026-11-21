@@ -295,6 +295,25 @@ def _cmd_extra_pay_read(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_extra_pay_crawl(args: argparse.Namespace) -> int:
+    from pay_pipeline.extra_pay import crawl
+
+    rows = _wrangler_rows(Path(args.queue))
+    shard = [r for i, r in enumerate(rows) if i % args.shards == args.shard]
+    known = {str(r["url"]) for r in _wrangler_rows(Path(args.known))} if args.known else set()
+    results = crawl.crawl(
+        shard, Path(args.out), known, user_agent(), deadline_seconds=args.deadline_minutes * 60
+    )
+    counts: dict[str, int] = {}
+    for r in results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+    files = sum(len(r.files) for r in results)
+    print(
+        f"lô {args.shard}: {len(results)}/{len(shard)} học khu, {files} tài liệu phụ cấp, {counts}"
+    )
+    return 0
+
+
 def _cmd_extra_pay_build(args: argparse.Namespace) -> int:
     from dataclasses import replace
 
@@ -457,6 +476,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seen", required=True)
     p.add_argument("--out", required=True, help="Tệp JSONL, ghi nối")
     p.set_defaults(func=_cmd_extra_pay_read)
+
+    p = sub.add_parser("extra-pay-crawl", help="Tìm tài liệu phụ cấp HLV trên website (PLAN 11)")
+    p.add_argument("--queue", required=True, help="nces_id, website từ D1 (JSON wrangler)")
+    p.add_argument("--known", help="url đã có trong source_documents (JSON wrangler)")
+    p.add_argument("--shard", type=int, default=0)
+    p.add_argument("--shards", type=int, default=1)
+    p.add_argument("--out", required=True)
+    p.add_argument("--deadline-minutes", type=float, default=300)
+    p.set_defaults(func=_cmd_extra_pay_crawl)
 
     p = sub.add_parser("extra-pay-build", help="Chọn bảng phụ cấp, SQL cho D1 (PLAN 11)")
     p.add_argument("--readings", required=True, help="Thư mục các tệp JSONL của extra-pay-read")

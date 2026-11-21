@@ -13,7 +13,7 @@ All requests go through a polite fetcher: robots.txt, per-host delay, size limit
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlsplit
@@ -278,6 +278,10 @@ def discover(
     website: str | None,
     max_pages: int = 25,
     max_depth: int = 2,
+    *,
+    doc_score: Callable[[Link], float] = score_document,
+    page_score: Callable[[Link], float] = score_page,
+    table_pages: bool = True,
 ) -> Discovery:
     """Best-first crawl of the district site for salary-schedule documents (D-027).
 
@@ -291,7 +295,7 @@ def discover(
     candidates: dict[str, Candidate] = {}
 
     def add(link: Link, found_on: str, method: str) -> None:
-        s = score_document(link)
+        s = doc_score(link)
         if s < 1:
             return
         old = candidates.get(link.url)
@@ -320,7 +324,7 @@ def discover(
                 if is_document_url(u):
                     add(Link(u, ""), sitemap, "sitemap")
                 elif same_site(u, home) and u not in seen:
-                    priority = score_page(Link(u, ""))
+                    priority = page_score(Link(u, ""))
                     if priority >= DEEP_PRIORITY:
                         pages.append((priority, u))
             for priority, u in sorted(pages, key=lambda x: (-x[0], x[1]))[:SITEMAP_SEEDS]:
@@ -338,14 +342,14 @@ def discover(
         if depth == 0:
             result.home_url, result.home_bytes = response.final_url, len(response.content)
             result.home_links = len(links)
-        if salary_table_page(response.content) is not None:
+        if table_pages and salary_table_page(response.content) is not None:
             # The page itself holds the schedule as an HTML table (D-046).
             add(Link(response.final_url, "salary schedule table"), response.final_url, "crawl")
         for link in links:
             if is_document_url(link.url):
                 add(link, response.final_url, "crawl")
             elif link.url not in seen and same_site(link.url, home):
-                priority = score_page(link)
+                priority = page_score(link)
                 deeper = depth < max_depth or (depth == max_depth and priority >= DEEP_PRIORITY)
                 if depth == 0:
                     result.home_same_site += 1
