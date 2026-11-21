@@ -35,6 +35,7 @@ WRITE_JOBS = {
     ("pdf-pipeline.yml", "archive"): {"contents": "write"},
     ("pdf-pipeline-resume.yml", "archive"): {"contents": "write", "actions": "read"},
     ("pdf-eval.yml", "publish-report"): {"contents": "write"},
+    ("extra-pay-crawl.yml", "archive"): {"contents": "write"},
 }
 SECRET_REF = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}$")
