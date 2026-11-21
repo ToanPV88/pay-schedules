@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -37,25 +38,35 @@ from pay_pipeline.pdf_pipeline.gather import (
     reachable_website,
 )
 
-STIPEND_WORDS = ("stipend", "supplement", "extra duty", "extra-duty", "extraduty",
-                 "extracurricular", "extra-curricular", "co-curricular", "cocurricular",
-                 "coaching", "coach", "athletic", "activity pay", "activities pay",
-                 "additional pay", "addendum", "extended duty")  # fmt: skip
-PAY_WORDS = ("salary", "salaries", "pay", "schedule", "scale", "compensation", "rates")
+STRONG_WORDS = ("stipend", "supplemental pay", "supplement schedule", "supplements",
+                "supplement handbook", "extra duty", "extra-duty", "extraduty",
+                "extracurricular pay", "extra-curricular pay", "co-curricular pay",
+                "activity pay", "activities pay", "extended duty", "compensation handbook",
+                "compensation manual", "compensation plan", "pay plan")  # fmt: skip
+ACTIVITY_WORDS = ("athletic", "coach", "extracurricular", "extra-curricular", "co-curricular",
+                  "cocurricular", "supplement", "addendum")  # fmt: skip
+PAY_WORDS = ("salary", "salaries", " pay", "pay ", "scale", "compensation", "rates", "stipend",
+             "wage")  # fmt: skip
 NEGATIVE = ("calendar", "menu", "lunch", "bus ", "transportation", "nutrition", "roster",
             "physical", "concussion", "eligibility", "handbook for parents", "game schedule",
-            "tickets", "booster", "camp", "registration", "forms", "permission")  # fmt: skip
-PAGE_WORDS = ("athletic", "activities", "coach", "stipend", "supplement", "extra duty",
-              "salary", "compensation", "negotiated", "bargaining", "board policy",
-              "policies")  # fmt: skip
+            "game", "tickets", "booster", "camp", "registration", "forms", "permission",
+            "insurance", "scholar", "fee", "donation", "tax credit", "partnership", "of-the-week",
+            "of the week", "certificate", "emergency", "retiree", "leave form",
+            "police")  # fmt: skip
+PAGE_PAY_WORDS = ("stipend", "supplement", "extra duty", "salary", "salaries", "compensation",
+                  "negotiated", "bargaining", "pay schedule", "pay scale")  # fmt: skip
+PAGE_WORDS = ("athletic", "activities", "board policy", "policies")
 
 MAX_PAGES = 30
 MAX_DOCS = 6
-MIN_SCORE = 2.0
+MIN_SCORE = 3.0
 
 
 def _text(link: Link) -> str:
-    return f"{link.text} {link.url}".lower().replace("%20", " ").replace("_", " ")
+    """Anchor text and URL, words split: "CompensationHandbook", "Supplement-Handbook"."""
+    raw = f"{link.text} {link.url}".replace("%20", " ")
+    raw = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", raw)
+    return re.sub(r"[-_+]+", " ", raw).lower()
 
 
 def _has(text: str, words: tuple[str, ...]) -> int:
@@ -65,16 +76,19 @@ def _has(text: str, words: tuple[str, ...]) -> int:
 def score_doc(link: Link) -> float:
     """Higher = more likely a stipend schedule (or an agreement that holds one)."""
     t = _text(link)
-    score = 3.0 * bool(_has(t, STIPEND_WORDS)) + 1.0 * bool(_has(t, PAY_WORDS))
-    score += 2.0 * bool(_has(t, CONTRACT_WORDS))
+    pay = bool(_has(t, PAY_WORDS))
+    score = 4.0 * bool(_has(t, STRONG_WORDS))
+    score += 2.0 * bool(_has(t, ACTIVITY_WORDS) and pay)  # "coach" alone is the athletics site
+    score += 1.0 * pay + 2.0 * bool(_has(t, CONTRACT_WORDS))
     score += 1.0 * bool(YEAR_RE.search(t))
     return score - 3.0 * _has(t, NEGATIVE)
 
 
 def score_page(link: Link) -> float:
     t = _text(link)
-    score = 2.0 * bool(_has(t, PAGE_WORDS)) + 1.0 * bool(_has(t, NAV_WORDS))
-    return score - 1.0 * bool(_has(t, NEGATIVE))
+    score = 3.0 * bool(_has(t, PAGE_PAY_WORDS)) + 1.0 * bool(_has(t, PAGE_WORDS))
+    score += 1.0 * bool(_has(t, NAV_WORDS))
+    return score - 2.0 * bool(_has(t, NEGATIVE))
 
 
 @dataclass
