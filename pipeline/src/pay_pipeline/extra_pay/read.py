@@ -306,6 +306,9 @@ def check(answer: dict[str, Any]) -> list[str]:
     cells = [v for r in rows for v in r["amounts"]]
     if cells and sum(v is not None for v in cells) < 0.9 * len(cells):
         problems.append("bảng nhiều cột thiếu quá 10% ô")
+    labels = [re.sub(r"\W+", " ", r["label"]).strip().lower() for r in rows]
+    if rows and len(set(labels)) < 0.8 * len(labels):
+        problems.append("nhiều hàng trùng tên (thiếu tên môn)")
     if any(_PERCENT.search(r["label"]) for r in rows):
         problems.append("phụ cấp tính theo phần trăm lương")
     return problems
