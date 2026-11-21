@@ -13,6 +13,7 @@ teacher pipeline); a table is trusted only when both give the same rows and amou
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -88,7 +89,7 @@ def parse_row(line: Line, index: int) -> StipendRow | None:
         else:
             label.append(w)
     text = " ".join(w.text for w in label).strip(" :.-–")
-    if len(_LETTER.findall(text)) < 3 or _NOT_A_ROW.match(text):
+    if len(_LETTER.findall(text)) < 3 or _NOT_A_ROW.match(text) or _FOOTER.search(text):
         return None
     if any(dollar for _, dollar, _ in nums):
         nums = [(w, d, v) for w, d, v in nums if d or v is None]
@@ -107,6 +108,12 @@ _ROLE_ONLY = re.compile(
 _HEADING = re.compile(r"^[A-Za-z][A-Za-z/&'.\- ]{2,40}$")
 
 
+def _amounts_only(line: Line) -> bool:
+    return bool(line.words) and all(
+        _number(w.text) is not None or w.text.lower() in _EMPTY for w in line.words
+    )
+
+
 def find_tables(lines: list[Line], page: int) -> list[StipendTable]:
     """Runs of stipend rows on a page; a run may skip up to two non-row lines (section titles).
     A short heading line ("Football") names the rows under it that only give a role ("Head",
@@ -115,8 +122,16 @@ def find_tables(lines: list[Line], page: int) -> list[StipendTable]:
     run: list[StipendRow] = []
     gap = 0
     heading = ""
+    label_line: Line | None = None
     for i, line in enumerate(lines):
         row = parse_row(line, i) if line.words else None
+        if row is None and label_line is not None and _amounts_only(line):
+            # A label wrapped onto its own line above its amounts: "Head Baseball / Softball (1"
+            # then "$6,500 $6,550 $6,600".
+            row = parse_row(Line(label_line.words + line.words), i)
+            if row is not None:
+                gap = max(0, gap - 1)
+        label_line = line if row is None and line.words and not _amounts_only(line) else None
         if row is not None:
             if heading and _ROLE_ONLY.match(row.label):
                 row.label = f"{heading} {row.label}"
@@ -213,6 +228,7 @@ def to_answer(
 def read_pages(pages: list[list[Line]], wanted: list[int], reader: str) -> list[dict[str, Any]]:
     out = []
     doc_year = document_year(pages)
+    headers: dict[int, list[str]] = {}  # column headers last seen, by number of columns
     for p in wanted:
         if not 1 <= p <= len(pages):
             continue
@@ -220,9 +236,20 @@ def read_pages(pages: list[list[Line]], wanted: list[int], reader: str) -> list[
         text = "\n".join(ln.text for ln in lines)
         for t in find_tables(lines, p):
             built = build(t, lines, reader)
-            if built is not None:
-                out.append(to_answer(built, text, reader, doc_year))
+            if built is None:
+                continue
+            n = len(built.columns)
+            if n > 1 and all(_unnamed(c) for c in built.columns) and n in headers:
+                # A table continued from an earlier page prints its column headers only once.
+                built.columns = list(headers[n])
+            elif n > 1 and not any(_unnamed(c) for c in built.columns):
+                headers[n] = list(built.columns)
+            out.append(to_answer(built, text, reader, doc_year))
     return out
+
+
+def _unnamed(column: str) -> bool:
+    return bool(re.fullmatch(r"Column \d+", column) or re.search(r"\$\s*\d", column))
 
 
 def document_year(pages: list[list[Line]]) -> str | None:
@@ -292,10 +319,29 @@ def _title_part(part: str) -> bool:
     )
 
 
-def clean(answer: dict[str, Any]) -> dict[str, Any]:
+def year_columns(answer: dict[str, Any], today: dt.date) -> dict[str, Any]:
+    """Columns headed by school years ("FY 25 FY 26 FY 27", "2024-25 2025-26"): the table is one
+    amount per position for each year. Only the column of the year in force is kept."""
+    cols = answer["columns"]
+    years = [school_years(c) for c in cols]
+    if len(cols) < 2 or any(len(y) != 1 for y in years) or len({y[0] for y in years}) < len(cols):
+        return answer
+    now = today.year if today.month >= 7 else today.year - 1
+    starts = [int(y[0][:4]) for y in years]
+    usable = [j for j, s in enumerate(starts) if s <= now]
+    if not usable:
+        return answer
+    j = max(usable, key=lambda k: starts[k])
+    rows = [{**r, "amounts": [r["amounts"][j]]} for r in answer["rows"]]
+    rows = [r for r in rows if r["amounts"][0] is not None]
+    return {**answer, "columns": ["Amount"], "rows": rows, "school_year": years[j][0]}
+
+
+def clean(answer: dict[str, Any], today: dt.date | None = None) -> dict[str, Any]:
     """Tidy one agreed table before the checks: columns no row fills are dropped (a stray "$" or
     a percentage printed apart), a lone column is "Amount", labels lose a trailing "$", and a
     column header or title line that holds an amount (a data row read as a header) is dropped."""
+    answer = year_columns(answer, today or dt.datetime.now(dt.UTC).date())
     rows = [
         {**r, "label": re.sub(r"[\s$]+$", "", r["label"])}
         for r in answer["rows"]
@@ -339,6 +385,26 @@ _DUTY_RE = re.compile(
 )
 
 
+_PERSON = re.compile(r"^([A-Z][A-Za-z'\-]+(?:[ -][A-Z][A-Za-z'\-]+)?),\s*([A-Z][A-Za-z'\-]+)\b")
+_ROLE_WORD = re.compile(
+    r"\b(head|assistant|asst|varsity|jv|coach|director|sponsor|advisor|chair|coordinator|"
+    r"club|team|grade|school|elementary|middle|high|freshman|level|class|program|band|choir|"
+    r"boys|girls|men|women|coed|co-ed|offensive|defensive|lead|chief|senior|junior|"
+    r"fall|winter|spring|summer|per|each|all|ms|hs|es|jh|sr|jr)\b",
+    re.I,
+)
+
+
+def _not_person(label: str) -> bool:
+    """A comma after an activity or a role ("Softball, JV", "Class Sponsor, 10th") is no name."""
+    head, _, rest = label.partition(",")
+    first = rest.strip().split(" ", 1)[0] if rest.strip() else ""
+    return bool(
+        _ACTIVITY_RE.search(head) or _DUTY_RE.search(head) or _ROLE_WORD.search(head)
+        or _ROLE_WORD.fullmatch(first.strip(".()")) or not first[:1].isalpha()
+    )  # fmt: skip
+
+
 def check(answer: dict[str, Any]) -> list[str]:
     """Reasons a stipend table is not published; empty when it passes."""
     problems = []
@@ -365,6 +431,10 @@ def check(answer: dict[str, Any]) -> list[str]:
     cells = [v for r in rows for v in r["amounts"]]
     if cells and sum(v is not None for v in cells) < 0.9 * len(cells):
         problems.append("bảng nhiều cột thiếu quá 10% ô")
+    named = [r for r in rows if _PERSON.match(r["label"]) and not _not_person(r["label"])]
+    if named:
+        # A list of employees by name ("ALLISON, HEATHER ..."): never published (privacy).
+        problems.append("danh sách tên cá nhân")
     labels = [re.sub(r"\W+", " ", r["label"]).strip().lower() for r in rows]
     if rows and len(set(labels)) < 0.8 * len(labels):
         problems.append("nhiều hàng trùng tên (thiếu tên môn)")

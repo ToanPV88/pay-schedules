@@ -226,3 +226,39 @@ def test_three_tables_one_title_one_page_get_distinct_titles() -> None:
     db = _db()
     _load(db, [_doc("d", tables)])
     _load(db, [_doc("d", tables)])  # loading again is safe
+
+
+def test_year_columns_keep_the_year_in_force() -> None:
+    from pay_pipeline.extra_pay.read import year_columns
+
+    t = _raw(
+        ["FY 25", "FY 26", "FY 27", "FY 28"], [("Head Football", [8500.0, 8550.0, 8600.0, 8650.0])]
+    )
+    out = year_columns(t, TODAY)
+    assert out["columns"] == ["Amount"] and out["school_year"] == "2026-27"
+    assert out["rows"][0]["amounts"] == [8600.0]
+    steps = _raw(["Step 1", "Step 2"], [("Head Football", [1.0, 2.0])])
+    assert year_columns(steps, TODAY) is steps
+
+
+def test_wrapped_label_joins_its_amounts() -> None:
+    from pay_pipeline.extra_pay.read import find_tables
+
+    lines = [_line("Head Football", "$8,500"), _line("Head Baseball / Softball (1"),
+             _line("", "$6,500"), _line("perschool)"), _line("Head Track", "$5,000"),
+             _line("Head Golf", "$4,000"), _line("Head Tennis", "$4,000")]  # fmt: skip
+    rows = find_tables(lines, 1)[0].rows  # type: ignore[arg-type]
+    assert [(r.label, r.amounts[0].value) for r in rows][1] == (
+        "Head Baseball / Softball (1",
+        6500.0,
+    )
+
+
+def test_names_of_people_are_never_published() -> None:
+    from pay_pipeline.extra_pay.read import check
+
+    rows = [(f"Head {s} Coach", [1000.0]) for s in ["Football", "Track", "Golf", "Tennis"]]
+    ok = _raw(["Amount"], [*rows, ("Powerlifting, Head Coach", [900.0]), ("Softball, JV", [800.0])])
+    assert check(ok) == []
+    bad = _raw(["Amount"], [*rows, ("SMITH, JOHN Head Coach", [900.0])])
+    assert any("tên cá nhân" in p for p in check(bad))
