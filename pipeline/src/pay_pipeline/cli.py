@@ -268,6 +268,20 @@ def _cmd_pdf_eval(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_extra_pay_survey(args: argparse.Namespace) -> int:
+    from pay_pipeline.extra_pay import survey
+
+    seen_path = Path(args.seen)
+    seen = set(seen_path.read_text().split()) if seen_path.exists() else set()
+    manifest = Path(args.manifest) if args.manifest else None
+    rows = survey.survey_dir(Path(args.docs), manifest, seen)
+    n = survey.write_jsonl(rows, Path(args.out))
+    seen_path.write_text("\n".join(sorted(seen)) + "\n")
+    print(f"{n} tài liệu; {sum(bool(r.stipend_pages) for r in rows)} có trang phụ cấp, "
+          f"{sum(bool(r.substitute_pages) for r in rows)} có trang dạy thay")  # fmt: skip
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pay-pipeline")
     parser.add_argument("--version", action="version", version=__version__)
@@ -370,6 +384,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--docs", required=True, help="Thư mục chứa tài liệu của bộ chuẩn")
     p.add_argument("--report", required=True)
     p.set_defaults(func=_cmd_pdf_eval)
+
+    p = sub.add_parser("extra-pay-survey", help="Đếm tài liệu có trang phụ cấp, dạy thay (PLAN 11)")
+    p.add_argument("--docs", required=True, help="Thư mục tài liệu đã giải nén từ docs.tar")
+    p.add_argument("--manifest", help="manifest.json của Release (URL, SHA-256)")
+    p.add_argument(
+        "--seen", required=True, help="Tệp tên tài liệu đã quét, để bỏ trùng giữa các Release"
+    )
+    p.add_argument("--out", required=True, help="Tệp JSONL, ghi nối")
+    p.set_defaults(func=_cmd_extra_pay_survey)
     return parser
 
 
