@@ -28,8 +28,11 @@ from pay_pipeline.schedules.state_import import (
     RunRecord,
     SourceDocument,
 )
+from pay_pipeline.schedules.validate import current_school_year_start
 
 SCHEDULE_TYPE = "extra_duty"
+MAX_AGE_YEARS = 2
+"""Oldest school year published, counted back from the current one (2024-25 in 2026-27)."""
 EMPTY_NOTE = "Not printed in the document (N/A)"
 
 
@@ -64,7 +67,7 @@ def read_dir(docs: Path, manifest: Path, release_tag: str, seen: set[str]) -> li
         except Exception as exc:  # a broken file is skipped, not fatal
             print(f"bỏ qua {path.name}: {type(exc).__name__}: {exc}"[:300])
             continue
-        agreed = sr.agreed(a, b)
+        agreed = [sr.clean(t) for t in sr.agreed(a, b)]
         tables = [{**t, "problems": sr.check(t)} for t in agreed]
         out.append(
             DocReading(
@@ -108,6 +111,8 @@ def _good(r: DocReading, today: dt.date) -> list[dict[str, Any]]:
     if not ok:
         return []
     year = year_in_force({t["school_year"] for t in ok}, today)
+    if school_year_start(year) < current_school_year_start(today) - MAX_AGE_YEARS:
+        return []
     out, keys = [], set()
     for t in ok:
         k = (t["title"], sr._key(t))

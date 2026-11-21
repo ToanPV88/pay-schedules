@@ -88,3 +88,41 @@ def test_title_drops_running_header() -> None:
         "Pearland Independent School District\nCampus Stipends\nDAWSON HIGH SCHOOL\nPosition Amount"
     )
     assert title_of(ctx) == "Campus Stipends — DAWSON HIGH SCHOOL"
+
+
+def _raw(columns: list[str], rows: list[tuple[str, list[float | None]]]) -> dict:
+    return {"page": 1, "school_year": "2026-27", "title": "", "columns": columns,
+            "rows": [{"label": lab, "amounts": a} for lab, a in rows]}  # fmt: skip
+
+
+def test_clean_collapses_scattered_single_amounts_and_drops_footer() -> None:
+    from pay_pipeline.extra_pay.read import check, clean
+
+    t = clean(
+        _raw(
+            ["Column 1", "Column 2"],
+            [("Head Football Coach $", [None, 6500.0]), ("Head Track Coach", [3000.0, None]),
+             ("Head Volleyball Coach", [None, 4200.0]), ("Band Director", [2000.0, None]),
+             ("Head Soccer Coach", [None, 2500.0]), ("Board Approved: June 25,", [None, 2026.0])],
+        )
+    )  # fmt: skip
+    assert t["columns"] == ["Amount"]
+    assert t["rows"][0]["label"] == "Head Football Coach"
+    assert len(t["rows"]) == 5 and check(t) == []
+
+
+def test_check_rejects_unnamed_columns_and_percent_rows() -> None:
+    from pay_pipeline.extra_pay.read import check, clean
+
+    rows = [(f"Head {s} Coach", [1000.0, 2000.0]) for s in ["Football", "Track", "Golf", "Tennis"]]
+    t = clean(
+        _raw(["Column 1", "Column 2"], [*rows, ("Athletic Director 14.00%", [4858.0, 4958.0])])
+    )
+    problems = check(t)
+    assert any("tiêu đề cột" in p for p in problems)
+    assert any("phần trăm" in p for p in problems)
+
+
+def test_old_school_year_is_not_published() -> None:
+    result, outcomes = prepare([_doc("d", [_table("2023-24", 3)])], CATALOG, TODAY)
+    assert result.prepared == [] and outcomes[0].status == "no_table"
