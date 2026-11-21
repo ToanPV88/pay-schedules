@@ -225,6 +225,64 @@ def agreed(a: list[dict[str, Any]], b: list[dict[str, Any]]) -> list[dict[str, A
     return [x for x in a if (x["page"], _key(x)) in keys]
 
 
+_GENERIC_COLUMN = re.compile(r"^Column \d+$")
+_MONEY_IN = re.compile(r"\$\s*\d|\d[\d,]*\.\d\d\b")
+
+
+_FOOTER = re.compile(
+    r"\b(board approved|approved|revised|effective|adopted|updated)\b|^page\b|"
+    r"\b(january|february|march|april|may|june|july|august|september|october|november|"
+    r"december)\s+\d{1,2},?$",
+    re.I,
+)
+_HEADER_WORDS = re.compile(
+    r"\b(amount|position|assignment|stipend type|number|rate|activity|description)\b", re.I
+)
+
+
+def _title_part(part: str) -> bool:
+    """A heading, not prose or a column header: starts with a capital or digit, no amount,
+    no column-header words, does not end a sentence, at most ten words."""
+    part = part.strip()
+    return bool(
+        part
+        and (part[0].isupper() or part[0].isdigit())
+        and not _MONEY_IN.search(part)
+        and not _HEADER_WORDS.search(part)
+        and not part.endswith(".")
+        and len(part.split()) <= 10
+    )
+
+
+def clean(answer: dict[str, Any]) -> dict[str, Any]:
+    """Tidy one agreed table before the checks: columns no row fills are dropped (a stray "$" or
+    a percentage printed apart), a lone column is "Amount", labels lose a trailing "$", and a
+    column header or title line that holds an amount (a data row read as a header) is dropped."""
+    rows = [
+        {**r, "label": re.sub(r"[\s$]+$", "", r["label"])}
+        for r in answer["rows"]
+        if not _FOOTER.search(r["label"])
+    ]
+    cols = list(answer["columns"])
+    keep = [j for j in range(len(cols)) if any(r["amounts"][j] is not None for r in rows)]
+    cols = [cols[j] for j in keep]
+    rows = [{**r, "amounts": [r["amounts"][j] for j in keep]} for r in rows]
+    unnamed = all(_GENERIC_COLUMN.match(c) or _MONEY_IN.search(c) for c in cols)
+    if (
+        len(cols) > 1
+        and unnamed
+        and all(sum(v is not None for v in r["amounts"]) == 1 for r in rows)
+    ):
+        # One amount per row, landing in different columns: the "$" or a cent part printed apart.
+        cols = ["Amount"]
+        rows = [{**r, "amounts": [next(v for v in r["amounts"] if v is not None)]} for r in rows]
+    if len(cols) == 1:
+        cols = ["Amount"]
+    parts = [p for p in answer.get("title", "").split(" — ") if _title_part(p)]
+    title = " — ".join(parts)
+    return {**answer, "columns": cols, "rows": rows, "title": title}
+
+
 def check(answer: dict[str, Any]) -> list[str]:
     """Reasons a stipend table is not published; empty when it passes."""
     problems = []
@@ -240,4 +298,17 @@ def check(answer: dict[str, Any]) -> list[str]:
         problems.append(f"số tiền ngoài khoảng ${lo:,}–${hi:,}: {bad[:3]}")
     if not answer.get("school_year"):
         problems.append("không thấy năm học")
+    cols = answer["columns"]
+    if len(cols) > 1 and any(_GENERIC_COLUMN.match(c) or _MONEY_IN.search(c) for c in cols):
+        problems.append("nhiều cột nhưng không đọc được tiêu đề cột")
+    if any(all(v is None for v in r["amounts"]) for r in rows):
+        problems.append("có hàng không có số tiền")
+    cells = [v for r in rows for v in r["amounts"]]
+    if cells and sum(v is not None for v in cells) < 0.9 * len(cells):
+        problems.append("bảng nhiều cột thiếu quá 10% ô")
+    if any(_PERCENT.search(r["label"]) for r in rows):
+        problems.append("phụ cấp tính theo phần trăm lương")
     return problems
+
+
+_PERCENT = re.compile(r"\d\s*%")
