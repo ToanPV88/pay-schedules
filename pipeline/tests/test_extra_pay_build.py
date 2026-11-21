@@ -215,3 +215,14 @@ def test_reimport_retires_tables_no_longer_read() -> None:
         " WHERE s.status = 'published'"
     ).fetchone()[0]
     assert cells == 5
+
+
+def test_three_tables_one_title_one_page_get_distinct_titles() -> None:
+    rows = _table("x", 0)["rows"]
+    tables = [{**_table("2026-27", 4), "rows": rows[i:] + rows[:i]} for i in range(3)]
+    result, _ = prepare([_doc("d", tables)], CATALOG, TODAY)
+    titles = [p.draft.title for p in result.prepared]
+    assert len(titles) == 3 and len(set(titles)) == 3
+    db = _db()
+    _load(db, [_doc("d", tables)])
+    _load(db, [_doc("d", tables)])  # loading again is safe
