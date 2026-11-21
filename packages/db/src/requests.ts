@@ -50,7 +50,8 @@ export async function listTopRequested(
          FROM district_requests r
          JOIN districts d ON d.id = r.district_id
         WHERE NOT EXISTS (SELECT 1 FROM schedules s
-                           WHERE s.district_id = d.id AND s.status = 'published')
+                           WHERE s.district_id = d.id AND s.status = 'published'
+                             AND s.schedule_type = 'teacher')
         GROUP BY d.id
         ORDER BY requests DESC, d.name
         LIMIT ?`,

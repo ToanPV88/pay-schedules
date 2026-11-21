@@ -282,6 +282,59 @@ def _cmd_extra_pay_survey(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_extra_pay_read(args: argparse.Namespace) -> int:
+    from pay_pipeline.extra_pay import build
+
+    seen_path = Path(args.seen)
+    seen = set(seen_path.read_text().split()) if seen_path.exists() else set()
+    rows = build.read_dir(Path(args.docs), Path(args.manifest), args.tag, seen)
+    n = build.write_readings(rows, Path(args.out))
+    seen_path.write_text("\n".join(sorted(seen)) + "\n")
+    ok = sum(any(not t["problems"] for t in r.tables) for r in rows)
+    print(f"{args.tag}: {n} tài liệu có trang phụ cấp, {ok} có bảng qua kiểm tra")
+    return 0
+
+
+def _cmd_extra_pay_build(args: argparse.Namespace) -> int:
+    from dataclasses import replace
+
+    from pay_pipeline.extra_pay import build
+    from pay_pipeline.schedules.d1sql import schedules_sql
+    from pay_pipeline.schedules.state_import import load_catalog
+
+    readings = build.load_readings(sorted(Path(args.readings).glob("*.jsonl")))
+    catalog = load_catalog(Path(args.catalog))
+    today = dt.datetime.now(dt.UTC).date()
+    result, outcomes = build.prepare(readings, catalog, today)
+    out = Path(args.sql_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    # One SQL file per group of districts: each file stays small enough for one wrangler call.
+    districts = sorted({p.nces_id for p in result.prepared})
+    for n, start in enumerate(range(0, len(districts), args.chunk)):
+        group = set(districts[start : start + args.chunk])
+        part = replace(
+            result,
+            prepared=[p for p in result.prepared if p.nces_id in group],
+            sources=[s for s in result.sources if s.district_nces in group],
+            runs=[r for r in result.runs or [] if any(
+                s.sha256 == r.sha256 for s in result.sources if s.district_nces in group
+            )],
+        )  # fmt: skip
+        sql = schedules_sql(part)
+        (out / f"extra-pay-{n:03d}.sql").write_text(";\n".join(sql) + ";\n", encoding="utf-8")
+    counts: dict[str, int] = {}
+    for o in outcomes:
+        counts[o.status] = counts.get(o.status, 0) + 1
+    lines = ["# Phụ cấp HLV và việc ngoài giờ (PLAN 11)", ""]
+    lines += [f"- {k}: {v} học khu" for k, v in sorted(counts.items())]
+    lines += [f"- Bảng nạp: {len(result.prepared)}", ""]
+    lines += ["| NCES | Kết quả | Chi tiết |", "|---|---|---|"]
+    lines += [f"| {o.nces_id} | {o.status} | {o.detail.replace('|', '/')} |" for o in outcomes]
+    Path(args.report).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines[:8]))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pay-pipeline")
     parser.add_argument("--version", action="version", version=__version__)
@@ -393,6 +446,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--out", required=True, help="Tệp JSONL, ghi nối")
     p.set_defaults(func=_cmd_extra_pay_survey)
+
+    p = sub.add_parser(
+        "extra-pay-read", help="Đọc bảng phụ cấp trong tài liệu một Release (PLAN 11)"
+    )
+    p.add_argument("--docs", required=True)
+    p.add_argument("--manifest", required=True)
+    p.add_argument("--tag", required=True, help="Tên Release chứa tài liệu")
+    p.add_argument("--seen", required=True)
+    p.add_argument("--out", required=True, help="Tệp JSONL, ghi nối")
+    p.set_defaults(func=_cmd_extra_pay_read)
+
+    p = sub.add_parser("extra-pay-build", help="Chọn bảng phụ cấp, SQL cho D1 (PLAN 11)")
+    p.add_argument("--readings", required=True, help="Thư mục các tệp JSONL của extra-pay-read")
+    p.add_argument("--catalog", required=True, help="nces_id, state, name, active từ D1 (JSON)")
+    p.add_argument("--sql-dir", required=True, help="Thư mục ghi các tệp extra-pay-NNN.sql")
+    p.add_argument("--chunk", type=int, default=100, help="Số học khu mỗi tệp SQL")
+    p.add_argument("--report", required=True)
+    p.set_defaults(func=_cmd_extra_pay_build)
     return parser
 
 

@@ -105,7 +105,8 @@ const HAS_SCHEDULE = `EXISTS (SELECT 1 FROM schedules p
 const LATEST_SUMMARY = `ds.district_id = d.id AND ds.school_year = (
          SELECT MAX(x.school_year) FROM district_summary x
            JOIN schedules sx ON sx.id = x.schedule_id
-          WHERE x.district_id = d.id AND sx.status = 'published')`;
+          WHERE x.district_id = d.id AND sx.status = 'published'
+            AND sx.schedule_type = 'teacher')`;
 
 const SUMMARY_COLUMNS =
   "ds.school_year, ds.start_ba_cents, ds.ma_step10_cents, ds.max_salary_cents";
@@ -331,6 +332,47 @@ interface PublishedRow {
   school_year: string;
   title: string;
   published_at: string | null;
+}
+
+const SQL_EXTRA_DUTY = `
+  SELECT id, school_year, title, published_at
+    FROM schedules
+   WHERE district_id = ?1 AND status = 'published' AND schedule_type = 'extra_duty'
+     AND school_year = (SELECT MAX(school_year) FROM schedules
+                         WHERE district_id = ?1 AND status = 'published'
+                           AND schedule_type = 'extra_duty')
+   ORDER BY title, id`;
+
+/** Bảng phụ cấp HLV và việc ngoài giờ published của năm mới nhất (PLAN Công đoạn 11). */
+export async function listExtraDutySchedules(
+  db: D1Database,
+  districtId: number,
+): Promise<PublishedSchedule[]> {
+  const { results } = await db.prepare(SQL_EXTRA_DUTY).bind(districtId).all<PublishedRow>();
+  return results.map((r) => ({
+    id: r.id,
+    schoolYear: r.school_year,
+    title: r.title,
+    publishedAt: r.published_at,
+  }));
+}
+
+/** Học khu có bảng phụ cấp published: cho sitemap riêng (PLAN Công đoạn 11). */
+export async function listExtraDutyDistricts(
+  db: D1Database,
+): Promise<{ stateSlug: string; districtSlug: string; publishedAt: string | null }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT st.slug AS stateSlug, d.slug AS districtSlug, MAX(s.published_at) AS publishedAt
+         FROM schedules s
+         JOIN districts d ON d.id = s.district_id AND d.active = 1
+         JOIN states st ON st.code = d.state
+        WHERE s.status = 'published' AND s.schedule_type = 'extra_duty'
+        GROUP BY d.id
+        ORDER BY st.slug, d.slug`,
+    )
+    .all<{ stateSlug: string; districtSlug: string; publishedAt: string | null }>();
+  return results;
 }
 
 /** Bảng lương giáo viên đang published của học khu, năm mới nhất trước. */
@@ -679,7 +721,8 @@ const SQL_SITEMAP = `
          JOIN district_summary ds ON ds.district_id = nd.id AND ds.school_year = (
               SELECT MAX(x.school_year) FROM district_summary x
                 JOIN schedules sx ON sx.id = x.schedule_id
-               WHERE x.district_id = nd.id AND sx.status = 'published')
+               WHERE x.district_id = nd.id AND sx.status = 'published'
+            AND sx.schedule_type = 'teacher')
         WHERE n.district_id = d.id)
    GROUP BY d.id, s.school_year
    ORDER BY st.slug, d.slug, s.school_year DESC

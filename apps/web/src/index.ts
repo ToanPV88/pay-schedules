@@ -24,6 +24,8 @@ import {
   latestPayYear,
   listAsReportedChecks,
   listDistrictsOfState,
+  listExtraDutyDistricts,
+  listExtraDutySchedules,
   listLargestDistricts,
   listMenuStates,
   listNeighbors,
@@ -108,6 +110,13 @@ import {
   requestThanksPage,
   type Selection,
 } from "./views/district";
+import {
+  COACHING_SLUG,
+  coachingDescription,
+  coachingPage,
+  coachingPath,
+  coachingTitle,
+} from "./views/extra";
 import {
   FEDERAL_PATH,
   federalIndexPage,
@@ -258,7 +267,7 @@ app.get("/robots.txt", (c) => {
   }
   const origin = new URL(c.req.url).origin;
   return c.text(
-    `User-agent: *\nDisallow: /report\nDisallow: /api/\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+    `User-agent: *\nDisallow: /report\nDisallow: /api/\nAllow: /\nSitemap: ${origin}/sitemap.xml\nSitemap: ${origin}/sitemap-extra-pay.xml\n`,
   );
 });
 
@@ -299,6 +308,28 @@ app.get("/sitemap.xml", async (c) => {
   for (const path of await federalSitemapPaths(c.env.DB)) {
     urls.push(`<url><loc>${escapeXml(`${origin}${path}`)}</loc></url>`);
   }
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.join("\n")}
+</urlset>
+`;
+  c.header("Cache-Control", PAGE_CACHE);
+  c.header("Cache-Tag", cacheTags(TAG_SITEMAP));
+  c.header("Content-Type", "application/xml; charset=utf-8");
+  return c.body(body);
+});
+
+/**
+ * Sitemap riêng cho trang phụ cấp HLV (PLAN Công đoạn 11): /sitemap.xml giữ nguyên, chỉ liệt kê
+ * học khu có bảng phụ cấp published.
+ */
+app.get("/sitemap-extra-pay.xml", async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const urls = (await listExtraDutyDistricts(c.env.DB)).map((r) => {
+    const lastmod = r.publishedAt ? `<lastmod>${escapeXml(r.publishedAt)}</lastmod>` : "";
+    const loc = escapeXml(`${origin}${coachingPath(r.stateSlug, r.districtSlug)}`);
+    return `<url><loc>${loc}</loc>${lastmod}</url>`;
+  });
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.join("\n")}
@@ -1117,6 +1148,14 @@ async function districtRoute(c: Context<AppEnv>, yearParam: string | null) {
     statePay,
     ranks,
     pairs: await districtPairs(c.env.DB, district.id),
+    morePay: (await listExtraDutySchedules(c.env.DB, district.id)).length
+      ? [
+          {
+            href: coachingPath(district.state.slug, district.slug),
+            label: `Coaching and extra-duty stipends at ${district.name}`,
+          },
+        ]
+      : [],
     sameNameInState: sameName > 1,
   };
   const meta = {
@@ -1154,6 +1193,33 @@ app.post("/:state/:district/request", async (c) => {
   await recordDistrictRequest(c.env.DB, district.id, new Date().toISOString().slice(0, 10));
   const meta = { title: pageTitle(`Request recorded: ${district.name}`), noindex: true };
   return page(c, meta, requestThanksPage(district), { control: NO_STORE });
+});
+
+/** Phụ cấp HLV và việc ngoài giờ (PLAN Công đoạn 11); khai báo trước route `:year`. */
+app.get(`/:state/:district/${COACHING_SLUG}`, async (c) => {
+  const district = await getDistrictBySlug(
+    c.env.DB,
+    c.req.param("state") ?? "",
+    c.req.param("district") ?? "",
+  );
+  if (!district) {
+    return notFound(c);
+  }
+  const list = await listExtraDutySchedules(c.env.DB, district.id);
+  const schedules = (await Promise.all(list.map((s) => getSchedule(c.env.DB, s.id)))).filter(
+    (s): s is Schedule => s !== null,
+  );
+  if (schedules.length === 0) {
+    return notFound(c);
+  }
+  const meta = {
+    title: pageTitle(coachingTitle(district, schedules[0]?.schoolYear ?? "")),
+    description: coachingDescription(district, schedules),
+    canonicalPath: coachingPath(district.state.slug, district.slug),
+    noindex: hasQuery(c),
+  };
+  const tags = [districtTag(district.id), stateTag(district.state.code)];
+  return page(c, meta, coachingPage(site(c), district, schedules), { control: PAGE_CACHE, tags });
 });
 
 app.get("/:state/:district/:year", (c) => {
