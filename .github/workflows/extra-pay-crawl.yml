@@ -1,0 +1,226 @@
+# Công đoạn 11 (PLAN.md), D-126: tìm tài liệu phụ cấp HLV/việc ngoài giờ trên website học khu chưa
+# có bảng phụ cấp, đọc bằng hai bộ đọc, nạp bảng qua kiểm tra vào D1 (extra_duty, published).
+# Crawler lịch sự như pipeline PDF: robots.txt, giãn cách theo host, giới hạn kích thước.
+# Tài liệu giữ trong Release docs-stipend-<run>-s<lô>. Không gọi API trả phí.
+# CLOUDFLARE_API_TOKEN chỉ ở bước gọi wrangler. Production chỉ chạy commit đã có trên main.
+name: Extra pay crawl
+
+on:
+  push:
+    branches: ["run/extra-pay-crawl"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: preview hoặc production
+        default: preview
+      limit:
+        description: Số học khu tối đa
+        default: "20000"
+      load:
+        description: Nạp vào D1 (false = chỉ báo cáo)
+        default: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extra-pay-crawl
+  cancel-in-progress: false
+
+env:
+  TARGET: ${{ github.event_name == 'push' && 'production' || inputs.target }}
+  LIMIT: ${{ github.event_name == 'push' && '20000' || inputs.limit }}
+  LOAD: ${{ github.event_name == 'push' && 'true' || inputs.load }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  SHARDS: 20
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check inputs
+        run: |
+          [[ "$TARGET" =~ ^(preview|production)$ ]] || { echo "::error::target sai"; exit 1; }
+          [[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "::error::limit sai"; exit 1; }
+          if [ "$TARGET" = production ]; then
+            git fetch -q origin main
+            git merge-base --is-ancestor HEAD origin/main || { echo "::error::production chỉ từ main"; exit 1; }
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Read queue from D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          mkdir -p "$GITHUB_WORKSPACE/inputs"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT d.nces_id, d.website FROM districts d WHERE d.active = 1 AND d.employer_type = 'school_district' AND d.website IS NOT NULL AND d.website <> '' AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.district_id = d.id AND s.schedule_type = 'extra_duty' AND s.status = 'published') ORDER BY d.enrollment IS NULL, d.enrollment DESC LIMIT $LIMIT" \
+            > "$GITHUB_WORKSPACE/inputs/queue.json"
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT DISTINCT url FROM source_documents" > "$GITHUB_WORKSPACE/inputs/known.json"
+          python3 -c 'import json,sys; print("Học khu trong hàng đợi:", len(json.load(open(sys.argv[1]))[0]["results"]))' \
+            "$GITHUB_WORKSPACE/inputs/queue.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: inputs
+          path: inputs/
+          retention-days: 7
+          if-no-files-found: error
+
+  crawl:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    env:
+      SHARD: ${{ matrix.shard }}
+      TAG: docs-stipend-${{ github.run_id }}-s${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+          (cd pipeline && uv sync --locked --no-dev)
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: inputs
+          path: inputs
+      - name: Crawl
+        working-directory: pipeline
+        run: |
+          uv run --no-dev pay-pipeline extra-pay-crawl --queue "$GITHUB_WORKSPACE/inputs/queue.json" \
+            --known "$GITHUB_WORKSPACE/inputs/known.json" --shard "$SHARD" --shards "$SHARDS" \
+            --out "$RUNNER_TEMP/out" --deadline-minutes 290 | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Read
+        working-directory: pipeline
+        run: |
+          mkdir -p "$RUNNER_TEMP/read"
+          uv run --no-dev pay-pipeline extra-pay-read --docs "$RUNNER_TEMP/out/docs" \
+            --manifest "$RUNNER_TEMP/out/docs/manifest.json" --tag "$TAG" \
+            --seen "$RUNNER_TEMP/read/seen.txt" --out "$RUNNER_TEMP/read/read-$SHARD.jsonl" | tee -a "$GITHUB_STEP_SUMMARY"
+          touch "$RUNNER_TEMP/read/read-$SHARD.jsonl"
+      - name: Pack documents
+        run: |
+          set -euo pipefail
+          docs="$RUNNER_TEMP/out/docs"; pack="$RUNNER_TEMP/pack"; mkdir -p "$pack"
+          if find "$docs" -maxdepth 1 -name '*.pdf' | grep -q .; then
+            (cd "$docs" && find . -maxdepth 1 -name '*.pdf' -printf '%f\n' | sort | tar -cf "$pack/docs.tar" -T -)
+            cp "$docs/manifest.json" "$RUNNER_TEMP/out/crawl.json" "$pack/"
+          fi
+          echo "$TAG" > "$pack/tag.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-${{ matrix.shard }}
+          path: ${{ runner.temp }}/pack/
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: read-${{ matrix.shard }}
+          path: ${{ runner.temp }}/read/read-${{ matrix.shard }}.jsonl
+          retention-days: 30
+
+  archive:
+    needs: crawl
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: docs-*
+          path: packs
+      - name: Create releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for dir in packs/docs-*; do
+            [ -f "$dir/docs.tar" ] || continue
+            tag=$(cat "$dir/tag.txt")
+            [[ "$tag" =~ ^docs-stipend-[0-9]+-s[0-9]+$ ]] || { echo "::error::tag sai: $tag"; exit 1; }
+            gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+              gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "$tag" --prerelease \
+                --notes "Tài liệu phụ cấp HLV (PLAN 11, D-126)."
+            gh release upload "$tag" -R "$GITHUB_REPOSITORY" --clobber \
+              "$dir/docs.tar" "$dir/manifest.json" "$dir/crawl.json"
+            echo "Release: $tag" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  build:
+    needs: [crawl, archive]
+    if: ${{ !cancelled() && needs.archive.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          (cd pipeline && uv sync --locked --no-dev)
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: read-*
+          path: readings
+          merge-multiple: true
+      - name: Read catalog from D1
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT nces_id, state, name, active FROM districts WHERE nces_id IS NOT NULL" \
+            > "$GITHUB_WORKSPACE/catalog.json"
+      - name: Build
+        run: |
+          (cd pipeline && uv run --no-dev pay-pipeline extra-pay-build --readings "$GITHUB_WORKSPACE/readings" \
+            --catalog "$GITHUB_WORKSPACE/catalog.json" --sql-dir "$GITHUB_WORKSPACE/sql" \
+            --report "$GITHUB_WORKSPACE/extra-pay-report.md") | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extra-pay-crawl-import
+          path: |
+            extra-pay-report.md
+            sql/
+          retention-days: 90
+      - name: Load into D1
+        if: ${{ env.LOAD == 'true' }}
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET" = production ]; then db=pay-schedules; flag=""; else db=pay-schedules-preview; flag="--env preview"; fi
+          for sql in "$GITHUB_WORKSPACE"/sql/extra-pay-*.sql; do
+            [ -f "$sql" ] || continue
+            echo "Nạp $sql"
+            npx wrangler d1 execute "$db" $flag --remote --file "$sql"
+          done
+          npx wrangler d1 execute "$db" $flag --remote --json --command \
+            "SELECT COUNT(DISTINCT district_id) AS districts, COUNT(*) AS schedules FROM schedules WHERE schedule_type = 'extra_duty' AND status = 'published'" \
+            | tee -a "$GITHUB_STEP_SUMMARY"

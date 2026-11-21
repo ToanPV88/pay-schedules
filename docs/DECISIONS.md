@@ -1473,3 +1473,13 @@ quyết định thay thế thì ghi mục mới và trỏ về mục cũ.
 - Mọi truy vấn trang giáo viên, tóm tắt, sitemap cũ, yêu cầu học khu chỉ đếm `schedule_type =
   'teacher'`. Trang mới `/{state}/{district}/coaching-stipends` có canonical riêng, 404 khi không có
   bảng, nằm trong `/sitemap-extra-pay.xml` (robots.txt liệt kê thêm); `/sitemap.xml` giữ nguyên.
+
+## D-126: Crawl riêng tìm tài liệu phụ cấp HLV
+
+- Ngày: 2026-11-21. PLAN Công đoạn 11. Trong tài liệu đã tải (tìm cho bảng lương giáo viên), chỉ
+  1.249/5.898 học khu có trang phụ cấp, vì crawl cũ cố ý bỏ link có "coach", "athletic", "extra
+  duty". Workflow `Extra pay crawl` chạy lại crawler lịch sự (robots.txt, giãn cách 2 giây mỗi
+  host, giới hạn kích thước) với điểm riêng cho stipend/supplemental/extra duty/negotiated
+  agreement, trên học khu còn website mà chưa có bảng phụ cấp.
+- Tối đa 20 trang và 4 tài liệu mỗi học khu; bỏ URL đã có trong `source_documents`. Chỉ giữ PDF có
+  chữ và có trang phụ cấp; lưu ở Release `docs-stipend-<run>-s<lô>`. Đọc và nạp theo D-125.
