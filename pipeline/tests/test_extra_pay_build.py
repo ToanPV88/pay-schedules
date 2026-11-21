@@ -133,3 +133,45 @@ def test_check_rejects_repeated_labels() -> None:
 
     t = _raw(["Amount"], [("HEAD COACH", [7500.0])] * 4 + [("Band Director", [2000.0])] * 2)
     assert any("trùng tên" in p for p in check(t))
+
+
+def _line(label: str, amount: str | None = None) -> object:
+    from pay_pipeline.pdf_pipeline.read import Line, Word
+
+    words = [Word(t, 10.0 + 40 * i, 40.0 + 40 * i) for i, t in enumerate(label.split())]
+    if amount:
+        words.append(Word(amount, 400.0, 440.0))
+    return Line(words)
+
+
+def test_heading_names_role_only_rows() -> None:
+    from pay_pipeline.extra_pay.read import find_tables
+
+    lines = [_line("Football"), _line("Head", "$5,000"), _line("Asst.", "$3,000"),
+             _line("Basketball"), _line("Head", "$4,500"), _line("Asst.", "$2,800"),
+             _line("Head Golf Coach", "$2,000")]  # fmt: skip
+    labels = [r.label for r in find_tables(lines, 1)[0].rows]  # type: ignore[arg-type]
+    assert labels == ["Football Head", "Football Asst", "Basketball Head", "Basketball Asst",
+                      "Head Golf Coach"]  # fmt: skip
+
+
+def test_document_year_from_cover() -> None:
+    from pay_pipeline.extra_pay.read import document_year
+
+    pages = [[_line("Negotiated Agreement 2025-2026")], [_line("Stipends")]]
+    assert document_year(pages) == "2025-26"  # type: ignore[arg-type]
+
+
+def test_clean_drops_sentences_but_flags_many() -> None:
+    from pay_pipeline.extra_pay.read import check, clean
+
+    good = [(f"Head {s} Coach", [1000.0]) for s in ["Football", "Track", "Golf", "Tennis", "Swim"]]
+    t = clean(_raw(["Amount"], [*good, ("Teachers are compensated", [187.0])]))
+    assert len(t["rows"]) == 5 and check(t) == []
+    t = clean(_raw(["Amount"], [*good, *[("monetary supplements", [500.0])] * 3]))
+    assert any("câu văn" in p for p in check(t))
+
+
+def test_future_year_is_not_published() -> None:
+    result, _ = prepare([_doc("d", [_table("2027-28", 3)])], CATALOG, TODAY)
+    assert result.prepared == []

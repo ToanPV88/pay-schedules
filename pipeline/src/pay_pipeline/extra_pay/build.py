@@ -107,7 +107,9 @@ def load_readings(paths: Iterable[Path]) -> list[DocReading]:
 
 def _good(r: DocReading, today: dt.date) -> list[dict[str, Any]]:
     """Passing tables of the school year in force, duplicates (same rows) dropped."""
-    ok = [t for t in r.tables if not t["problems"]]
+    now = current_school_year_start(today)
+    # A future year (a multi-year contract's later column) is not the pay in force today.
+    ok = [t for t in r.tables if not t["problems"] and school_year_start(t["school_year"]) <= now]
     if not ok:
         return []
     year = year_in_force({t["school_year"] for t in ok}, today)
