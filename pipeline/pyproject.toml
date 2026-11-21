@@ -46,6 +46,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # cho phép ký tự tiếng Việt tro
 "src/pay_pipeline/pdf_pipeline/run.py" = ["S608"]
 "src/pay_pipeline/pdf_pipeline/unpublish.py" = ["S608"]
 "src/pay_pipeline/federal/tables.py" = ["S608"]
+"src/pay_pipeline/extra_pay/build.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"

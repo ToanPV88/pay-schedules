@@ -22,7 +22,7 @@ from pay_pipeline.documents.classify import school_years
 from pay_pipeline.extra_pay.survey import _ACTIVITY_RE, STIPEND_RANGE
 from pay_pipeline.pdf_pipeline.read import Line, Word, _cluster, layout_lines, plumber_lines
 
-READERS = ("stipend-layout@1", "stipend-plumber@1")
+READERS = ("stipend-layout@2", "stipend-plumber@2")
 
 _NUM = re.compile(r"^\(?(\$)?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?\)?\**$")
 _EMPTY = {"n/a", "na", "-", "–", "—", "--"}
@@ -30,7 +30,7 @@ _LETTER = re.compile(r"[A-Za-z]")
 _NOT_A_ROW = re.compile(r"^(total|subtotal|page \d|step|years?|column|level)\b", re.I)
 MIN_ROWS = 5
 HEADER_REACH = 4  # lines above the first row searched for column headers
-COLUMN_GAP = {"stipend-layout@1": 3.0, "stipend-plumber@1": 9.0}
+COLUMN_GAP = {"stipend-layout@2": 3.0, "stipend-plumber@2": 9.0}
 
 
 @dataclass

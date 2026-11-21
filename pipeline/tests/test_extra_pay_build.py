@@ -21,13 +21,14 @@ def _table(year: str, page: int, title: str = "", columns: list[str] | None = No
         {"label": "Band Director", "amounts": [None] * len(cols)},
         {"label": "Head Track Coach", "amounts": [3000.0] * len(cols)},
     ]
-    return {"reader": "stipend-layout@1", "page": page, "school_year": year, "title": title,
+    return {"reader": "stipend-layout@2", "page": page, "school_year": year, "title": title,
             "columns": cols, "rows": rows, "problems": []}  # fmt: skip
 
 
 def _doc(name: str, tables: list[dict], fetched: str = "2026-11-01T00:00:00Z") -> DocReading:
     return DocReading(
-        nces_id="9900001", asset_name=name, url=f"https://x.invalid/{name}", sha256=name * 8,
+        nces_id="9900001", asset_name=name, url=f"https://x.invalid/{name}",
+        sha256=(name.encode().hex() * 64)[:64],
         fetched_at=fetched, content_type="application/pdf", release_tag="docs-t",
         stipend_pages=[t["page"] for t in tables], tables=tables,
     )  # fmt: skip
@@ -175,3 +176,42 @@ def test_clean_drops_sentences_but_flags_many() -> None:
 def test_future_year_is_not_published() -> None:
     result, _ = prepare([_doc("d", [_table("2027-28", 3)])], CATALOG, TODAY)
     assert result.prepared == []
+
+
+def _db() -> object:
+    import sqlite3
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    db = sqlite3.connect(":memory:")
+    db.execute("PRAGMA foreign_keys = ON")
+    for path in sorted((repo / "packages" / "db" / "migrations").glob("*.sql")):
+        db.executescript(path.read_text(encoding="utf-8"))
+    db.execute("INSERT INTO states (code, name, slug) VALUES ('ZZ', 'Zed', 'zed')")
+    db.execute(
+        "INSERT INTO districts (nces_id, name, slug, state)"
+        " VALUES ('9900001', 'Test ISD', 'test-isd', 'ZZ')"
+    )
+    return db
+
+
+def _load(db: object, docs: list[DocReading]) -> None:
+    from pay_pipeline.extra_pay.build import with_retire
+
+    result, _ = prepare(docs, CATALOG, TODAY)
+    sql = with_retire(schedules_sql(result, now=dt.datetime(2026, 11, 21, tzinfo=dt.UTC)))
+    db.executescript(";\n".join(sql) + ";")  # type: ignore[attr-defined]
+
+
+def test_reimport_retires_tables_no_longer_read() -> None:
+    db = _db()
+    _load(db, [_doc("d", [_table("2026-27", 3, "Athletics"), _table("2026-27", 4, "Clubs")])])
+    q = "SELECT title, status FROM schedules WHERE schedule_type = 'extra_duty' ORDER BY id"
+    assert db.execute(q).fetchall() == [("Athletics", "published"), ("Clubs", "published")]  # type: ignore[attr-defined]
+    _load(db, [_doc("d", [_table("2026-27", 3, "Athletics")])])
+    assert db.execute(q).fetchall() == [("Athletics", "published"), ("Clubs", "superseded")]  # type: ignore[attr-defined]
+    cells = db.execute(  # type: ignore[attr-defined]
+        "SELECT count(*) FROM cells c JOIN schedules s ON s.id = c.schedule_id"
+        " WHERE s.status = 'published'"
+    ).fetchone()[0]
+    assert cells == 5

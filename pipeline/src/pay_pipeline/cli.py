@@ -321,6 +321,7 @@ def _cmd_extra_pay_build(args: argparse.Namespace) -> int:
             )],
         )  # fmt: skip
         sql = schedules_sql(part)
+        sql = build.with_retire(sql)
         (out / f"extra-pay-{n:03d}.sql").write_text(";\n".join(sql) + ";\n", encoding="utf-8")
     counts: dict[str, int] = {}
     for o in outcomes:

@@ -208,3 +208,19 @@ def prepare(
         states=sorted({c.state for n, c in catalog.items() if n in by_district}), runs=runs,
     )  # fmt: skip
     return result, outcomes
+
+
+def with_retire(sql: list[str]) -> list[str]:
+    """A new reading replaces the district's earlier stipend tables, even those under a title no
+    longer read: they are retired just before the staging tables are dropped."""
+    newer = (
+        "SELECT max(m.schedule_id) FROM _imp_map m JOIN schedules n ON n.id = m.schedule_id"
+        " WHERE n.district_id = schedules.district_id AND n.status = 'published'"
+    )
+    retire = (
+        f"UPDATE schedules SET status = 'superseded', superseded_by = ({newer})"
+        f" WHERE schedule_type = '{SCHEDULE_TYPE}' AND status = 'published'"
+        f" AND id NOT IN (SELECT schedule_id FROM _imp_map) AND ({newer}) IS NOT NULL"
+    )
+    at = next(i for i, q in enumerate(sql) if q.startswith("DROP TABLE _imp"))
+    return [*sql[:at], retire, *sql[at:]]
